@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <style>
+      body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background: #f5f5f5;
+        margin: 0;
+        padding: 20px;
+      }
+      .container {
+        max-width: 600px;
+        margin: 0 auto;
+        background: white;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      }
+      .header {
+        background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+        color: white;
+        padding: 20px;
+        text-align: center;
+      }
+      .header h2 {
+        margin: 0;
+        font-size: 20px;
+      }
+      .content {
+        padding: 30px;
+      }
+      .notice-block {
+        background: #ffe8e8;
+        padding: 15px;
+        border-radius: 5px;
+        margin: 20px 0;
+        border-left: 4px solid #e74c3c;
+      }
+      .label {
+        color: #7f8c8d;
+        font-size: 12px;
+        text-transform: uppercase;
+      }
+      .value {
+        color: #2c3e50;
+        font-size: 16px;
+        font-weight: bold;
+        margin: 5px 0 0 0;
+      }
+      .footer {
+        background: #ecf0f1;
+        padding: 20px;
+        text-align: center;
+        font-size: 12px;
+        color: #7f8c8d;
+        border-top: 1px solid #bdc3c7;
+      }
+      .support-link {
+        color: #667eea;
+        text-decoration: none;
+        font-weight: bold;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h2>⚠️ Account Blocked</h2>
+      </div>
+
+      <div class="content">
+        <p>Hi <strong><%= @account.first_name.presence || "there" %></strong>,</p>
+
+        <p>We regret to inform you that your SalesPoints account has been temporarily blocked.</p>
+
+        <div class="notice-block">
+          <div class="label">Account Email</div>
+          <div class="value"><%= @account.email %></div>
+
+          <div class="label" style="margin-top: 15px;">Status</div>
+          <div class="value">Blocked</div>
+
+          <div class="label" style="margin-top: 15px;">Effective Date</div>
+          <div class="value"><%= Time.now.strftime("%B %d, %Y") %></div>
+        </div>
+
+        <p>This action may have been taken due to:</p>
+        <ul>
+          <li>Violation of our terms and conditions</li>
+          <li>Suspicious account activity</li>
+          <li>Multiple failed security checks</li>
+        </ul>
+
+        <p>
+          If you believe this is an error or would like to discuss this decision, please 
+          <a href="<%= ENV['FRONTEND_URL'] || 'https://salespoints.com' %>/support" class="support-link">contact our support team</a>.
+        </p>
+
+        <p>We are here to help and will review your case promptly.</p>
+      </div>
+
+      <div class="footer">
+        <p>This is an automated notification from SalesPoints.</p>
+        <p>© 2026 SalesPoints. All rights reserved.</p>
+      </div>
+    </div>
+  </body>
+</html>

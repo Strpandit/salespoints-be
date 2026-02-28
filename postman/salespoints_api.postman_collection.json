@@ -1,0 +1,113 @@
+{
+  "info": {
+    "name": "Salespoints API - OTP Auth",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Collection for OTP-based signup/login and account/address management"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:3000/api" },
+    { "key": "token", "value": "" },
+    { "key": "account_id", "value": "" },
+    { "key": "otp", "value": "123456" },
+    { "key": "identifier", "value": "john@example.com" }
+  ],
+  "item": [
+    {
+      "name": "Send OTP (signup/login)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"identifier\": \"{{identifier}}\"\n}"
+        },
+        "url": { "raw": "{{base_url}}/otp/send", "host": ["{{base_url}}"], "path": ["otp","send"] }
+      },
+      "response": []
+    },
+    {
+      "name": "Verify OTP (issue token)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const json = pm.response.json();",
+              "if (json.token) {",
+              "  pm.environment.set('token', json.token);",
+              "}",
+              "if (json.account && json.account.id) { pm.environment.set('account_id', json.account.id); }"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [ { "key": "Content-Type", "value": "application/json" } ],
+        "body": { "mode": "raw", "raw": "{\n  \"identifier\": \"{{identifier}}\",\n  \"otp\": \"{{otp}}\"\n}" },
+        "url": { "raw": "{{base_url}}/otp/verify", "host": ["{{base_url}}"], "path": ["otp","verify"] }
+      },
+      "response": []
+    },
+    {
+      "name": "Login (OTP) - alternative",
+      "request": {
+        "method": "POST",
+        "header": [ { "key": "Content-Type", "value": "application/json" } ],
+        "body": { "mode": "raw", "raw": "{\n  \"identifier\": \"{{identifier}}\",\n  \"otp\": \"{{otp}}\"\n}" },
+        "url": { "raw": "{{base_url}}/login", "host": ["{{base_url}}"], "path": ["login"] }
+      },
+      "response": []
+    },
+    {
+      "name": "Create Account (explicit)",
+      "request": {
+        "method": "POST",
+        "header": [ { "key": "Content-Type", "value": "application/json" } ],
+        "body": { "mode": "raw", "raw": "{\n  \"account\": {\n    \"first_name\": \"John\",\n    \"last_name\": \"Doe\",\n    \"email\": \"john@example.com\",\n    \"phone\": \"+911234567890\",\n    \"country_code\": \"+91\",\n    \"google_signup\": false\n  }\n}" },
+        "url": { "raw": "{{base_url}}/accounts", "host": ["{{base_url}}"], "path": ["accounts"] }
+      },
+      "response": []
+    },
+    {
+      "name": "Get Profile",
+      "request": {
+        "method": "GET",
+        "header": [ { "key": "Authorization", "value": "Bearer {{token}}" } ],
+        "url": { "raw": "{{base_url}}/accounts/{{account_id}}", "host": ["{{base_url}}"], "path": ["accounts","{{account_id}}"] }
+      },
+      "response": []
+    },
+    {
+      "name": "Update Profile",
+      "request": {
+        "method": "PUT",
+        "header": [ { "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" } ],
+        "body": { "mode": "raw", "raw": "{\n  \"account\": {\n    \"first_name\": \"Jane\"\n  }\n}" },
+        "url": { "raw": "{{base_url}}/accounts/{{account_id}}", "host": ["{{base_url}}"], "path": ["accounts","{{account_id}}"] }
+      },
+      "response": []
+    },
+    {
+      "name": "List Addresses",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": { "raw": "{{base_url}}/accounts/{{account_id}}/addresses", "host": ["{{base_url}}"], "path": ["accounts","{{account_id}}","addresses"] }
+      },
+      "response": []
+    },
+    {
+      "name": "Create Address",
+      "request": {
+        "method": "POST",
+        "header": [ { "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" } ],
+        "body": { "mode": "raw", "raw": "{\n  \"address\": {\n    \"label\": \"Home\",\n    \"address_line1\": \"123 Street\",\n    \"city\": \"Mumbai\",\n    \"state\": \"Maharashtra\",\n    \"postal_code\": \"400001\",\n    \"phone\": \"+911234567890\",\n    \"address_type\": \"home\",\n    \"default\": true\n  }\n}" },
+        "url": { "raw": "{{base_url}}/accounts/{{account_id}}/addresses", "host": ["{{base_url}}"], "path": ["accounts","{{account_id}}","addresses"] }
+      },
+      "response": []
+    }
+  ]
+}

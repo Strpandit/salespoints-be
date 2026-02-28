@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <style>
+      body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        margin: 0;
+        padding: 20px;
+      }
+      .container {
+        max-width: 600px;
+        margin: 0 auto;
+        background: white;
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+      }
+      .header {
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        color: white;
+        padding: 40px 20px;
+        text-align: center;
+      }
+      .header h1 {
+        margin: 0;
+        font-size: 28px;
+      }
+      .content {
+        padding: 40px;
+      }
+      .greeting {
+        font-size: 20px;
+        color: #333;
+        margin-bottom: 20px;
+      }
+      .notice-box {
+        background: #fce4ec;
+        border-left: 4px solid #f5576c;
+        padding: 20px;
+        margin: 25px 0;
+        border-radius: 5px;
+      }
+      .notice-box h3 {
+        color: #c2185b;
+        margin: 0 0 10px 0;
+      }
+      .reason-box {
+        background: #f5f5f5;
+        padding: 20px;
+        border-radius: 5px;
+        margin: 20px 0;
+      }
+      .reason-box h4 {
+        margin-top: 0;
+        color: #333;
+      }
+      .button {
+        display: inline-block;
+        background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        color: white;
+        text-decoration: none;
+        padding: 15px 40px;
+        border-radius: 5px;
+        margin: 20px 0;
+        font-weight: bold;
+      }
+      .footer {
+        background: #f8f9fa;
+        padding: 20px;
+        text-align: center;
+        font-size: 12px;
+        color: #666;
+        border-top: 1px solid #eee;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>Account Status Update</h1>
+      </div>
+
+      <div class="content">
+        <div class="greeting">
+          Hi <strong><%= @dealer.first_name %> <%= @dealer.last_name %></strong>,
+        </div>
+
+        <div class="notice-box">
+          <h3>⚠️ Account Application Not Approved</h3>
+          <p>
+            Thank you for applying to become a dealer on SalesPoints. Unfortunately, your account application 
+            has not been approved at this time.
+          </p>
+        </div>
+
+        <% if @reason.present? %>
+          <div class="reason-box">
+            <h4>Reason for Rejection:</h4>
+            <p><%= @reason %></p>
+          </div>
+        <% end %>
+
+        <h3>What You Can Do:</h3>
+        <ol>
+          <li><strong>Review Your Information</strong> - Make sure all your business details are accurate and complete</li>
+          <li><strong>Verify Documents</strong> - Ensure all required documents (Aadhaar, PAN, GST, Bank Details) are genuine</li>
+          <li><strong>Update Your Profile</strong> - You can update your information and reapply</li>
+          <li><strong>Contact Support</strong> - Reach out for clarification on the rejection reasons</li>
+        </ol>
+
+        <p style="background: #e3f2fd; padding: 15px; border-radius: 5px; border-left: 4px solid #2196f3;">
+          💡 Our support team can provide guidance on the application process. Please contact us 
+          at <strong>support@salespoints.com</strong> for assistance.
+        </p>
+
+        <p>
+          <a href="<%= ENV['DEALER_SIGNUP_URL'] || 'https://salespoints.com/dealer/signup' %>" class="button">
+            Update Your Application →
+          </a>
+        </p>
+
+        <p>
+          We appreciate your interest in SalesPoints and hope to work with you in the future.
+        </p>
+
+        <p>
+          Best regards,<br><strong>SalesPoints Team</strong>
+        </p>
+      </div>
+
+      <div class="footer">
+        <p>This is an automated email. Please do not reply directly to this email.</p>
+        <p>© 2026 SalesPoints. All rights reserved.</p>
+      </div>
+    </div>
+  </body>
+</html>

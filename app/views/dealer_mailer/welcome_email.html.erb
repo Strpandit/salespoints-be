@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <style>
+      body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        margin: 0;
+        padding: 20px;
+      }
+      .container {
+        max-width: 600px;
+        margin: 0 auto;
+        background: white;
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+      }
+      .header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 40px 20px;
+        text-align: center;
+      }
+      .header h1 {
+        margin: 0;
+        font-size: 28px;
+      }
+      .content {
+        padding: 40px;
+      }
+      .greeting {
+        font-size: 20px;
+        color: #333;
+        margin-bottom: 20px;
+      }
+      .credentials {
+        background: #f8f9fa;
+        border-left: 4px solid #667eea;
+        padding: 20px;
+        margin: 30px 0;
+        border-radius: 5px;
+      }
+      .credentials-label {
+        font-size: 12px;
+        color: #666;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+      }
+      .credentials-value {
+        font-size: 16px;
+        color: #333;
+        font-weight: bold;
+        margin: 10px 0;
+        word-break: break-all;
+      }
+      .button {
+        display: inline-block;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        text-decoration: none;
+        padding: 15px 40px;
+        border-radius: 5px;
+        margin: 20px 0;
+        font-weight: bold;
+      }
+      .button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+      }
+      .footer {
+        background: #f8f9fa;
+        padding: 20px;
+        text-align: center;
+        font-size: 12px;
+        color: #666;
+        border-top: 1px solid #eee;
+      }
+      .important {
+        color: #d85030;
+        font-weight: bold;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>🎉 Welcome to SalesPoints</h1>
+        <p>Dealer Platform</p>
+      </div>
+
+      <div class="content">
+        <div class="greeting">
+          Hello <strong><%= @dealer.first_name %> <%= @dealer.last_name %></strong>,
+        </div>
+
+        <p>
+          Thank you for registering as a dealer on <strong>SalesPoints</strong>! We're excited to have you on board.
+        </p>
+
+        <p>
+          Your account has been created and is currently <strong>pending approval</strong>. Our admin team will review your information and you'll receive a notification once your account is activated.
+        </p>
+
+        <div class="credentials">
+          <div class="credentials-label">Login Email</div>
+          <div class="credentials-value"><%= @email %></div>
+
+          <div class="credentials-label" style="margin-top: 20px;">Temporary Password</div>
+          <div class="credentials-value"><%= @password %></div>
+
+          <p style="color: #d85030; font-size: 12px; margin-top: 15px;">
+            ⚠️ <strong>Important:</strong> Please change your password immediately after your first login for security.
+          </p>
+        </div>
+
+        <p>
+          <a href="<%= ENV['DEALER_LOGIN_URL'] || 'https://salespoints.com/dealer/login' %>" class="button">
+            Go to Dealer Portal →
+          </a>
+        </p>
+
+        <h3>What's Next?</h3>
+        <ul>
+          <li>✓ Complete your profile with detailed business information</li>
+          <li>✓ Get approval from our admin team</li>
+          <li>✓ Start listing and selling products</li>
+          <li>✓ Manage your inventory and orders</li>
+        </ul>
+
+        <p>
+          If you need any assistance, please don't hesitate to contact our support team at 
+          <strong>support@salespoints.com</strong> or call us.
+        </p>
+
+        <p>Best regards,<br><strong>SalesPoints Team</strong></p>
+      </div>
+
+      <div class="footer">
+        <p>This is an automated email. Please do not reply directly to this email.</p>
+        <p>© 2026 SalesPoints. All rights reserved.</p>
+      </div>
+    </div>
+  </body>
+</html>

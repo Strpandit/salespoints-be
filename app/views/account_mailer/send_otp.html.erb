@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <style>
+      body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        margin: 0;
+        padding: 20px;
+      }
+      .container {
+        max-width: 600px;
+        margin: 0 auto;
+        background: white;
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+      }
+      .header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 30px;
+        text-align: center;
+      }
+      .header h2 {
+        margin: 0;
+        font-size: 24px;
+      }
+      .content {
+        padding: 30px;
+      }
+      .otp-box {
+        background: #f0f0f0;
+        border-radius: 8px;
+        padding: 25px;
+        margin: 25px 0;
+        border-left: 4px solid #667eea;
+        text-align: center;
+      }
+      .otp-code {
+        font-size: 36px;
+        font-weight: bold;
+        color: #667eea;
+        letter-spacing: 5px;
+        font-family: 'Courier New', monospace;
+        margin: 15px 0;
+        background: white;
+        padding: 15px;
+        border-radius: 5px;
+        border: 2px dashed #667eea;
+      }
+      .otp-message {
+        color: #7f8c8d;
+        font-size: 14px;
+        margin: 15px 0 0 0;
+      }
+      .warning-box {
+        background: #fff3cd;
+        border-left: 4px solid #ffc107;
+        padding: 15px;
+        border-radius: 5px;
+        margin: 20px 0;
+      }
+      .warning-box h4 {
+        margin-top: 0;
+        color: #856404;
+      }
+      .warning-box ul {
+        margin: 10px 0;
+        padding-left: 20px;
+      }
+      .warning-box li {
+        color: #856404;
+        font-size: 13px;
+        margin: 5px 0;
+      }
+      .timer-info {
+        background: #e8f4f8;
+        border-left: 4px solid #17a2b8;
+        padding: 15px;
+        border-radius: 5px;
+        margin: 20px 0;
+        text-align: center;
+      }
+      .timer-info strong {
+        color: #17a2b8;
+        font-size: 14px;
+      }
+      .footer {
+        background: #ecf0f1;
+        padding: 20px;
+        text-align: center;
+        font-size: 12px;
+        color: #7f8c8d;
+        border-top: 1px solid #bdc3c7;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h2>🔐 Your OTP Code</h2>
+      </div>
+
+      <div class="content">
+        <p>Hi <%= @account&.first_name.presence || 'User' %>,</p>
+
+        <p>We received a request to access your SalesPoints account. Use the OTP code below to verify your identity.</p>
+
+        <div class="otp-box">
+          <p style="margin: 0 0 10px 0; color: #7f8c8d; font-size: 12px; text-transform: uppercase;">Your One-Time Password</p>
+          <div class="otp-code"><%= @otp %></div>
+          <p class="otp-message">Use this code to complete your login/signup</p>
+        </div>
+
+        <div class="timer-info">
+          <strong>⏰ This OTP will expire in 5 minutes</strong>
+        </div>
+
+        <div class="warning-box">
+          <h4>🔒 Security Tips</h4>
+          <ul>
+            <li><strong>Never share this code</strong> with anyone, not even SalesPoints staff</li>
+            <li>We will <strong>never ask you for this code</strong> via email, phone, or chat</li>
+            <li>If you didn't request this code, <strong>ignore this email</strong></li>
+            <li>Always verify you're on official SalesPoints website</li>
+          </ul>
+        </div>
+
+        <p style="color: #7f8c8d; font-size: 13px; margin: 20px 0;">
+          <strong>Didn't request this OTP?</strong> If this wasn't you, your account credentials may be at risk. 
+          Please contact our support team immediately at <strong>support@salespoints.com</strong>
+        </p>
+      </div>
+
+      <div class="footer">
+        <p>This is an automated security email from SalesPoints.</p>
+        <p>© 2026 SalesPoints. All rights reserved.</p>
+        <p>For security concerns, email: <strong>security@salespoints.com</strong></p>
+      </div>
+    </div>
+  </body>
+</html>

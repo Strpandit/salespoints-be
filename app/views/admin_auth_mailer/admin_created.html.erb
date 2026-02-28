@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <style>
+      body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+        margin: 0;
+        padding: 20px;
+      }
+      .container {
+        max-width: 600px;
+        margin: 0 auto;
+        background: white;
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+      }
+      .header {
+        background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+        color: white;
+        padding: 30px;
+        text-align: center;
+      }
+      .header h2 {
+        margin: 0;
+        font-size: 24px;
+      }
+      .content {
+        padding: 30px;
+      }
+      .credentials-box {
+        background: #ecf0f1;
+        border-radius: 5px;
+        padding: 20px;
+        margin: 20px 0;
+        border-left: 4px solid #2c3e50;
+      }
+      .credential-item {
+        margin: 15px 0;
+      }
+      .label {
+        color: #7f8c8d;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+      }
+      .value {
+        color: #2c3e50;
+        font-size: 16px;
+        font-weight: bold;
+        margin: 5px 0 0 0;
+        word-break: break-all;
+        font-family: 'Courier New', monospace;
+      }
+      .warning {
+        background: #fff5e6;
+        border-left: 4px solid #f39c12;
+        padding: 15px;
+        margin: 20px 0;
+        border-radius: 5px;
+      }
+      .warning h4 {
+        margin: 0 0 10px 0;
+        color: #f39c12;
+      }
+      .warning p {
+        margin: 5px 0;
+        color: #555;
+      }
+      .cta-button {
+        display: inline-block;
+        background: #2c3e50;
+        color: white;
+        padding: 12px 30px;
+        border-radius: 5px;
+        text-decoration: none;
+        font-weight: bold;
+        margin: 20px 0;
+      }
+      .next-steps {
+        background: #f9f9f9;
+        padding: 20px;
+        border-radius: 5px;
+        margin: 20px 0;
+      }
+      .step {
+        display: flex;
+        margin: 10px 0;
+      }
+      .step-number {
+        background: #2c3e50;
+        color: white;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 15px;
+        font-weight: bold;
+        flex-shrink: 0;
+      }
+      .footer {
+        background: #ecf0f1;
+        padding: 20px;
+        text-align: center;
+        font-size: 12px;
+        color: #7f8c8d;
+        border-top: 1px solid #bdc3c7;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h2>🔑 Admin Account Created</h2>
+      </div>
+
+      <div class="content">
+        <p>Hello <strong><%= @admin.full_name %></strong>,</p>
+
+        <p>Your SalesPoints Admin account has been successfully created. Below are your login credentials:</p>
+
+        <div class="credentials-box">
+          <div class="credential-item">
+            <div class="label">Email</div>
+            <div class="value"><%= @admin.email %></div>
+          </div>
+
+          <div class="credential-item">
+            <div class="label">Temporary Password</div>
+            <div class="value"><%= @password %></div>
+          </div>
+
+          <div class="credential-item">
+            <div class="label">Admin Portal</div>
+            <div class="value"><%= @login_url %></div>
+          </div>
+        </div>
+
+        <div class="warning">
+          <h4>🔒 Security Notice</h4>
+          <p>• Keep your credentials confidential and secure</p>
+          <p>• Change your password immediately upon first login</p>
+          <p>• Never share your password via email or chat</p>
+          <p>• Enable two-factor authentication for added security</p>
+        </div>
+
+        <div class="next-steps">
+          <h3 style="margin: 0 0 15px 0; color: #2c3e50;">Getting Started</h3>
+          <div class="step">
+            <div class="step-number">1</div>
+            <div class="step-text"><strong>Log in</strong> with your credentials</div>
+          </div>
+          <div class="step">
+            <div class="step-number">2</div>
+            <div class="step-text"><strong>Change your password</strong> to something secure</div>
+          </div>
+          <div class="step">
+            <div class="step-number">3</div>
+            <div class="step-text"><strong>Set up 2FA</strong> for enhanced security</div>
+          </div>
+          <div class="step">
+            <div class="step-number">4</div>
+            <div class="step-text"><strong>Review your permissions</strong> and modules</div>
+          </div>
+        </div>
+
+        <p style="text-align: center;">
+          <a href="<%= @login_url %>" class="cta-button">Go to Admin Portal</a>
+        </p>
+
+        <p>If you have any questions or need assistance, please contact the IT support team.</p>
+      </div>
+
+      <div class="footer">
+        <p>This is an automated email from SalesPoints Admin System.</p>
+        <p>© 2026 SalesPoints. All rights reserved.</p>
+      </div>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,143 @@
+module Api
+  class ProductsController < ApplicationController
+    skip_before_action :authenticate_request!, only: [:index, :active_products, :show]
+    before_action :require_admin, except: [:index, :active_products, :show]
+    before_action :check_permission, except: [:index, :active_products, :show]
+    before_action :find_product, only: [:show, :update, :destroy]
+
+    def index
+      products = Product.all.order(created_at: :desc).page(params[:page]).per(params[:per_page] || 20)
+      render json: {
+        data: ActiveModelSerializers::SerializableResource.new(products, each_serializer: ProductSerializer),
+        meta: {
+          current_page: products.current_page,
+          next_page: products.next_page,
+          prev_page: products.prev_page,
+          total_pages: products.total_pages,
+          total_count: products.total_count
+        },
+        message: "Products fetched successfully"
+      }, status: :ok
+    end
+
+    def active_products
+      products = Product.active.order(created_at: :desc).page(params[:page]).per(params[:per_page] || 20)
+      render json: {
+        data: ActiveModelSerializers::SerializableResource.new(products, each_serializer: ProductSerializer),
+        meta: {
+          current_page: products.current_page,
+          next_page: products.next_page,
+          prev_page: products.prev_page,
+          total_pages: products.total_pages,
+          total_count: products.total_count
+        },
+        message: "Products fetched successfully"
+      }, status: :ok
+    end
+
+    def show
+      render json: {
+        data: ProductSerializer.new(@product),
+        message: "Product fetched successfully"
+      }, status: :ok
+    end
+
+    def similar_product
+      products = Product.where(category_id: params[:category_id])
+                        .where.not(id: params[:product_id])
+                        .limit(4)
+    
+      if products.present?
+        render json: { 
+          data: ActiveModelSerializers::SerializableResource.new(products, each_serializer: ProductSerializer),
+          message: "Similar products fetched successfully"
+        }, status: :ok
+      else
+        render json: { errors: "No similar products found" }, status: :not_found
+      end
+    end
+
+    def create
+      product = Product.new(product_params)
+
+      if product.save
+        notify_admins_entity_created(product)
+        render json: {
+          data: ProductSerializer.new(product),
+          message: "Product created successfully"
+        }, status: :created
+      else
+        render json: { error: product.errors.full_messages }, status: :unprocessable_entity
+      end
+    end
+
+    def update
+      if @product.update(product_params)
+        notify_admins_entity_updated(@product)
+        render json: {
+          data: ProductSerializer.new(@product),
+          message: "Product updated successfully"
+        }, status: :ok
+      else
+        render json: { error: @product.errors.full_messages }, status: :unprocessable_entity
+      end
+    end
+
+    def destroy
+      @product.update(deleted_at: Time.current, is_active: false, is_featured: false, is_new: false)
+      @product.product_variants.update_all(is_active: false)
+      render json: { message: "Product deleted successfully" }, status: :ok
+    end
+
+    private
+
+    def product_params
+      params.require(:product).permit(
+        :name, :slug, :sku, :desc, :material, :brand_id, :category_id,
+        :is_featured, :is_new, :is_active, :tax_rate,
+        features: [], care_instructions: [],
+        product_specifications_attributes: [:id, :key, :value, :_destroy],
+        product_variants_attributes: [
+          :id, :variant_sku, :price, :selling_price, :dealer_price,
+          :dealer_selling_price, :discount_percentage, :is_active, :_destroy, variant_attributes: [:key, :value]
+        ]
+      )
+    end
+
+    def find_product
+      @product = Product.find_by(slug: params[:id])
+      render json: { error: "Product not found" }, status: :not_found unless @product
+    end
+
+    def check_permission
+      unless current_admin.can_access?(:products)
+        render json: { error: "You do not have permission to manage products"}, status: :forbidden
+      end
+    end
+
+    def require_admin
+      render json: { error: "Admin only" }, status: :unauthorized unless current_user_type == "AdminUser"
+    end
+
+    def current_admin
+      current_user
+    end
+
+    ### notification helpers
+    def get_admin_emails
+      AdminUser.where(is_super_admin: true).pluck(:email)
+    end
+
+    def notify_admins_entity_created(product)
+      get_admin_emails.each do |email|
+        AdminNotificationMailer.entity_created(email, "Product", product.name, current_admin&.email).deliver_later
+      end
+    end
+
+    def notify_admins_entity_updated(product)
+      get_admin_emails.each do |email|
+        AdminNotificationMailer.entity_updated(email, "Product", product.name, current_admin&.email).deliver_later
+      end
+    end
+  end
+end
