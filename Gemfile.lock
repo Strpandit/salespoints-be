@@ -217,6 +217,8 @@ GEM
     parser (3.3.10.0)
       ast (~> 2.4.1)
       racc
+    pg (1.6.3-x64-mingw-ucrt)
+    pg (1.6.3-x86_64-linux)
     phonelib (0.10.15)
     pp (0.6.3)
       prettyprint
@@ -321,8 +323,6 @@ GEM
       rexml (~> 3.2, >= 3.2.5)
       rubyzip (>= 1.2.2, < 4.0)
       websocket (~> 1.0)
-    sqlite3 (2.9.0-x64-mingw-ucrt)
-    sqlite3 (2.9.0-x86_64-linux-gnu)
     sshkit (1.25.0)
       base64
       logger
@@ -385,6 +385,7 @@ DEPENDENCIES
   jwt (~> 2.6)
   kamal
   kaminari
+  pg
   phonelib
   propshaft
   puma (>= 5.0)
@@ -392,7 +393,6 @@ DEPENDENCIES
   rails (~> 8.0.4)
   rubocop-rails-omakase
   selenium-webdriver
-  sqlite3 (>= 2.1)
   stimulus-rails
   thruster
   turbo-rails

@@ -1,0 +1,101 @@
+Method,Endpoint,Full URL,Required Data Fields,Authentication,Description
+POST,/api/otp/send,{{base_url}}/otp/send,identifier,Not Required,Send OTP to email/phone for signup/login
+POST,/api/otp/verify,{{base_url}}/otp/verify,"identifier, otp",Not Required,Verify OTP and get JWT token
+POST,/api/auth/google,{{base_url}}/auth/google,google_token,Not Required,Google OAuth login
+POST,/api/password,{{base_url}}/password,password related,Not Required,Create/Reset password
+POST,/api/set_password,{{base_url}}/set_password,new_password,Bearer Token,Set new password
+POST,/api/accounts,{{base_url}}/accounts,"first_name, last_name, email, phone, country_code, google_signup",Not Required,Create new account
+GET,/api/accounts/:id,{{base_url}}/accounts/:id,none,Bearer Token,Get account profile by ID
+PUT,/api/accounts/:id,{{base_url}}/accounts/:id,first_name and other fields,Bearer Token,Update account profile
+DELETE,/api/accounts/:id,{{base_url}}/accounts/:id,none,Bearer Token,Delete account
+PATCH,/api/accounts/:id/block,{{base_url}}/accounts/:id/block,none,Bearer Token,Block an account
+PATCH,/api/accounts/:id/unblock,{{base_url}}/accounts/:id/unblock,none,Bearer Token,Unblock an account
+GET,/api/accounts/:account_id/addresses,{{base_url}}/accounts/:account_id/addresses,none,Bearer Token,List all addresses for account
+POST,/api/accounts/:account_id/addresses,{{base_url}}/accounts/:account_id/addresses,"label, address_line1, city, state, postal_code, phone, address_type, default",Bearer Token,Create new address
+GET,/api/accounts/:account_id/addresses/:id,{{base_url}}/accounts/:account_id/addresses/:id,none,Bearer Token,Get specific address
+PUT,/api/accounts/:account_id/addresses/:id,{{base_url}}/accounts/:account_id/addresses/:id,"label, address_line1, city, state, postal_code, phone, address_type, default",Bearer Token,Update address
+DELETE,/api/accounts/:account_id/addresses/:id,{{base_url}}/accounts/:account_id/addresses/:id,none,Bearer Token,Delete address
+GET,/api/cart,{{base_url}}/cart,none,Bearer Token,Get shopping cart
+POST,/api/cart_items,{{base_url}}/cart_items,"product_variant_id, quantity",Bearer Token,Add item to cart
+PUT,/api/cart_items/:id,{{base_url}}/cart_items/:id,quantity,Bearer Token,Update cart item quantity
+DELETE,/api/cart_items/:id,{{base_url}}/cart_items/:id,none,Bearer Token,Remove item from cart
+POST,/api/admin/login,{{base_url}}/admin/login,"email, password",Not Required,Admin login
+POST,/api/admin/forgot_password,{{base_url}}/admin/forgot_password,email,Not Required,Request admin password reset
+POST,/api/admin/otp_confirmation,{{base_url}}/admin/otp_confirmation,"email, otp",Not Required,Confirm admin OTP
+POST,/api/admin/reset_password,{{base_url}}/admin/reset_password,"email, new_password",Not Required,Reset admin password
+PUT,/api/admin/change_password,{{base_url}}/admin/change_password,"old_password, new_password",Bearer Token,Admin change password
+GET,/api/admin_users,{{base_url}}/admin_users,none,Bearer Token,List all admin users
+POST,/api/admin_users,{{base_url}}/admin_users,"first_name, last_name, email, phone",Bearer Token,Create new admin user
+GET,/api/admin_users/:id,{{base_url}}/admin_users/:id,none,Bearer Token,Get admin user details
+PUT,/api/admin_users/:id,{{base_url}}/admin_users/:id,admin user fields,Bearer Token,Update admin user
+DELETE,/api/admin_users/:id,{{base_url}}/admin_users/:id,none,Bearer Token,Delete admin user
+PUT,/api/admin/:id/deactivate,{{base_url}}/admin/:id/deactivate,none,Bearer Token,Deactivate admin user
+PUT,/api/admin/:id/reactivate,{{base_url}}/admin/:id/reactivate,none,Bearer Token,Reactivate admin user
+GET,/api/roles,{{base_url}}/roles,none,Bearer Token,List all roles
+POST,/api/roles,{{base_url}}/roles,"name, permissions",Bearer Token,Create new role
+GET,/api/roles/:id,{{base_url}}/roles/:id,none,Bearer Token,Get role details
+PUT,/api/roles/:id,{{base_url}}/roles/:id,role fields,Bearer Token,Update role
+DELETE,/api/roles/:id,{{base_url}}/roles/:id,none,Bearer Token,Delete role
+GET,/api/modules,{{base_url}}/modules,none,Bearer Token,Get all available modules/permissions
+PUT,/api/roles/:id/deactivate,{{base_url}}/roles/:id/deactivate,none,Bearer Token,Deactivate role
+PUT,/api/roles/:id/reactivate,{{base_url}}/roles/:id/reactivate,none,Bearer Token,Reactivate role
+GET,/api/active_roles,{{base_url}}/active_roles,none,Bearer Token,Get all active roles
+POST,/api/assign_role,{{base_url}}/assign_role,"admin_user_id, role_id",Bearer Token,Assign role to admin user
+GET,/api/categories,{{base_url}}/categories,none,Optional Bearer Token,List all categories
+POST,/api/categories,{{base_url}}/categories,"name, description",Bearer Token,Create new category
+GET,/api/categories/:id,{{base_url}}/categories/:id,none,Optional Bearer Token,Get category details
+PUT,/api/categories/:id,{{base_url}}/categories/:id,"name, description",Bearer Token,Update category
+DELETE,/api/categories/:id,{{base_url}}/categories/:id,none,Bearer Token,Delete category
+GET,/api/all_categories,{{base_url}}/all_categories,none,Not Required,Get all active categories
+PUT,/api/categories/:id/deactivate,{{base_url}}/categories/:id/deactivate,none,Bearer Token,Deactivate category
+PUT,/api/categories/:id/reactivate,{{base_url}}/categories/:id/reactivate,none,Bearer Token,Reactivate category
+GET,/api/cat_filters,{{base_url}}/cat_filters,none,Optional Bearer Token,List all category filters
+POST,/api/cat_filters,{{base_url}}/cat_filters,"name, category_id, values",Bearer Token,Create new category filter
+GET,/api/cat_filters/:id,{{base_url}}/cat_filters/:id,none,Optional Bearer Token,Get filter details
+PUT,/api/cat_filters/:id,{{base_url}}/cat_filters/:id,filter fields,Bearer Token,Update category filter
+DELETE,/api/cat_filters/:id,{{base_url}}/cat_filters/:id,none,Bearer Token,Delete category filter
+GET,/api/active_filters,{{base_url}}/active_filters,none,Not Required,Get all active filters
+GET,/api/brands,{{base_url}}/brands,none,Optional Bearer Token,List all brands
+POST,/api/brands,{{base_url}}/brands,"name, logo_url",Bearer Token,Create new brand
+GET,/api/brands/:id,{{base_url}}/brands/:id,none,Optional Bearer Token,Get brand details
+PUT,/api/brands/:id,{{base_url}}/brands/:id,brand fields,Bearer Token,Update brand
+DELETE,/api/brands/:id,{{base_url}}/brands/:id,none,Bearer Token,Delete brand
+GET,/api/all_brands,{{base_url}}/all_brands,none,Not Required,Get all active brands
+PUT,/api/brands/:id/deactivate,{{base_url}}/brands/:id/deactivate,none,Bearer Token,Deactivate brand
+PUT,/api/brands/:id/reactivate,{{base_url}}/brands/:id/reactivate,none,Bearer Token,Reactivate brand
+GET,/api/products,{{base_url}}/products,none,Not Required,List all products
+POST,/api/products,{{base_url}}/products,"name, description, category_id, brand_id, price",Bearer Token,Create new product
+GET,/api/products/:id,{{base_url}}/products/:id,none,Not Required,Get product details
+PUT,/api/products/:id,{{base_url}}/products/:id,product fields,Bearer Token,Update product
+DELETE,/api/products/:id,{{base_url}}/products/:id,none,Bearer Token,Delete product
+GET,/api/products/similar_product,{{base_url}}/products/similar_product,product_id,Not Required,Get similar products
+GET,/api/active_products,{{base_url}}/active_products,none,Not Required,Get all active products
+GET,/api/products/:product_id/reviews,{{base_url}}/products/:product_id/reviews,none,Not Required,List product reviews
+POST,/api/products/:product_id/reviews,{{base_url}}/products/:product_id/reviews,"rating, comment",Bearer Token,Create product review
+GET,/api/dealers,{{base_url}}/dealers,none,Optional Bearer Token,List all dealers
+POST,/api/dealers,{{base_url}}/dealers,"name, email, phone, business_details",Not Required,Create/Register dealer
+GET,/api/dealers/:id,{{base_url}}/dealers/:id,none,Optional Bearer Token,Get dealer details
+PUT,/api/dealers/:id,{{base_url}}/dealers/:id,dealer fields,Bearer Token,Update dealer profile
+DELETE,/api/dealers/:id,{{base_url}}/dealers/:id,none,Bearer Token,Delete dealer
+GET,/api/dealers/active_dealers,{{base_url}}/dealers/active_dealers,none,Not Required,Get all active dealers
+PATCH,/api/dealers/:id/block,{{base_url}}/dealers/:id/block,none,Bearer Token,Block dealer account
+PATCH,/api/dealers/:id/unblock,{{base_url}}/dealers/:id/unblock,none,Bearer Token,Unblock dealer account
+PATCH,/api/dealers/:id/approve,{{base_url}}/dealers/:id/approve,none,Bearer Token,Approve dealer registration
+PATCH,/api/dealers/:id/reject,{{base_url}}/dealers/:id/reject,rejection_reason,Bearer Token,Reject dealer registration
+POST,/api/dealer/login,{{base_url}}/dealer/login,"email, password",Not Required,Dealer login
+POST,/api/dealer/change_password,{{base_url}}/dealer/change_password,"old_password, new_password",Bearer Token,Dealer change password
+POST,/api/dealer/forgot_password,{{base_url}}/dealer/forgot_password,email,Not Required,Dealer forgot password
+POST,/api/dealer/otp_confirmation,{{base_url}}/dealer/otp_confirmation,"email, otp",Not Required,Dealer OTP confirmation
+POST,/api/dealer/reset_password,{{base_url}}/dealer/reset_password,"email, new_password",Not Required,Dealer reset password
+GET,/api/dealer_products,{{base_url}}/dealer_products,none,Optional Bearer Token,List dealer products
+POST,/api/dealer_products,{{base_url}}/dealer_products,"product_id, price, stock, specifications",Bearer Token,Add product as dealer
+GET,/api/dealer_products/:id,{{base_url}}/dealer_products/:id,none,Optional Bearer Token,Get dealer product details
+PUT,/api/dealer_products/:id,{{base_url}}/dealer_products/:id,product fields,Bearer Token,Update dealer product
+DELETE,/api/dealer_products/:id,{{base_url}}/dealer_products/:id,none,Bearer Token,Delete dealer product
+PATCH,/api/dealer_products/:id/approve,{{base_url}}/dealer_products/:id/approve,none,Bearer Token,Approve dealer product
+PATCH,/api/dealer_products/:id/reject,{{base_url}}/dealer_products/:id/reject,rejection_reason,Bearer Token,Reject dealer product
+PATCH,/api/dealer_products/:id/revert_to_pending,{{base_url}}/dealer_products/:id/revert_to_pending,none,Bearer Token,Revert product to pending
+PATCH,/api/dealer_products/:id/update_stock,{{base_url}}/dealer_products/:id/update_stock,quantity,Bearer Token,Update product stock
+PATCH,/api/dealer_products/:id/toggle_active,{{base_url}}/dealer_products/:id/toggle_active,none,Bearer Token,Toggle product active status
+GET,/api/dealer_products/shop_index,{{base_url}}/dealer_products/shop_index,none,Not Required,Get products for shop display
+GET,/api/dealer_products/similar,{{base_url}}/dealer_products/similar,product_id,Not Required,Get similar dealer products
