@@ -1,0 +1,802 @@
+[
+  {
+    "method": "POST",
+    "endpoint": "/api/otp/send",
+    "full_url": "{{base_url}}/otp/send",
+    "data_fields": {"identifier": "ravi@yopmail.com"},
+    "auth": "none",
+    "description": "Send OTP to email/phone for signup/login"
+  },
+  {
+    "method": "POST",
+    "endpoint": "/api/otp/verify",
+    "full_url": "{{base_url}}/otp/verify",
+    "data_fields": {"identifier": "ravi@yopmail.com", "otp": "123456"},
+    "auth": "none",
+    "description": "Verify OTP and get JWT token"
+  },
+  {
+    "method": "POST",
+    "endpoint": "/api/auth/google",
+    "full_url": "{{base_url}}/auth/google",
+    "data_fields": {"google_token": "example_google_token"},
+    "auth": "none",
+    "description": "Google OAuth login"
+  },
+  {
+    "method": "POST",
+    "endpoint": "/api/password",
+    "full_url": "{{base_url}}/password",
+    "data_fields": {"email": "example@example.com"},
+    "auth": "none",
+    "description": "Create/Reset password link sent"
+  },
+  {
+    "method": "POST",
+    "endpoint": "/api/set_password",
+    "full_url": "{{base_url}}/set_password",
+    "data_fields": {"reset_password_token": "example_reset_password_token", "password": "example_new_password", "password_confirmation": "example_new_password"},
+    "auth": "Bearer Token",
+    "description": "Set new password"
+  },
+  {
+    "method": "POST",
+    "endpoint": "/api/accounts",
+    "full_url": "{{base_url}}/accounts",
+    "data_fields": ["first_name", "last_name", "email", "phone", "country_code", "google_signup"],
+    "auth": "none",
+    "description": "Create new account"
+  },
+  {
+    "method": "GET",
+    "endpoint": "/api/accounts/:id",
+    "full_url": "{{base_url}}/accounts/:id",
+    "data_fields": [],
+    "auth": "Bearer Token",
+    "description": "Get account profile by ID"
+  },
+  {
+    "method": "PUT",
+    "endpoint": "/api/accounts/:id",
+    "full_url": "{{base_url}}/accounts/:id",
+    "data_fields": ["first_name and other fields"],
+    "auth": "Bearer Token",
+    "description": "Update account profile"
+  },
+  {
+    "method": "DELETE",
+    "endpoint": "/api/accounts/:id",
+    "full_url": "{{base_url}}/accounts/:id",
+    "data_fields": [],
+    "auth": "Bearer Token",
+    "description": "Delete account"
+  },
+  {
+    "method": "PATCH",
+    "endpoint": "/api/accounts/:id/block",
+    "full_url": "{{base_url}}/accounts/:id/block",
+    "data_fields": [],
+    "auth": "Bearer Token",
+    "description": "Block an account"
+  },
+  {
+    "method": "PATCH",
+    "endpoint": "/api/accounts/:id/unblock",
+    "full_url": "{{base_url}}/accounts/:id/unblock",
+    "data_fields": [],
+    "auth": "Bearer Token",
+    "description": "Unblock an account"
+  },
+  {
+    "method": "GET",
+    "endpoint": "/api/accounts/:account_id/addresses",
+    "full_url": "{{base_url}}/accounts/:account_id/addresses",
+    "data_fields": [],
+    "auth": "Bearer Token",
+    "description": "List all addresses for account"
+  },
+  {
+    "method": "POST",
+    "endpoint": "/api/accounts/:account_id/addresses",
+    "full_url": "{{base_url}}/accounts/:account_id/addresses",
+    "data_fields": ["label", "address_line1", "city", "state", "postal_code", "phone", "address_type", "default"],
+    "auth": "Bearer Token",
+    "description": "Create new address"
+  },
+  {
+    "method": "GET",
+    "endpoint": "/api/accounts/:account_id/addresses/:id",
+    "full_url": "{{base_url}}/accounts/:account_id/addresses/:id",
+    "data_fields": [],
+    "auth": "Bearer Token",
+    "description": "Get specific address"
+  },
+  {
+    "method": "PUT",
+    "endpoint": "/api/accounts/:account_id/addresses/:id",
+    "full_url": "{{base_url}}/accounts/:account_id/addresses/:id",
+    "data_fields": ["label", "address_line1", "city", "state", "postal_code", "phone", "address_type", "default"],
+    "auth": "Bearer Token",
+    "description": "Update address"
+  },
+  {
+    "method": "DELETE",
+    "endpoint": "/api/accounts/:account_id/addresses/:id",
+    "full_url": "{{base_url}}/accounts/:account_id/addresses/:id",
+    "data_fields": [],
+    "auth": "Bearer Token",
+    "description": "Delete address"
+  },
+  {
+    "method": "GET",
+    "endpoint": "/api/cart",
+    "full_url": "{{base_url}}/cart",
+    "data_fields": [],
+    "auth": "Bearer Token",
+    "description": "Get shopping cart"
+  },
+  {
+    "method": "POST",
+    "endpoint": "/api/cart_items",
+    "full_url": "{{base_url}}/cart_items",
+    "data_fields": ["product_variant_id", "quantity"],
+    "auth": "Bearer Token",
+    "description": "Add item to cart"
+  },
+  {
+    "method": "PUT",
+    "endpoint": "/api/cart_items/:id",
+    "full_url": "{{base_url}}/cart_items/:id",
+    "data_fields": ["quantity"],
+    "auth": "Bearer Token",
+    "description": "Update cart item quantity"
+  },
+  {
+    "method": "DELETE",
+    "endpoint": "/api/cart_items/:id",
+    "full_url": "{{base_url}}/cart_items/:id",
+    "data_fields": [],
+    "auth": "Bearer Token",
+    "description": "Remove item from cart"
+  },
+  {
+    "method": "POST",
+    "endpoint": "/api/admin/login",
+    "full_url": "{{base_url}}/admin/login",
+    "data_fields": ["email", "password"],
+    "auth": "none",
+    "description": "Admin login"
+  },
+  {
+    "method": "POST",
+    "endpoint": "/api/admin/forgot_password",
+    "full_url": "{{base_url}}/admin/forgot_password",
+    "data_fields": ["email"],
+    "auth": "none",
+    "description": "Request admin password reset"
+  },
+  {
+    "method": "POST",
+    "endpoint": "/api/admin/otp_confirmation",
+    "full_url": "{{base_url}}/admin/otp_confirmation",
+    "data_fields": ["email", "otp"],
+    "auth": "none",
+    "description": "Confirm admin OTP"
+  },
+  {
+    "method": "POST",
+    "endpoint": "/api/admin/reset_password",
+    "full_url": "{{base_url}}/admin/reset_password",
+    "data_fields": ["id", "password", "password_confirmation"],
+    "auth": "none",
+    "description": "Reset admin password"
+  },
+  {
+    "method": "PUT",
+    "endpoint": "/api/admin/change_password",
+    "full_url": "{{base_url}}/admin/change_password",
+    "data_fields": ["password", "password_confirmation"],
+    "auth": "Bearer Token",
+    "description": "Admin change password"
+  },
+  {
+    "method": "GET",
+    "endpoint": "/api/admin_users",
+    "full_url": "{{base_url}}/admin_users",
+    "data_fields": [],
+    "auth": "Bearer Token",
+    "description": "List all admin users"
+  },
+  {
+    "method": "POST",
+    "endpoint": "/api/admin_users",
+    "full_url": "{{base_url}}/admin_users",
+    "data_fields": ["first_name", "last_name", "email", "phone"],
+    "auth": "Bearer Token",
+    "description": "Create new admin user"
+  },
+  {
+    "method": "GET",
+    "endpoint": "/api/admin_users/:id",
+    "full_url": "{{base_url}}/admin_users/:id",
+    "data_fields": [],
+    "auth": "Bearer Token",
+    "description": "Get admin user details"
+  },
+  {
+    "method": "PUT",
+    "endpoint": "/api/admin_users/:id",
+    "full_url": "{{base_url}}/admin_users/:id",
+    "data_fields": ["admin user fields"],
+    "auth": "Bearer Token",
+    "description": "Update admin user"
+  },
+  {
+    "method": "DELETE",
+    "endpoint": "/api/admin_users/:id",
+    "full_url": "{{base_url}}/admin_users/:id",
+    "data_fields": [],
+    "auth": "Bearer Token",
+    "description": "Delete admin user"
+  },
+  {
+    "method": "PUT",
+    "endpoint": "/api/admin/:id/deactivate",
+    "full_url": "{{base_url}}/admin/:id/deactivate",
+    "data_fields": [],
+    "auth": "Bearer Token",
+    "description": "Deactivate admin user"
+  },
+  {
+    "method": "PUT",
+    "endpoint": "/api/admin/:id/reactivate",
+    "full_url": "{{base_url}}/admin/:id/reactivate",
+    "data_fields": [],
+    "auth": "Bearer Token",
+    "description": "Reactivate admin user"
+  },
+  {
+    "method": "GET",
+    "endpoint": "/api/roles",
+    "full_url": "{{base_url}}/roles",
+    "data_fields": [],
+    "auth": "Bearer Token",
+    "description": "List all roles"
+  },
+  {
+    "method": "POST",
+    "endpoint": "/api/roles",
+    "full_url": "{{base_url}}/roles",
+    "data_fields": ["name", "permissions"],
+    "auth": "Bearer Token",
+    "description": "Create new role"
+  },
+  {
+    "method": "GET",
+    "endpoint": "/api/roles/:id",
+    "full_url": "{{base_url}}/roles/:id",
+    "data_fields": [],
+    "auth": "Bearer Token",
+    "description": "Get role details"
+  },
+  {
+    "method": "PUT",
+    "endpoint": "/api/roles/:id",
+    "full_url": "{{base_url}}/roles/:id",
+    "data_fields": ["role fields"],
+    "auth": "Bearer Token",
+    "description": "Update role"
+  },
+  {
+    "method": "DELETE",
+    "endpoint": "/api/roles/:id",
+    "full_url": "{{base_url}}/roles/:id",
+    "data_fields": [],
+    "auth": "Bearer Token",
+    "description": "Delete role"
+  },
+  {
+    "method": "GET",
+    "endpoint": "/api/modules",
+    "full_url": "{{base_url}}/modules",
+    "data_fields": [],
+    "auth": "Bearer Token",
+    "description": "Get all available modules/permissions"
+  },
+  {
+    "method": "PUT",
+    "endpoint": "/api/roles/:id/deactivate",
+    "full_url": "{{base_url}}/roles/:id/deactivate",
+    "data_fields": [],
+    "auth": "Bearer Token",
+    "description": "Deactivate role"
+  },
+  {
+    "method": "PUT",
+    "endpoint": "/api/roles/:id/reactivate",
+    "full_url": "{{base_url}}/roles/:id/reactivate",
+    "data_fields": [],
+    "auth": "Bearer Token",
+    "description": "Reactivate role"
+  },
+  {
+    "method": "GET",
+    "endpoint": "/api/active_roles",
+    "full_url": "{{base_url}}/active_roles",
+    "data_fields": [],
+    "auth": "Bearer Token",
+    "description": "Get all active roles"
+  },
+  {
+    "method": "POST",
+    "endpoint": "/api/assign_role",
+    "full_url": "{{base_url}}/assign_role",
+    "data_fields": ["admin_user_id", "role_id"],
+    "auth": "Bearer Token",
+    "description": "Assign role to admin user"
+  },
+  {
+    "method": "GET",
+    "endpoint": "/api/categories",
+    "full_url": "{{base_url}}/categories",
+    "data_fields": [],
+    "auth": "optional",
+    "description": "List all categories"
+  },
+  {
+    "method": "POST",
+    "endpoint": "/api/categories",
+    "full_url": "{{base_url}}/categories",
+    "data_fields": ["name", "description"],
+    "auth": "Bearer Token",
+    "description": "Create new category"
+  },
+  {
+    "method": "GET",
+    "endpoint": "/api/categories/:id",
+    "full_url": "{{base_url}}/categories/:id",
+    "data_fields": [],
+    "auth": "optional",
+    "description": "Get category details"
+  },
+  {
+    "method": "PUT",
+    "endpoint": "/api/categories/:id",
+    "full_url": "{{base_url}}/categories/:id",
+    "data_fields": ["name", "description"],
+    "auth": "Bearer Token",
+    "description": "Update category"
+  },
+  {
+    "method": "DELETE",
+    "endpoint": "/api/categories/:id",
+    "full_url": "{{base_url}}/categories/:id",
+    "data_fields": [],
+    "auth": "Bearer Token",
+    "description": "Delete category"
+  },
+  {
+    "method": "GET",
+    "endpoint": "/api/all_categories",
+    "full_url": "{{base_url}}/all_categories",
+    "data_fields": [],
+    "auth": "none",
+    "description": "Get all active categories"
+  },
+  {
+    "method": "PUT",
+    "endpoint": "/api/categories/:id/deactivate",
+    "full_url": "{{base_url}}/categories/:id/deactivate",
+    "data_fields": [],
+    "auth": "Bearer Token",
+    "description": "Deactivate category"
+  },
+  {
+    "method": "PUT",
+    "endpoint": "/api/categories/:id/reactivate",
+    "full_url": "{{base_url}}/categories/:id/reactivate",
+    "data_fields": [],
+    "auth": "Bearer Token",
+    "description": "Reactivate category"
+  },
+  {
+    "method": "GET",
+    "endpoint": "/api/cat_filters",
+    "full_url": "{{base_url}}/cat_filters",
+    "data_fields": [],
+    "auth": "optional",
+    "description": "List all category filters"
+  },
+  {
+    "method": "POST",
+    "endpoint": "/api/cat_filters",
+    "full_url": "{{base_url}}/cat_filters",
+    "data_fields": ["name", "category_id", "values"],
+    "auth": "Bearer Token",
+    "description": "Create new category filter"
+  },
+  {
+    "method": "GET",
+    "endpoint": "/api/cat_filters/:id",
+    "full_url": "{{base_url}}/cat_filters/:id",
+    "data_fields": [],
+    "auth": "optional",
+    "description": "Get filter details"
+  },
+  {
+    "method": "PUT",
+    "endpoint": "/api/cat_filters/:id",
+    "full_url": "{{base_url}}/cat_filters/:id",
+    "data_fields": ["filter fields"],
+    "auth": "Bearer Token",
+    "description": "Update category filter"
+  },
+  {
+    "method": "DELETE",
+    "endpoint": "/api/cat_filters/:id",
+    "full_url": "{{base_url}}/cat_filters/:id",
+    "data_fields": [],
+    "auth": "Bearer Token",
+    "description": "Delete category filter"
+  },
+  {
+    "method": "GET",
+    "endpoint": "/api/active_filters",
+    "full_url": "{{base_url}}/active_filters",
+    "data_fields": [],
+    "auth": "none",
+    "description": "Get all active filters"
+  },
+  {
+    "method": "GET",
+    "endpoint": "/api/brands",
+    "full_url": "{{base_url}}/brands",
+    "data_fields": [],
+    "auth": "optional",
+    "description": "List all brands"
+  },
+  {
+    "method": "POST",
+    "endpoint": "/api/brands",
+    "full_url": "{{base_url}}/brands",
+    "data_fields": ["name", "logo_url"],
+    "auth": "Bearer Token",
+    "description": "Create new brand"
+  },
+  {
+    "method": "GET",
+    "endpoint": "/api/brands/:id",
+    "full_url": "{{base_url}}/brands/:id",
+    "data_fields": [],
+    "auth": "optional",
+    "description": "Get brand details"
+  },
+  {
+    "method": "PUT",
+    "endpoint": "/api/brands/:id",
+    "full_url": "{{base_url}}/brands/:id",
+    "data_fields": ["brand fields"],
+    "auth": "Bearer Token",
+    "description": "Update brand"
+  },
+  {
+    "method": "DELETE",
+    "endpoint": "/api/brands/:id",
+    "full_url": "{{base_url}}/brands/:id",
+    "data_fields": [],
+    "auth": "Bearer Token",
+    "description": "Delete brand"
+  },
+  {
+    "method": "GET",
+    "endpoint": "/api/all_brands",
+    "full_url": "{{base_url}}/all_brands",
+    "data_fields": [],
+    "auth": "none",
+    "description": "Get all active brands"
+  },
+  {
+    "method": "PUT",
+    "endpoint": "/api/brands/:id/deactivate",
+    "full_url": "{{base_url}}/brands/:id/deactivate",
+    "data_fields": [],
+    "auth": "Bearer Token",
+    "description": "Deactivate brand"
+  },
+  {
+    "method": "PUT",
+    "endpoint": "/api/brands/:id/reactivate",
+    "full_url": "{{base_url}}/brands/:id/reactivate",
+    "data_fields": [],
+    "auth": "Bearer Token",
+    "description": "Reactivate brand"
+  },
+  {
+    "method": "GET",
+    "endpoint": "/api/products",
+    "full_url": "{{base_url}}/products",
+    "data_fields": [],
+    "auth": "none",
+    "description": "List all products"
+  },
+  {
+    "method": "POST",
+    "endpoint": "/api/products",
+    "full_url": "{{base_url}}/products",
+    "data_fields": ["name", "description", "category_id", "brand_id", "price"],
+    "auth": "Bearer Token",
+    "description": "Create new product"
+  },
+  {
+    "method": "GET",
+    "endpoint": "/api/products/:id",
+    "full_url": "{{base_url}}/products/:id",
+    "data_fields": [],
+    "auth": "none",
+    "description": "Get product details"
+  },
+  {
+    "method": "PUT",
+    "endpoint": "/api/products/:id",
+    "full_url": "{{base_url}}/products/:id",
+    "data_fields": ["product fields"],
+    "auth": "Bearer Token",
+    "description": "Update product"
+  },
+  {
+    "method": "DELETE",
+    "endpoint": "/api/products/:id",
+    "full_url": "{{base_url}}/products/:id",
+    "data_fields": [],
+    "auth": "Bearer Token",
+    "description": "Delete product"
+  },
+  {
+    "method": "GET",
+    "endpoint": "/api/products/similar_product",
+    "full_url": "{{base_url}}/products/similar_product",
+    "data_fields": ["product_id"],
+    "auth": "none",
+    "description": "Get similar products"
+  },
+  {
+    "method": "GET",
+    "endpoint": "/api/active_products",
+    "full_url": "{{base_url}}/active_products",
+    "data_fields": [],
+    "auth": "none",
+    "description": "Get all active products"
+  },
+  {
+    "method": "GET",
+    "endpoint": "/api/products/:product_id/reviews",
+    "full_url": "{{base_url}}/products/:product_id/reviews",
+    "data_fields": [],
+    "auth": "none",
+    "description": "List product reviews"
+  },
+  {
+    "method": "POST",
+    "endpoint": "/api/products/:product_id/reviews",
+    "full_url": "{{base_url}}/products/:product_id/reviews",
+    "data_fields": ["rating", "comment"],
+    "auth": "Bearer Token",
+    "description": "Create product review"
+  },
+  {
+    "method": "GET",
+    "endpoint": "/api/dealers",
+    "full_url": "{{base_url}}/dealers",
+    "data_fields": [],
+    "auth": "optional",
+    "description": "List all dealers"
+  },
+  {
+    "method": "POST",
+    "endpoint": "/api/dealers",
+    "full_url": "{{base_url}}/dealers",
+    "data_fields": ["name", "email", "phone", "business_details"],
+    "auth": "none",
+    "description": "Create/Register dealer"
+  },
+  {
+    "method": "GET",
+    "endpoint": "/api/dealers/:id",
+    "full_url": "{{base_url}}/dealers/:id",
+    "data_fields": [],
+    "auth": "optional",
+    "description": "Get dealer details"
+  },
+  {
+    "method": "PUT",
+    "endpoint": "/api/dealers/:id",
+    "full_url": "{{base_url}}/dealers/:id",
+    "data_fields": ["dealer fields"],
+    "auth": "Bearer Token",
+    "description": "Update dealer profile"
+  },
+  {
+    "method": "DELETE",
+    "endpoint": "/api/dealers/:id",
+    "full_url": "{{base_url}}/dealers/:id",
+    "data_fields": [],
+    "auth": "Bearer Token",
+    "description": "Delete dealer"
+  },
+  {
+    "method": "GET",
+    "endpoint": "/api/dealers/active_dealers",
+    "full_url": "{{base_url}}/dealers/active_dealers",
+    "data_fields": [],
+    "auth": "none",
+    "description": "Get all active dealers"
+  },
+  {
+    "method": "PATCH",
+    "endpoint": "/api/dealers/:id/block",
+    "full_url": "{{base_url}}/dealers/:id/block",
+    "data_fields": [],
+    "auth": "Bearer Token",
+    "description": "Block dealer account"
+  },
+  {
+    "method": "PATCH",
+    "endpoint": "/api/dealers/:id/unblock",
+    "full_url": "{{base_url}}/dealers/:id/unblock",
+    "data_fields": [],
+    "auth": "Bearer Token",
+    "description": "Unblock dealer account"
+  },
+  {
+    "method": "PATCH",
+    "endpoint": "/api/dealers/:id/approve",
+    "full_url": "{{base_url}}/dealers/:id/approve",
+    "data_fields": [],
+    "auth": "Bearer Token",
+    "description": "Approve dealer registration"
+  },
+  {
+    "method": "PATCH",
+    "endpoint": "/api/dealers/:id/reject",
+    "full_url": "{{base_url}}/dealers/:id/reject",
+    "data_fields": ["rejection_reason"],
+    "auth": "Bearer Token",
+    "description": "Reject dealer registration"
+  },
+  {
+    "method": "POST",
+    "endpoint": "/api/dealer/login",
+    "full_url": "{{base_url}}/dealer/login",
+    "data_fields": ["email", "password"],
+    "auth": "none",
+    "description": "Dealer login"
+  },
+  {
+    "method": "POST",
+    "endpoint": "/api/dealer/change_password",
+    "full_url": "{{base_url}}/dealer/change_password",
+    "data_fields": ["password", "password_confirmation"],
+    "auth": "Bearer Token",
+    "description": "Dealer change password"
+  },
+  {
+    "method": "POST",
+    "endpoint": "/api/dealer/forgot_password",
+    "full_url": "{{base_url}}/dealer/forgot_password",
+    "data_fields": ["email"],
+    "auth": "none",
+    "description": "Dealer forgot password"
+  },
+  {
+    "method": "POST",
+    "endpoint": "/api/dealer/otp_confirmation",
+    "full_url": "{{base_url}}/dealer/otp_confirmation",
+    "data_fields": ["email", "otp"],
+    "auth": "none",
+    "description": "Dealer OTP confirmation"
+  },
+  {
+    "method": "POST",
+    "endpoint": "/api/dealer/reset_password",
+    "full_url": "{{base_url}}/dealer/reset_password",
+    "data_fields": ["password", "password_confirmation"],
+    "auth": "none",
+    "description": "Dealer reset password"
+  },
+  {
+    "method": "GET",
+    "endpoint": "/api/dealer_products",
+    "full_url": "{{base_url}}/dealer_products",
+    "data_fields": [],
+    "auth": "optional",
+    "description": "List dealer products"
+  },
+  {
+    "method": "POST",
+    "endpoint": "/api/dealer_products",
+    "full_url": "{{base_url}}/dealer_products",
+    "data_fields": ["product_id", "product_variant_id", "stock_quantity"],
+    "auth": "Bearer Token",
+    "description": "Add product as dealer"
+  },
+  {
+    "method": "GET",
+    "endpoint": "/api/dealer_products/:id",
+    "full_url": "{{base_url}}/dealer_products/:id",
+    "data_fields": [],
+    "auth": "optional",
+    "description": "Get dealer product details"
+  },
+  {
+    "method": "PUT",
+    "endpoint": "/api/dealer_products/:id",
+    "full_url": "{{base_url}}/dealer_products/:id",
+    "data_fields": ["product fields"],
+    "auth": "Bearer Token",
+    "description": "Update dealer product"
+  },
+  {
+    "method": "DELETE",
+    "endpoint": "/api/dealer_products/:id",
+    "full_url": "{{base_url}}/dealer_products/:id",
+    "data_fields": [],
+    "auth": "Bearer Token",
+    "description": "Delete dealer product"
+  },
+  {
+    "method": "PATCH",
+    "endpoint": "/api/dealer_products/:id/approve",
+    "full_url": "{{base_url}}/dealer_products/:id/approve",
+    "data_fields": [],
+    "auth": "Bearer Token",
+    "description": "Approve dealer product"
+  },
+  {
+    "method": "PATCH",
+    "endpoint": "/api/dealer_products/:id/reject",
+    "full_url": "{{base_url}}/dealer_products/:id/reject",
+    "data_fields": ["rejection_reason"],
+    "auth": "Bearer Token",
+    "description": "Reject dealer product"
+  },
+  {
+    "method": "PATCH",
+    "endpoint": "/api/dealer_products/:id/revert_to_pending",
+    "full_url": "{{base_url}}/dealer_products/:id/revert_to_pending",
+    "data_fields": [],
+    "auth": "Bearer Token",
+    "description": "Revert product to pending"
+  },
+  {
+    "method": "PATCH",
+    "endpoint": "/api/dealer_products/:id/update_stock",
+    "full_url": "{{base_url}}/dealer_products/:id/update_stock",
+    "data_fields": ["quantity"],
+    "auth": "Bearer Token",
+    "description": "Update product stock"
+  },
+  {
+    "method": "PATCH",
+    "endpoint": "/api/dealer_products/:id/toggle_active",
+    "full_url": "{{base_url}}/dealer_products/:id/toggle_active",
+    "data_fields": [],
+    "auth": "Bearer Token",
+    "description": "Toggle product active status"
+  },
+  {
+    "method": "GET",
+    "endpoint": "/api/dealer_products/shop_index",
+    "full_url": "{{base_url}}/dealer_products/shop_index",
+    "data_fields": [],
+    "auth": "none",
+    "description": "Get products for shop display"
+  },
+  {
+    "method": "GET",
+    "endpoint": "/api/dealer_products/similar",
+    "full_url": "{{base_url}}/dealer_products/similar",
+    "data_fields": ["product_id"],
+    "auth": "none",
+    "description": "Get similar dealer products"
+  }
+]
