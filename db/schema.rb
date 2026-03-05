@@ -10,7 +10,10 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_02_06_000000) do
+ActiveRecord::Schema[8.0].define(version: 2026_03_05_090241) do
+  # These are extensions that must be enabled in order to support this database
+  enable_extension "pg_catalog.plpgsql"
+
   create_table "accounts", force: :cascade do |t|
     t.string "first_name"
     t.string "last_name"
@@ -279,6 +282,20 @@ ActiveRecord::Schema[8.0].define(version: 2026_02_06_000000) do
     t.index ["created_by_id"], name: "index_roles_on_created_by_id"
   end
 
+  create_table "wholesaler_posts", force: :cascade do |t|
+    t.bigint "dealer_id", null: false
+    t.bigint "dealer_product_id"
+    t.string "title"
+    t.text "body"
+    t.decimal "price", precision: 12, scale: 2
+    t.integer "stock_quantity", default: 0
+    t.string "modal_no"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["dealer_id"], name: "index_wholesaler_posts_on_dealer_id"
+    t.index ["dealer_product_id"], name: "index_wholesaler_posts_on_dealer_product_id"
+  end
+
   add_foreign_key "addresses", "accounts"
   add_foreign_key "admin_roles", "admin_users"
   add_foreign_key "admin_roles", "roles"
@@ -297,4 +314,6 @@ ActiveRecord::Schema[8.0].define(version: 2026_02_06_000000) do
   add_foreign_key "reviews", "accounts"
   add_foreign_key "reviews", "dealer_products"
   add_foreign_key "roles", "admin_users", column: "created_by_id"
+  add_foreign_key "wholesaler_posts", "dealer_products"
+  add_foreign_key "wholesaler_posts", "dealers"
 end

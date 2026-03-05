@@ -93,6 +93,17 @@ Rails.application.routes.draw do
       end
     end
 
+    # Dealer bulk upload (CSV) - dealers can bulk upload their inventory mapping to existing variants
+    post "dealer/bulk_upload", to: "dealer_bulk_uploads#create"
+
+    # Wholesaler posts (facebook-like posts by dealers) and quick buy endpoint
+    resources :wholesaler_posts, only: [:index, :create, :show] do
+      post :buy, on: :member
+    end
+
+    # Generic bulk uploads for admins (brands, categories, cat_filters, roles, products)
+    post "bulk_uploads", to: "bulk_uploads#create"
+
   end
 
 end

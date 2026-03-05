@@ -5,6 +5,7 @@ class DealerProduct < ApplicationRecord
 
   has_many :cart_items
   has_many :reviews
+  has_many :wholesaler_posts, dependent: :destroy
   # has_many :order_items
 
   enum :approve_status, { pending: 0, approved: 1, rejected: 2 }

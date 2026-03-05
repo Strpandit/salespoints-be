@@ -5,6 +5,7 @@ class Dealer < ApplicationRecord
   has_one :dealer_location, dependent: :destroy, inverse_of: :dealer
   has_many :dealer_products
   has_many :products, through: :dealer_products
+  has_many :wholesaler_posts, dependent: :destroy
   has_one :cart, as: :buyer, dependent: :destroy
   # has_many :orders, as: :buyer
   # has_many :order_items, through: :orders

@@ -9,7 +9,7 @@ class CreateProductVariants < ActiveRecord::Migration[8.0]
       t.decimal :dealer_selling_price, precision: 10, scale: 2
       t.integer :discount_percentage, default: 0
       t.boolean :is_active, default: true
-      t.string :attributes, default: '{}'
+      t.string :variant_attributes, default: '{}'
       t.datetime :deleted_at
 
       t.timestamps
