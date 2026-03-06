@@ -36,7 +36,8 @@ module Api
         )
 
         # Send signup email notification
-        AccountMailer.signup_email(account).deliver_later if account.email.present?
+        # send signup notification immediately
+        AccountMailer.signup_email(account).deliver_now if account.email.present?
       end
       OtpService.send_otp(account)
       render json: { message: "OTP sent successfully", flow: signup ? 'signup' : 'login' }
@@ -56,7 +57,8 @@ module Api
       # Send login notification (only for existing accounts, not signup)
       is_signup = account.status == 'pending'
       unless is_signup
-        AccountMailer.login_notification(account).deliver_later if account.email.present?
+        # immediate delivery ensures user sees notification promptly
+        AccountMailer.login_notification(account).deliver_now if account.email.present?
       end
       
       # Mark account as active after successful login

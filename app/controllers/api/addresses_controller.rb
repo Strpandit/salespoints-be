@@ -77,7 +77,7 @@ module Api
     end
 
     def address_params
-      params.require(:address).permit(:label, :address_line1, :address_line2, :city, :state, :country, :postal_code, :phone, :address_type, :is_default)
+      params.require(:address).permit(:name, :address_line1, :address_line2, :city, :state, :country, :postal_code, :phone, :address_type, :is_default)
     end
   end
 end

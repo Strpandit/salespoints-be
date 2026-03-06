@@ -29,7 +29,8 @@ class OtpService
 
   def self.send_via_channel(account, otp)
     if account.email.present?
-      AccountMailer.send_otp(account, otp).deliver_later
+      # deliver_now ensures the OTP email is sent immediately, avoiding jobs not being processed
+      AccountMailer.send_otp(account, otp).deliver_now
     else
       SmsService.send_sms(account.phone, "Your OTP is #{otp}")
     end

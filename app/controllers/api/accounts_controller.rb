@@ -77,6 +77,21 @@ module Api
       render json: { message: "Account unblocked successfully" }, status: :ok
     end
 
+    def change_password
+      unless current_account.authenticate(params[:current_password])
+        return unauthorized("Incorrect current password")
+      end
+
+      if current_account.update(
+        password: params[:new_password],
+        password_confirmation: params[:confirm_password]
+      )
+        render json: { status: 200, message: "Password changed successfully" }, status: :ok
+      else
+        render json: { error: current_account.errors.full_messages }, status: :unprocessable_entity
+      end
+    end
+
     private
 
     def set_account
@@ -90,7 +105,7 @@ module Api
     end
 
     def account_params
-      params.require(:account).permit(:first_name, :last_name, :email, :phone, :country_code, :gender, :status, :password, :password_confirmation, :google_signup)
+      params.permit(:first_name, :last_name, :email, :phone, :country_code, :gender, :status, :password, :password_confirmation, :google_signup)
     end
 
     def check_permission

@@ -12,6 +12,7 @@ Rails.application.routes.draw do
   # Defines the root path route ("/")
   namespace :api do
     resources :accounts do
+      put :change_password, on: :member
       patch :block, on: :member
       patch :unblock, on: :member
       resources :addresses
