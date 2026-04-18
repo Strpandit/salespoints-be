@@ -45,10 +45,10 @@ Rails.application.configure do
   # Simple SMTP config - override with ENV vars as needed
   config.action_mailer.delivery_method = :smtp
   config.action_mailer.smtp_settings = {
-    address: "smtp.gmail.com",
-    port: 587,
-    user_name: "chaturvedisingham007@gmail.com",
-    password: "cdtlyoqntzpwifrt",
+    address: ENV['SMTP_ADDRESS'],
+    port: ENV['SMTP_PORT'],
+    user_name: ENV['SMTP_USERNAME'],
+    password: ENV['SMTP_PASSWORD'],
     authentication: "plain"
   }
 

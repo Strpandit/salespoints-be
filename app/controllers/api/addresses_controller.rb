@@ -1,12 +1,12 @@
 module Api
   class AddressesController < ApplicationController
+    before_action :authenticate_request!
     before_action :set_account
-    before_action :authenticate_request!, except: [:index, :show]
-    before_action :authorize_account!, only: [:create, :update, :destroy]
     before_action :set_address, only: [:show, :update, :destroy]
 
     def index
-      render json: current_account.addresses, each_serializer: AddressSerializer
+      return render json: { error: 'Not authorized' }, status: :unauthorized unless current_account
+      render json: serialize_resource(current_account.addresses, AddressSerializer), status: :ok
     end
 
     def create
@@ -15,10 +15,9 @@ module Api
         current_account.addresses.update_all(is_default: false)
       end
       if address.save
-        render json: {
-          data: AddressSerializer.new(address),
+        render json: serialize_resource(address, AddressSerializer).merge(
           message: "Address added successfully"
-        }, status: :created
+        ), status: :created
       else
         render json: {
           errors: address.errors.full_messages,
@@ -27,10 +26,9 @@ module Api
     end
 
     def show
-      render json: {
-        data: AddressSerializer.new(@address),
+      render json: serialize_resource(@address, AddressSerializer).merge(
         message: "Address details fetched successfully"
-      }, status: :ok
+      ), status: :ok
     end
 
     def update
@@ -38,10 +36,9 @@ module Api
         current_account.addresses.update_all(is_default: false)
       end
       if @address.update(address_params)
-        render json: {
-          data: AddressSerializer.new(@address),
+        render json: serialize_resource(@address, AddressSerializer).merge(
           message: "Address updated successfully"
-        }, status: :ok
+        ), status: :ok
       else
         render json: {
           errors: @address.errors.full_messages,
@@ -59,15 +56,8 @@ module Api
     private
 
     def set_account
-      @account = Account.find(params[:account_id])
-    rescue ActiveRecord::RecordNotFound
-      render json: { errors: "Account not found", status: 404 }, status: :not_found
-    end
-
-    def authorize_account!
-      unless current_account && current_account.id == @account.id
-        render json: { error: 'Not authorized' }, status: :forbidden
-      end
+      @account = current_account
+      return render json: { error: 'Not authorized' }, status: :unauthorized unless @account
     end
 
     def set_address

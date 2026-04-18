@@ -6,7 +6,7 @@ class DealerProduct < ApplicationRecord
   has_many :cart_items
   has_many :reviews
   has_many :wholesaler_posts, dependent: :destroy
-  # has_many :order_items
+  has_many :order_items
 
   enum :approve_status, { pending: 0, approved: 1, rejected: 2 }
 
@@ -25,5 +25,13 @@ class DealerProduct < ApplicationRecord
     (price_score * 50) +
     (rating_score * 30) +
     (stock_score * 20)
+  end
+
+  def sellable?
+    is_active && approve_status == "approved" && stock_quantity.to_i > 0
+  end
+  
+  def owner?(buyer)
+    dealer_id == buyer.id
   end
 end

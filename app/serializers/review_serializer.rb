@@ -1,5 +1,5 @@
-class ReviewSerializer < ActiveModel::Serializer
-  attributes :id, :title, :comment, :rating, :verified, :author, :date
+class ReviewSerializer < ApplicationSerializer
+  attributes :title, :comment, :rating, :verified
 
   def author
     object.account&.full_name || "Unknown"

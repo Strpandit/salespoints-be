@@ -4,9 +4,17 @@ module Api
     before_action :authenticate_request!, only: [:create]
 
     def index
-      reviews = @product.reviews.order(created_at: :desc)
+      reviews = @product.reviews.order(created_at: :desc).page(params[:page]).per(params[:per_page] || 20)
       if reviews.exists?
-        render json: { data: ActiveModelSerializers::SerializableResource.new(reviews, each_serializer: ReviewSerializer)  }, status: :ok
+        render json: serialize_resource(reviews, ReviewSerializer).merge(
+            meta: {
+              current_page: reviews.current_page,
+              next_page: reviews.next_page,
+              prev_page: reviews.prev_page,
+              total_pages: reviews.total_pages,
+              total_count: reviews.total_count
+            },
+          ), status: :ok
       else
         render json: { error: "No reviews found"}, status: :not_found
       end
@@ -18,7 +26,7 @@ module Api
       review.verified = user_verified?
 
       if review.save
-        render json: { data: ReviewSerializer.new(review), message: "Review created successfully" }, status: :created
+        render json: serialize_resource(review, ReviewSerializer).merge(message: "Review created successfully"), status: :created
       else
         render json: { error: review.errors.full_messages }, status: :unprocessable_entity
       end

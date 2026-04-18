@@ -11,7 +11,7 @@ module Api
 
       render json: {
         token: token,
-        dealer: DealerSerializer.new(dealer),
+        dealer: serialize_data(dealer, DealerSerializer),
         message: "Logged in successfully"
       }, status: :ok
     end
@@ -36,8 +36,10 @@ module Api
     def forgot_password
       dealer = Dealer.active.find_by(email: params[:email]&.downcase) || Dealer.active.find_by(phone: params[:phone]&.gsub(/\D/, ''))
       return unauthorized("Dealer not found") unless dealer
+      return render json: { error: "Dealer email not available" }, status: :unprocessable_entity if dealer.email.blank?
 
       dealer.update!(otp_pin: rand(1000..9999), otp_sent_at: Time.current)
+      DealerAuthMailer.forgot_password_otp(dealer).deliver_later if dealer.email.present?
       render json: { message: "OTP sent successfully", id: dealer.id }, status: :ok
     end
 
@@ -52,6 +54,7 @@ module Api
       dealer = Dealer.active.find(params[:id])
       if dealer.update(password: params[:password], password_confirmation: params[:password_confirmation])
         dealer.update(otp_pin: nil, otp_sent_at: nil)
+        DealerAuthMailer.password_reset_confirmation(dealer).deliver_later if dealer.email.present?
         render json: { message: "Password reset successfully" }, status: :ok
       else
         render json: { error: dealer.errors.full_messages }, status: :unprocessable_entity

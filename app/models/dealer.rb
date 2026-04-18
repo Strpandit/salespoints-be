@@ -4,11 +4,20 @@ class Dealer < ApplicationRecord
   has_one :dealer_profile, dependent: :destroy, inverse_of: :dealer
   has_one :dealer_location, dependent: :destroy, inverse_of: :dealer
   has_many :dealer_products
+  has_many :coupons, foreign_key: :created_by_dealer_id, dependent: :nullify
+  has_many :buyer_b2b_orders, class_name: "B2bOrder", foreign_key: :buyer_dealer_id, dependent: :destroy
+  has_many :seller_b2b_orders, class_name: "B2bOrder", foreign_key: :seller_dealer_id, dependent: :nullify
+  has_many :notifications, as: :receiver, dependent: :destroy
+  has_many :dealer_deletion_requests, dependent: :destroy
+  has_many :push_subscriptions, as: :subscriber, dependent: :destroy
   has_many :products, through: :dealer_products
   has_many :wholesaler_posts, dependent: :destroy
+  has_many :wholesaler_post_ratings, dependent: :destroy
   has_one :cart, as: :buyer, dependent: :destroy
-  # has_many :orders, as: :buyer
-  # has_many :order_items, through: :orders
+  has_many :orders, as: :buyer, dependent: :destroy
+  has_many :payment_attempts, as: :buyer, dependent: :destroy
+  has_many :sales_orders, class_name: "Order", foreign_key: :seller_dealer_id, dependent: :nullify
+  has_many :order_items, through: :sales_orders
 
   accepts_nested_attributes_for :dealer_profile, reject_if: :all_blank
   accepts_nested_attributes_for :dealer_location, reject_if: :all_blank
@@ -16,12 +25,16 @@ class Dealer < ApplicationRecord
   enum :status, { pending: 'pending', active: 'active', inactive: 'inactive', banned: 'banned', rejected: 'rejected' }
 
   before_validation :normalize_phone
+  before_validation :generate_dealer_code, on: :create
   before_validation :generate_password, on: :create
 
   scope :active, -> { where(status: "active") }
 
   validates :email, uniqueness: { case_sensitive: false }, allow_nil: true, format: { with: URI::MailTo::EMAIL_REGEXP }
   validates :phone, uniqueness: true, allow_nil: true
+  validates :dealer_code, uniqueness: true, allow_nil: true
+
+  after_create :create_default_cart
 
   def full_name
     [first_name, last_name].compact.join(" ")
@@ -55,6 +68,22 @@ class Dealer < ApplicationRecord
       code = country_code.gsub(/\D/, '')
       self.phone = phone.sub(/^0+/, '')
       self.phone = "#{code}#{self.phone}" unless self.phone.start_with?(code)
+    end
+  end
+
+  def create_default_cart
+    create_cart unless cart
+  end
+
+  def generate_dealer_code
+    return if dealer_code.present?
+
+    loop do
+      candidate = format("%06d", rand(0..999_999))
+      unless Dealer.exists?(dealer_code: candidate)
+        self.dealer_code = candidate
+        break
+      end
     end
   end
 end

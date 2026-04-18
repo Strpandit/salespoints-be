@@ -59,6 +59,8 @@ Rails.application.configure do
 
   # Set host to be used by links generated in mailer templates.
   # config.action_mailer.default_url_options = { host: "example.com" }
+  Rails.application.routes.default_url_options[:host] = "http://salespoints-be.onrender.com"
+  config.active_storage.default_url_options = { host: "http://salespoints-be.onrender.com" }
 
   # Specify outgoing SMTP server. Remember to add smtp/* credentials via rails credentials:edit.
   # config.action_mailer.smtp_settings = {
@@ -92,10 +94,10 @@ Rails.application.configure do
 
   config.action_mailer.delivery_method = :smtp
   config.action_mailer.smtp_settings = {
-    :address              => "smtp.gmail.com",
-    :port                 => 587,
-    :user_name            => "chaturvedisingham007@gmail.com",
-    :password             => "cdtlyoqntzpwifrt",
+    :address              => ENV['SMTP_ADDRESS'],
+    :port                 => ENV['SMTP_PORT'],
+    :user_name            => ENV['SMTP_USERNAME'],
+    :password             => ENV['SMTP_PASSWORD'],
     :authentication       => "plain"
   }
 end

@@ -1,4 +1,11 @@
 class DealerAuthMailer < ApplicationMailer
+  def forgot_password_otp(dealer)
+    @dealer = dealer
+    @otp = dealer.otp_pin
+    @expires_in_minutes = 10
+    mail(to: dealer.email, subject: "Dealer Password Reset OTP - SalesPoints")
+  end
+
   def dealer_login_notification(dealer)
     @dealer = dealer
     @login_time = Time.now.strftime("%B %d, %Y at %I:%M %p")

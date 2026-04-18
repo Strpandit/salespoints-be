@@ -2,9 +2,22 @@ module Api
   class WholesalerPostsController < ApplicationController
     # GET /api/wholesaler_posts
     def index
-      posts = WholesalerPost.order(created_at: :desc).page(params[:page]).per(params[:per_page] || 20)
+      posts = WholesalerPost
+        .includes(:media_attachments, dealer: :dealer_profile)
+        .order(Arel.sql("COALESCE(rating, 0) DESC"), created_at: :desc)
+        .page(params[:page])
+        .per(params[:per_page] || 20)
+
+      current_ratings = {}
+      if current_dealer.present? && posts.any?
+        current_ratings = WholesalerPostRating
+          .where(dealer_id: current_dealer.id, wholesaler_post_id: posts.map(&:id))
+          .pluck(:wholesaler_post_id, :rating)
+          .to_h
+      end
+
       render json: {
-        data: posts.as_json,
+        data: posts.map { |post| post_payload(post, current_ratings[post.id]) },
         meta: {
           current_page: posts.current_page,
           next_page: posts.next_page,
@@ -17,21 +30,65 @@ module Api
 
     # GET /api/wholesaler_posts/:id
     def show
-      post = WholesalerPost.find_by(id: params[:id])
+      post = WholesalerPost.includes(:media_attachments, dealer: :dealer_profile).find_by(id: params[:id])
       return render json: { error: 'Not found' }, status: :not_found unless post
-      render json: { data: post.as_json}, status: :ok
+
+      my_rating = current_dealer&.wholesaler_post_ratings&.find_by(wholesaler_post_id: post.id)&.rating
+      render json: { data: post_payload(post, my_rating) }, status: :ok
     end
 
     # POST /api/wholesaler_posts
     def create
       return render json: { error: 'Only dealers can create posts' }, status: :forbidden unless current_dealer
 
-      post = current_dealer.wholesaler_posts.new(wholesaler_post_params)
+      post = WholesalerPost.new(wholesaler_post_params)
+      post.dealer_id = current_dealer.id
+
+      if post.dealer_product_id.present?
+        dealer_product = current_dealer.dealer_products.find_by(id: post.dealer_product_id)
+        return render json: { error: 'Invalid dealer product selection' }, status: :unprocessable_entity unless dealer_product
+      end
+
       if post.save
-        render json: { data: post, message: 'Post created' }, status: :created
+        render json: { data: post_payload(post), message: 'Post created' }, status: :created
       else
         render json: { error: post.errors.full_messages }, status: :unprocessable_entity
       end
+    end
+
+    # PATCH/PUT /api/wholesaler_posts/:id
+    def update
+      return render json: { error: 'Only dealers can edit posts' }, status: :forbidden unless current_dealer
+
+      post = WholesalerPost.find_by(id: params[:id])
+      return render json: { error: 'Post not found' }, status: :not_found unless post
+      return render json: { error: 'You can edit only your own post' }, status: :forbidden unless post.dealer_id == current_dealer.id
+
+      if post_params_without_media[:dealer_product_id].present?
+        dealer_product = current_dealer.dealer_products.find_by(id: post_params_without_media[:dealer_product_id])
+        return render json: { error: 'Invalid dealer product selection' }, status: :unprocessable_entity unless dealer_product
+      end
+
+      post.assign_attributes(post_params_without_media)
+      attach_media_files(post)
+
+      if post.save
+        render json: { data: post_payload(post, current_dealer_rating_for(post)), message: 'Post updated' }, status: :ok
+      else
+        render json: { error: post.errors.full_messages }, status: :unprocessable_entity
+      end
+    end
+
+    # DELETE /api/wholesaler_posts/:id
+    def destroy
+      return render json: { error: 'Only dealers can delete posts' }, status: :forbidden unless current_dealer
+
+      post = WholesalerPost.find_by(id: params[:id])
+      return render json: { error: 'Post not found' }, status: :not_found unless post
+      return render json: { error: 'You can delete only your own post' }, status: :forbidden unless post.dealer_id == current_dealer.id
+
+      post.destroy
+      render json: { message: 'Post deleted' }, status: :ok
     end
 
     # POST /api/wholesaler_posts/:id/buy
@@ -43,14 +100,13 @@ module Api
       return render json: { error: 'Post not found' }, status: :not_found unless post
 
       if post.dealer_id == current_dealer.id
-        return render json: { error: "Cannot buy your own post" }, status: :unprocessable_entity
+        return render json: { error: 'Cannot buy your own products' }, status: :unprocessable_entity
       end
 
       unless post.dealer_product
-        return render json: { error: 'Post has no dealer_product attached' }, status: :unprocessable_entity
+        return render json: { error: 'Post has no dealer product attached' }, status: :unprocessable_entity
       end
 
-      # add to buyer's cart
       cart = current_dealer.cart || current_dealer.create_cart
       item = cart.cart_items.find_or_initialize_by(dealer_product: post.dealer_product)
       qty = params[:quantity].to_i > 0 ? params[:quantity].to_i : 1
@@ -64,10 +120,86 @@ module Api
       end
     end
 
+    # POST /api/wholesaler_posts/:id/rate
+    def rate
+      return render json: { error: 'Only dealers can rate' }, status: :forbidden unless current_dealer
+
+      post = WholesalerPost.find_by(id: params[:id])
+      return render json: { error: 'Post not found' }, status: :not_found unless post
+      return render json: { error: 'Cannot rate your own post' }, status: :unprocessable_entity if post.dealer_id == current_dealer.id
+
+      rating_value = params[:rating].to_f
+      unless rating_value.between?(1, 5)
+        return render json: { error: 'Rating must be between 1 and 5' }, status: :unprocessable_entity
+      end
+
+      dealer_rating = post.wholesaler_post_ratings.find_or_initialize_by(dealer_id: current_dealer.id)
+      dealer_rating.rating = rating_value
+      dealer_rating.save!
+
+      new_count = post.wholesaler_post_ratings.count
+      new_avg = post.wholesaler_post_ratings.average(:rating).to_f.round(2)
+      post.update!(rating: new_avg, rating_count: new_count)
+
+      render json: { data: post_payload(post, dealer_rating.rating), message: 'Rating submitted' }, status: :ok
+    end
+
     private
 
     def wholesaler_post_params
-      params.require(:wholesaler_post).permit(:title, :body, :price, :stock_quantity, :modal_no, :dealer_product_id, images: [])
+      params.require(:wholesaler_post).permit(:title, :body, :price, :stock_quantity, :modal_no, :dealer_product_id, media: [])
+    end
+
+    def post_params_without_media
+      wholesaler_post_params.except(:media)
+    end
+
+    def attach_media_files(post)
+      return unless wholesaler_post_params[:media].present?
+
+      wholesaler_post_params[:media].each do |file|
+        post.media.attach(file)
+      end
+    end
+
+    def current_dealer_rating_for(post)
+      return nil unless current_dealer
+
+      current_dealer.wholesaler_post_ratings.find_by(wholesaler_post_id: post.id)&.rating
+    end
+
+    def post_payload(post, current_user_rating = nil)
+      {
+        id: post.id,
+        title: post.title,
+        body: post.body,
+        price: post.price,
+        stock_quantity: post.stock_quantity,
+        modal_no: post.modal_no,
+        rating: post.rating.to_f,
+        rating_count: post.rating_count.to_i,
+        current_user_rating: current_user_rating&.to_f,
+        is_owner: current_dealer.present? && post.dealer_id == current_dealer.id,
+        dealer_id: post.dealer_id,
+        dealer_product_id: post.dealer_product_id,
+        dealer_name: dealer_display_name(post.dealer),
+        media: post.media.map do |file|
+          {
+            id: file.id,
+            url: rails_blob_url(file, host: request.base_url),
+            filename: file.filename.to_s,
+            content_type: file.content_type.to_s
+          }
+        end,
+        created_at: post.created_at
+      }
+    end
+
+    def dealer_display_name(dealer)
+      return 'Dealer' unless dealer
+      return "Dealer Code: #{dealer.dealer_code}" if dealer.dealer_code.present?
+
+      "Dealer ##{dealer.id}"
     end
   end
 end

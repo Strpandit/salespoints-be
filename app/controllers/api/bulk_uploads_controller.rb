@@ -1,7 +1,6 @@
 require 'csv'
 module Api
   class BulkUploadsController < ApplicationController
-    # Only admin users should be able to run these bulk imports
     before_action :require_admin
 
     def create
@@ -21,6 +20,12 @@ module Api
       render json: result, status: :ok
     rescue => e
       render json: { error: e.message }, status: :internal_server_error
+    end
+
+    private
+
+    def require_admin
+      unauthorized("Admin only") unless current_user_type == "AdminUser"
     end
   end
 end

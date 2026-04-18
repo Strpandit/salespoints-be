@@ -3,60 +3,93 @@ module Api
     before_action :authenticate_request!
     before_action :require_admin, only: [:index, :block, :unblock]
     before_action :check_permission, only: [:index, :block, :unblock]
-    before_action :set_account, only: [:show, :update, :destroy, :block, :unblock]
-    before_action :authorize_account!, only: [:show, :update, :destroy]
+    before_action :set_account, only: [:show, :update, :destroy, :block, :unblock, :request_deletion, :cancel_deletion_request]
+    before_action :authorize_account!, only: [:show, :update, :request_deletion, :cancel_deletion_request]
 
     def index
-      @accounts = Account.all
+      @accounts = Account.all.order(created_at: :desc).page(params[:page]).per(params[:per_page] || 20)
       if @accounts.exists?
-        render json: {
-          data: ActiveModelSerializers::SerializableResource.new(@accounts, each_serializer: AccountSerializer),
+        render json: serialize_resource(@accounts, AccountSerializer).merge(
+          meta: {
+            current_page: @accounts.current_page,
+            next_page: @accounts.next_page,
+            prev_page: @accounts.prev_page,
+            total_pages: @accounts.total_pages,
+            total_count: @accounts.total_count
+          },
           message: 'Account list fetched successfully'
-        }, status: :ok
+        ), status: :ok
       else
         render json: { message: "No Data Found." }, status: :not_found
       end
     end
 
     def show
-      render json: {
-        data: AccountSerializer.new(@account).serializable_hash,
+      render json: serialize_resource(@account, AccountSerializer).merge(
         message: 'User Details'
-      }, status: :ok
+      ), status: :ok
     end
 
     def update
       if @account.update(account_params)
-        render json: { account: AccountSerializer.new(@account), message: "Account updated successfully" }, status: :ok
+        render json: { account: serialize_data(@account, AccountSerializer), message: "Account updated successfully" }, status: :ok
       else
         render json: { errors: @account.errors.full_messages }, status: :unprocessable_entity
       end
     end
 
     def destroy
-      @account = Account.with_deleted.find_by(id: params[:id])
+      render json: {
+        message: "Account deletion requires admin approval. Submit a request from Security settings in your profile."
+      }, status: :forbidden
+    end
 
-      return render json: { message: "Account not found" }, status: :not_found unless @account
-
+    def request_deletion
       unless params[:password].present?
         return render json: { message: "Password is required" }, status: :unprocessable_entity
       end
-      
+
       unless @account.authenticate(params[:password])
         return render json: { message: "Incorrect password" }, status: :unauthorized
       end
 
-      # Store email before deletion
-      account_email = @account.email
-
-      if @account.destroy
-        # Send account deletion email
-        AccountMailer.account_deleted(account_email).deliver_later if account_email.present?
-        
-        render json: { message: "Account deleted successfully" }, status: :ok
-      else
-        render json: { message: "Unable to delete account" }, status: :unprocessable_entity
+      if @account.account_deletion_requests.pending.exists?
+        return render json: { message: "A deletion request is already pending review" }, status: :unprocessable_entity
       end
+
+      req = @account.account_deletion_requests.create!(
+        status: "pending",
+        reason: params[:reason].to_s.presence,
+        requested_at: Time.current,
+        password_verified_at: Time.current
+      )
+
+      AdminUser.find_each do |admin|
+        next unless admin.can_access?(:accounts, :read)
+
+        NotificationService.deliver(
+          recipient: admin,
+          actor: @account,
+          notifiable: req,
+          kind: "account_deletion_requested",
+          title: "Account deletion requested",
+          message: "#{@account.full_name.presence || 'Customer'} (#{@account.email}) requested account deletion.",
+          payload: { account_deletion_request_id: req.id, account_id: @account.id }
+        )
+      end
+
+      render json: {
+        message: "Deletion request submitted. An administrator will review it.",
+        data: { pending_deletion_request: true }
+      }, status: :ok
+    end
+
+    def cancel_deletion_request
+      req = @account.account_deletion_requests.pending.order(created_at: :desc).first
+      return render json: { message: "No pending deletion request" }, status: :not_found unless req
+
+      req.destroy!
+      render json: { message: "Deletion request cancelled", data: { pending_deletion_request: false } }, status: :ok
     end
 
     def block
@@ -105,7 +138,7 @@ module Api
     end
 
     def account_params
-      params.permit(:first_name, :last_name, :email, :phone, :country_code, :gender, :status, :password, :password_confirmation, :google_signup)
+      params.require(:account).permit(:first_name, :last_name, :email, :phone, :country_code, :gender, :status, :password, :password_confirmation, :google_signup)
     end
 
     def check_permission

@@ -1,5 +1,5 @@
 class AccountMailer < ApplicationMailer
-  default from: 'no-reply@salespoints.com'
+  default from: "Sales Points <salespointecom@gmail.com>"
 
   def send_otp(account, otp)
     @account = account

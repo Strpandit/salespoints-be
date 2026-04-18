@@ -1,6 +1,6 @@
 class OtpService
   MAX_ATTEMPTS = 5
-  COOLDOWN     = 60.seconds
+  COOLDOWN     = 30.seconds
   OTP_TTL      = 5.minutes
 
   def self.send_otp(account)
@@ -21,7 +21,7 @@ class OtpService
     Rails.cache.write(
       otp_attempt_key(account),
       attempts + 1,
-      expires_in: 15.minutes
+      expires_in: OTP_TTL
     )
 
     send_via_channel(account, otp)
@@ -29,7 +29,6 @@ class OtpService
 
   def self.send_via_channel(account, otp)
     if account.email.present?
-      # deliver_now ensures the OTP email is sent immediately, avoiding jobs not being processed
       AccountMailer.send_otp(account, otp).deliver_now
     else
       SmsService.send_sms(account.phone, "Your OTP is #{otp}")

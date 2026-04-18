@@ -6,26 +6,42 @@ module Api
     before_action :set_brand, only: [:show, :update, :destroy, :deactivate , :reactivate]
     
     def index
-      brands = Brand.where(is_active: true)
+      brands = Brand.where(is_active: true).order(created_at: :desc).page(params[:page]).per(params[:per_page] || 20)
       if brands.exists?
-        render json: { data: ActiveModelSerializers::SerializableResource.new(brands, each_serializer: BrandSerializer), message: "Brands fetched successfully" }, status: :ok
+        render json: serialize_resource(brands, BrandSerializer).merge(
+          meta: {
+            current_page: brands.current_page,
+            next_page: brands.next_page,
+            prev_page: brands.prev_page,
+            total_pages: brands.total_pages,
+            total_count: brands.total_count
+          },
+          message: "Brands fetched successfully" ), status: :ok
       else
         render json: { error: "No brands found" }, status: :not_found
       end
     end
 
     def all_brands
-      all_brands = Brand.all
+      all_brands = Brand.all.order(created_at: :desc).page(params[:page]).per(params[:per_page] || 20)
       if all_brands.exists?
-        render json: { data: ActiveModelSerializers::SerializableResource.new(all_brands, each_serializer: BrandSerializer), message: "All Brands fetched successfully" }, status: :ok
+        render json: serialize_resource(all_brands, BrandSerializer).merge(
+          meta: {
+            current_page: all_brands.current_page,
+            next_page: all_brands.next_page,
+            prev_page: all_brands.prev_page,
+            total_pages: all_brands.total_pages,
+            total_count: all_brands.total_count
+          },
+          message: "All Brands fetched successfully" ), status: :ok
       else
         render json: { error: "Brands not found" }, status: :not_found
       end
     end
 
     def show
-      if @brand.exists?
-        render json: { data: BrandSerializer.new(@brand), message: "Brand details fetched successfully" }, status: :ok
+      if @brand.present?
+        render json: serialize_resource(@brand, BrandSerializer).merge(message: "Brand details fetched successfully"), status: :ok
       else
         render json: { error: "Brand not found" }, status: :not_found
       end
@@ -35,7 +51,7 @@ module Api
       brand = Brand.new(brand_params)
       if brand.save
         notify_admins_entity_created(brand)
-        render json: {data: BrandSerializer.new(brand), message: "Brand created successfully"}, status: :created
+        render json: serialize_resource(brand, BrandSerializer).merge(message: "Brand created successfully"), status: :created
       else
         render json: { error: brand.errors.full_messages }, status: :unprocessable_entity
       end
@@ -44,7 +60,7 @@ module Api
     def update
       if @brand.update(brand_params)
         notify_admins_entity_updated(@brand)
-        render json: {data: BrandSerializer.new(@brand), message: "Brand updated successfully"}, status: :ok
+        render json: serialize_resource(@brand, BrandSerializer).merge(message: "Brand updated successfully"), status: :ok
       else
         render json: { error: @brand.errors.full_messages }, status: :unprocessable_entity
       end

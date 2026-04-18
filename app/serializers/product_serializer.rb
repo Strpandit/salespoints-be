@@ -1,10 +1,10 @@
-class ProductSerializer < ActiveModel::Serializer
-  attributes :id, :name, :slug, :sku, :desc, :material, :features, :care_instructions,
+class ProductSerializer < ApplicationSerializer
+  attributes :name, :slug, :sku, :desc, :material, :features, :care_instructions,
              :is_featured, :is_new, :is_active, :tax_rate, :deleted_at, :specifications
 
   belongs_to :category
   belongs_to :brand
-  has_many :product_variants, serializer: ProductVariantSerializer
+  has_many :product_variants
 
   def specifications
     object.product_specifications.each_with_object({}) do |spec, hash|

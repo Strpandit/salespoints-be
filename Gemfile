@@ -20,9 +20,6 @@ gem "jbuilder"
 # Use Active Model has_secure_password [https://guides.rubyonrails.org/active_model_basics.html#securepassword]
 gem "bcrypt", "~> 3.1.17"
 
-# JSON serialization helper
-gem 'active_model_serializers', '~> 0.10.12'
-
 # JSON Web Token support
 gem 'jwt', '~> 2.6'
 
@@ -71,9 +68,11 @@ group :test do
   gem "selenium-webdriver"
 end
 
-gem 'dotenv-rails', groups: [:development, :test]
+gem "dotenv-rails", groups: [:development, :test, :production]
 gem 'kaminari'
 gem 'httparty'
 gem 'acts_as_paranoid'
+gem 'plivo'
 gem 'phonelib'
 gem 'country_select'
+gem 'cloudinary'

@@ -2,23 +2,36 @@ module Api
   class DealersController < ApplicationController
     before_action :authenticate_request!
     before_action :require_admin, only: [:create, :index, :active_dealers, :block, :unblock, :destroy, :approve, :reject]
-    before_action :set_dealer, only: [:show, :update, :block, :unblock, :approve, :reject]
+    before_action :set_dealer, only: [:show, :update, :block, :unblock, :approve, :reject, :request_deletion, :cancel_deletion_request]
     before_action :authorize_dealer_update, only: [:update, :show]
+    before_action :authorize_dealer_self!, only: [:request_deletion, :cancel_deletion_request]
 
     def index
-      dealers = Dealer.where(status: "pending").includes(:dealer_profile, :dealer_location)
-      render json: {
-        data: ActiveModelSerializers::SerializableResource.new(dealers, each_serializer: DealerSerializer),
+      dealers = Dealer.where(status: "pending").includes(:dealer_profile, :dealer_location).order(created_at: :desc).page(params[:page]).per(params[:per_page] || 20)
+      render json: serialize_resource(dealers, DealerSerializer).merge(
+        meta: {
+          current_page: dealers.current_page,
+          next_page: dealers.next_page,
+          prev_page: dealers.prev_page,
+          total_pages: dealers.total_pages,
+          total_count: dealers.total_count
+        },
         message: "Dealers fetched successfully"
-      }, status: :ok
+      ), status: :ok
     end
 
     def active_dealers
-      dealers = Dealer.active.includes(:dealer_profile, :dealer_location)
-      render json: {
-        data: ActiveModelSerializers::SerializableResource.new(dealers, each_serializer: DealerSerializer),
+      dealers = Dealer.active.includes(:dealer_profile, :dealer_location).order(created_at: :desc).page(params[:page]).per(params[:per_page] || 20)
+      render json: serialize_resource(dealers, DealerSerializer).merge(
+        meta: {
+          current_page: dealers.current_page,
+          next_page: dealers.next_page,
+          prev_page: dealers.prev_page,
+          total_pages: dealers.total_pages,
+          total_count: dealers.total_count
+        },
         message: "Active dealers fetched successfully"
-      }, status: :ok
+      ), status: :ok
     end
 
     def create
@@ -35,25 +48,23 @@ module Api
         # Notify admins about new dealer creation
         notify_admins_about_dealer_creation(dealer)
         
-        render json: {
-          data: DealerSerializer.new(dealer),
+        render json: serialize_resource(dealer, DealerSerializer).merge(
           message: "Dealer created successfully. Welcome email sent."
-        }, status: :created
+        ), status: :created
       else
         render json: { error: dealer.errors.full_messages }, status: :unprocessable_entity
       end
     end
 
     def show
-      render json: {
-        data: DealerSerializer.new(@dealer),
+      render json: serialize_resource(@dealer, DealerSerializer).merge(
         message: "Dealer fetched successfully"
-      }, status: :ok
+      ), status: :ok
     end
 
     def update
       if @dealer.update(dealer_params)
-        render json: { data: DealerSerializer.new(@dealer), message: "Dealer updated successfully" }, status: :ok
+        render json: serialize_resource(@dealer, DealerSerializer).merge(message: "Dealer updated successfully"), status: :ok
       else
         render json: {
           error: @dealer.errors.full_messages
@@ -83,10 +94,9 @@ module Api
         # Notify admins about approval
         notify_admins_about_dealer_action(@dealer, "approved")
         
-        render json: {
-          data: DealerSerializer.new(@dealer),
+        render json: serialize_resource(@dealer, DealerSerializer).merge(
           message: "Dealer approved successfully. Approval email sent."
-        }, status: :ok
+        ), status: :ok
       else
         render json: { error: @dealer.errors.full_messages }, status: :unprocessable_entity
       end
@@ -106,21 +116,75 @@ module Api
         # Notify admins about rejection
         notify_admins_about_dealer_action(@dealer, "rejected", rejection_reason)
         
-        render json: {
-          data: DealerSerializer.new(@dealer),
+        render json: serialize_resource(@dealer, DealerSerializer).merge(
           message: "Dealer rejected successfully. Rejection email sent."
-        }, status: :ok
+        ), status: :ok
       else
         render json: { error: @dealer.errors.full_messages }, status: :unprocessable_entity
       end
     end
 
     def destroy
-      @dealer.destroy
-      render json: { message: "Dealer deleted successfully" }, status: :ok
+      render json: {
+        error: "Direct deletion is disabled. Dealers must submit a deletion request; an administrator will approve it."
+      }, status: :forbidden
+    end
+
+    def request_deletion
+      unless params[:password].present?
+        return render json: { message: "Password is required" }, status: :unprocessable_entity
+      end
+
+      unless @dealer.authenticate(params[:password])
+        return render json: { message: "Incorrect password" }, status: :unauthorized
+      end
+
+      if @dealer.dealer_deletion_requests.pending.exists?
+        return render json: { message: "A deletion request is already pending review" }, status: :unprocessable_entity
+      end
+
+      req = @dealer.dealer_deletion_requests.create!(
+        status: "pending",
+        reason: params[:reason].to_s.presence,
+        requested_at: Time.current,
+        password_verified_at: Time.current
+      )
+
+      AdminUser.find_each do |admin|
+        next unless admin.can_access?(:dealers, :write)
+
+        NotificationService.deliver(
+          recipient: admin,
+          actor: @dealer,
+          notifiable: req,
+          kind: "dealer_deletion_requested",
+          title: "Dealer deletion requested",
+          message: "#{@dealer.full_name.presence || 'Dealer'} (#{@dealer.email}) requested account deletion.",
+          payload: { dealer_deletion_request_id: req.id, dealer_id: @dealer.id }
+        )
+      end
+
+      render json: {
+        message: "Deletion request submitted. An administrator will review it.",
+        data: { pending_deletion_request: true }
+      }, status: :ok
+    end
+
+    def cancel_deletion_request
+      req = @dealer.dealer_deletion_requests.pending.order(created_at: :desc).first
+      return render json: { message: "No pending deletion request" }, status: :not_found unless req
+
+      req.destroy!
+      render json: { message: "Deletion request cancelled", data: { pending_deletion_request: false } }, status: :ok
     end
 
     private
+
+    def authorize_dealer_self!
+      return if current_user_type == "Dealer" && current_dealer.present? && current_dealer.id == @dealer.id
+
+      render json: { error: "Unauthorized" }, status: :forbidden
+    end
 
     def dealer_params
       params.require(:dealer).permit(

@@ -49,7 +49,15 @@ module Api
     end
 
     def current_account
-      current_user if current_user_type == 'Account'
+      current_user if current_user_type.to_s.strip == 'Account'
+    end
+
+    def serialize_resource(resource, serializer, options = {})
+      { data: serializer.render(resource, options) }
+    end
+
+    def serialize_data(resource, serializer, options = {})
+      serialize_resource(resource, serializer, options)[:data]
     end
   end
 end

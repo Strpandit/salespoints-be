@@ -9,14 +9,22 @@ module Api
       if params[:slug].present?
         category = Category.find_by(slug: params[:slug])
         if category
-          render json: { data: CategorySerializer.new(category), message: "Category fetched" }, status: :ok
+          render json: serialize_resource(category, CategorySerializer).merge(message: "Category fetched"), status: :ok
         else
           render json: { error: "Category not found" }, status: :not_found
         end
       else
-        categories = Category.where(is_active: true)
+        categories = Category.where(is_active: true).order(created_at: :desc).page(params[:page]).per(params[:per_page] || 20)
         if categories.exists?
-          render json: { data: ActiveModelSerializers::SerializableResource.new(categories, each_serializer: CategorySerializer), message: "Categories fetched successfully" }, status: :ok
+          render json: serialize_resource(categories, CategorySerializer).merge(
+            meta: {
+              current_page: categories.current_page,
+              next_page: categories.next_page,
+              prev_page: categories.prev_page,
+              total_pages: categories.total_pages,
+              total_count: categories.total_count
+            },
+            message: "Categories fetched successfully" ), status: :ok
         else
           render json: { error: "No categories found" }, status: :not_found
         end
@@ -24,17 +32,25 @@ module Api
     end
 
     def all_categories
-      categories = Category.all
+      categories = Category.all.order(created_at: :desc).page(params[:page]).per(params[:per_page] || 20)
       if categories.exists?
-        render json: { data: ActiveModelSerializers::SerializableResource.new(categories, each_serializer: CategorySerializer), message: "Categories fetched successfully" }, status: :ok
+        render json: serialize_resource(categories, CategorySerializer).merge(
+          meta: {
+            current_page: categories.current_page,
+            next_page: categories.next_page,
+            prev_page: categories.prev_page,
+            total_pages: categories.total_pages,
+            total_count: categories.total_count
+          },
+          message: "Categories fetched successfully" ), status: :ok
       else
         render json: { error: "No categories found" }, status: :not_found
       end
     end
 
     def show
-      if @category.exists?
-        render json: { data: CategorySerializer.new(@category), message: "Category details fetched successfully" }, status: :ok
+      if @category.present?
+        render json: serialize_resource(@category, CategorySerializer).merge(message: "Category details fetched successfully"), status: :ok
       else
         render json: { error: "Category not found" }, status: :not_found
       end
@@ -44,7 +60,7 @@ module Api
       category = Category.new(category_params)
       if category.save
         notify_admins_entity_created(category)
-        render json: {data: CategorySerializer.new(category), message: "Category created successfully"}, status: :created
+        render json: serialize_resource(category, CategorySerializer).merge(message: "Category created successfully"), status: :created
       else
         render json: { error: category.errors.full_messages }, status: :unprocessable_entity
       end
@@ -53,9 +69,9 @@ module Api
     def update
       if @category.update(category_params)
         notify_admins_entity_updated(@category)
-        render json: {data: CategorySerializer.new(@category), message: "Category updated successfully"}, status: :ok
+        render json: serialize_resource(@category, CategorySerializer).merge(message: "Category updated successfully"), status: :ok
       else
-        render json: { error: category.errors.full_messages }, status: :unprocessable_entity
+        render json: { error: @category.errors.full_messages }, status: :unprocessable_entity
       end
     end
 

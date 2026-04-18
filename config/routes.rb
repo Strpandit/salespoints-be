@@ -21,12 +21,31 @@ Rails.application.routes.draw do
     post 'otp/send', to: 'auth#send_otp'
     post 'otp/verify', to: 'auth#verify_otp'
 
-    # cart endpoints
-    get 'cart', to: 'carts#show'
-    resources :cart_items, only: [:create, :update, :destroy]
     post 'auth/google',  to: 'auth#google_login'
     post 'password', to: 'passwords#create'
     post 'set_password', to: 'passwords#update'
+
+    # Cart routes
+    get '/cart', to: 'carts#current_cart'
+    post '/cart/add_item', to: 'carts#add_item'
+    patch '/cart/update_item', to: 'carts#update_item'
+    delete '/cart/remove_item', to: 'carts#remove_item'
+    post '/cart/apply_coupon', to: 'carts#apply_coupon'
+    delete '/cart/remove_coupon', to: 'carts#remove_coupon'
+    post '/cart/checkout', to: 'carts#checkout'
+    resources :orders, only: [:index, :show, :update]
+    resources :notifications, only: [:index] do
+      collection do
+        get :unread_count
+        patch :mark_all_read
+      end
+      member do
+        patch :mark_read
+      end
+    end
+    get "payments/cashfree/verify", to: "payments#verify_cashfree"
+    post "payments/cashfree/cancel", to: "payments#cancel_cashfree"
+    post "payments/cashfree/webhook", to: "payments#cashfree_webhook"
 
     # Admin routes
     resources :admin_users
@@ -88,9 +107,25 @@ Rails.application.routes.draw do
       patch :revert_to_pending, on: :member
       patch :update_stock, on: :member
       patch :toggle_active, on: :member
+      get :b2b_show, on: :member
       collection do
         get :shop_index
         get :similar
+        get :b2b_shop_index
+        get :b2b_similar
+      end
+    end
+    resources :b2b_orders, only: [:index] do
+      collection do
+        post :place_from_cart
+      end
+      member do
+        post :accept
+      end
+    end
+    resources :dealer_notifications, only: [:index] do
+      member do
+        patch :mark_read
       end
     end
 
@@ -98,12 +133,16 @@ Rails.application.routes.draw do
     post "dealer/bulk_upload", to: "dealer_bulk_uploads#create"
 
     # Wholesaler posts (facebook-like posts by dealers) and quick buy endpoint
-    resources :wholesaler_posts, only: [:index, :create, :show] do
+    resources :wholesaler_posts, only: [:index, :create, :show, :update, :destroy] do
       post :buy, on: :member
+      post :rate, on: :member
     end
 
     # Generic bulk uploads for admins (brands, categories, cat_filters, roles, products)
     post "bulk_uploads", to: "bulk_uploads#create"
+
+    # Dealer coupons
+    resources :coupons
 
   end
 

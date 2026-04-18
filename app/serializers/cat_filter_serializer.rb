@@ -1,5 +1,5 @@
-class CatFilterSerializer < ActiveModel::Serializer
-  attributes :id, :name, :data_type, :is_filterable, :category_id
+class CatFilterSerializer < ApplicationSerializer
+  attributes :name, :data_type, :is_filterable, :category_id
 
-  belongs_to :category, serializer: CategorySerializer
+  belongs_to :category
 end

@@ -7,8 +7,7 @@ module Api
 
     def index
       products = Product.all.order(created_at: :desc).page(params[:page]).per(params[:per_page] || 20)
-      render json: {
-        data: ActiveModelSerializers::SerializableResource.new(products, each_serializer: ProductSerializer),
+      render json: serialize_resource(products, ProductSerializer).merge(
         meta: {
           current_page: products.current_page,
           next_page: products.next_page,
@@ -17,13 +16,12 @@ module Api
           total_count: products.total_count
         },
         message: "Products fetched successfully"
-      }, status: :ok
+      ), status: :ok
     end
 
     def active_products
       products = Product.active.order(created_at: :desc).page(params[:page]).per(params[:per_page] || 20)
-      render json: {
-        data: ActiveModelSerializers::SerializableResource.new(products, each_serializer: ProductSerializer),
+      render json: serialize_resource(products, ProductSerializer).merge(
         meta: {
           current_page: products.current_page,
           next_page: products.next_page,
@@ -32,14 +30,13 @@ module Api
           total_count: products.total_count
         },
         message: "Products fetched successfully"
-      }, status: :ok
+      ), status: :ok
     end
 
     def show
-      render json: {
-        data: ProductSerializer.new(@product),
+      render json: serialize_resource(@product, ProductSerializer).merge(
         message: "Product fetched successfully"
-      }, status: :ok
+      ), status: :ok
     end
 
     def similar_product
@@ -48,10 +45,9 @@ module Api
                         .limit(4)
     
       if products.present?
-        render json: { 
-          data: ActiveModelSerializers::SerializableResource.new(products, each_serializer: ProductSerializer),
+        render json: serialize_resource(products, ProductSerializer).merge(
           message: "Similar products fetched successfully"
-        }, status: :ok
+        ), status: :ok
       else
         render json: { errors: "No similar products found" }, status: :not_found
       end
@@ -62,10 +58,9 @@ module Api
 
       if product.save
         notify_admins_entity_created(product)
-        render json: {
-          data: ProductSerializer.new(product),
+        render json: serialize_resource(product, ProductSerializer).merge(
           message: "Product created successfully"
-        }, status: :created
+        ), status: :created
       else
         render json: { error: product.errors.full_messages }, status: :unprocessable_entity
       end
@@ -74,10 +69,9 @@ module Api
     def update
       if @product.update(product_params)
         notify_admins_entity_updated(@product)
-        render json: {
-          data: ProductSerializer.new(@product),
+        render json: serialize_resource(@product, ProductSerializer).merge(
           message: "Product updated successfully"
-        }, status: :ok
+        ), status: :ok
       else
         render json: { error: @product.errors.full_messages }, status: :unprocessable_entity
       end

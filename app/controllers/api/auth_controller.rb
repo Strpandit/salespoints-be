@@ -35,8 +35,7 @@ module Api
           status: 'pending'
         )
 
-        # Send signup email notification
-        # send signup notification immediately
+        # Send signup email notification immediately
         AccountMailer.signup_email(account).deliver_now if account.email.present?
       end
       OtpService.send_otp(account)
@@ -69,7 +68,7 @@ module Api
       render json: {
         message: is_signup ? 'Signup successful' : 'Login successful',
         token: token,
-        account: AccountSerializer.new(account)
+        account: serialize_data(account, AccountSerializer)
       }
     end
 
@@ -81,22 +80,29 @@ module Api
       account = Account.find_or_initialize_by(email: result[:email])
 
       if account.new_record?
+        generated_password = SecureRandom.urlsafe_base64(12)
         account.assign_attributes(
           provider: 'google',
           provider_uid: result[:uid],
           google_signup: true,
           status: 'active',
-          password: SecureRandom.urlsafe_base64(12),
-          password_confirmation: SecureRandom.urlsafe_base64(12)
+          password: generated_password,
+          password_confirmation: generated_password
         )
         account.save!
+      else
+        account.update!(
+          provider: 'google',
+          provider_uid: result[:uid],
+          google_signup: true
+        )
       end
 
       token = JsonWebToken.encode(user_id: account.id, user_type: 'Account')
 
       render json: {
         token: token,
-        account: AccountSerializer.new(account)
+        account: serialize_data(account, AccountSerializer)
       }
     end
   end

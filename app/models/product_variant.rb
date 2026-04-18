@@ -1,7 +1,8 @@
 class ProductVariant < ApplicationRecord
   belongs_to :product
   has_many :dealer_products
-  # has_many :order_items
+  has_many :cart_items
+  has_many :order_items
 
   validates :variant_sku, presence: true, uniqueness: true
   validates :selling_price, :dealer_selling_price, presence: true, numericality: true
