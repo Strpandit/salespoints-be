@@ -35,8 +35,6 @@ module Api
           status: 'pending'
         )
 
-        # Send signup email notification immediately
-        AccountMailer.signup_email(account).deliver_now if account.email.present?
       end
       OtpService.send_otp(account)
       render json: { message: "OTP sent successfully", flow: signup ? 'signup' : 'login' }
@@ -55,13 +53,13 @@ module Api
       
       # Send login notification (only for existing accounts, not signup)
       is_signup = account.status == 'pending'
-      unless is_signup
-        # immediate delivery ensures user sees notification promptly
+
+      if is_signup
+        account.update(status: 'active')
+        AccountMailer.signup_email(account).deliver_now if account.email.present?
+      else
         AccountMailer.login_notification(account).deliver_now if account.email.present?
       end
-      
-      # Mark account as active after successful login
-      account.update(status: 'active') if is_signup
       
       token = JsonWebToken.encode(user_id: account.id, user_type: 'Account')
 
@@ -82,6 +80,9 @@ module Api
       if account.new_record?
         generated_password = SecureRandom.urlsafe_base64(12)
         account.assign_attributes(
+          email: result[:email],
+          first_name: result[:first_name],
+          last_name: result[:last_name],
           provider: 'google',
           provider_uid: result[:uid],
           google_signup: true,

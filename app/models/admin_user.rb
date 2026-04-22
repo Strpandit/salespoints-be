@@ -10,10 +10,11 @@ class AdminUser < ApplicationRecord
 
   enum :status, { active: 'active', inactive: 'inactive' }
 
-  validates :email, uniqueness: { case_sensitive: false }, allow_nil: true, format: { with: URI::MailTo::EMAIL_REGEXP }
-  validates :phone, uniqueness: true, allow_nil: true
+  validates :email, uniqueness: { case_sensitive: false }, allow_blank: true, format: { with: URI::MailTo::EMAIL_REGEXP }
+  validates :phone, uniqueness: true, allow_blank: true
 
   before_create :generate_password
+  before_validation :normalize_email
 
   def super_admin?
     is_super_admin
@@ -37,13 +38,18 @@ class AdminUser < ApplicationRecord
 
   private
 
+  def normalize_email
+    self.email = email.to_s.strip.downcase.presence
+  end
+
   def generate_password
     return if password.present?
 
     year = Time.current.year.to_s
     email_part = email.split('@').first.to_s[0, 3]
     email_part = email_part.ljust(3, "x")
-    generated_password = "#{email_part}@#{year}"
+    random_digits = SecureRandom.random_number(10_000).to_s.rjust(4, "0")
+    generated_password = "#{email_part}#{random_digits}"
     self.generated_password = generated_password
     self.password = generated_password
     self.password_confirmation = generated_password

@@ -16,10 +16,11 @@ class Account < ApplicationRecord
   enum :gender, { male: 'male', female: 'female', other: 'other' }
 
   before_validation :normalize_phone
+  before_validation :normalize_email
   scope :active, -> { where(status: "active") }
 
-  validates :email, uniqueness: { case_sensitive: false }, allow_nil: true, format: { with: URI::MailTo::EMAIL_REGEXP }
-  validates :phone, uniqueness: true, allow_nil: true
+  validates :email, uniqueness: { case_sensitive: false }, allow_blank: true, format: { with: URI::MailTo::EMAIL_REGEXP }
+  validates :phone, uniqueness: true, allow_blank: true
 
   after_create :create_default_cart
 
@@ -39,10 +40,15 @@ class Account < ApplicationRecord
 
   def normalize_phone
     return if phone.blank?
-    self.phone = phone.gsub(/\D/, '').sub(/^0+/, '')
+    mobile = phone.to_s.gsub(/\D/, '').sub(/^0+/, '')
+    self.phone = mobile.presence
     if country_code.present?
       self.country_code = "+#{country_code.gsub(/\D/, '')}"
     end
+  end
+
+  def normalize_email
+    self.email = email.to_s.strip.downcase.presence
   end
 
   def create_default_cart

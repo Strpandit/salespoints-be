@@ -25,13 +25,14 @@ class Dealer < ApplicationRecord
   enum :status, { pending: 'pending', active: 'active', inactive: 'inactive', banned: 'banned', rejected: 'rejected' }
 
   before_validation :normalize_phone
+  before_validation :normalize_email
   before_validation :generate_dealer_code, on: :create
-  before_validation :generate_password, on: :create
+  # before_validation :generate_password, on: :create
 
   scope :active, -> { where(status: "active") }
 
-  validates :email, uniqueness: { case_sensitive: false }, allow_nil: true, format: { with: URI::MailTo::EMAIL_REGEXP }
-  validates :phone, uniqueness: true, allow_nil: true
+  validates :email, uniqueness: { case_sensitive: false }, allow_blank: true, format: { with: URI::MailTo::EMAIL_REGEXP }
+  validates :phone, uniqueness: true, allow_blank: true
   validates :dealer_code, uniqueness: true, allow_nil: true
 
   after_create :create_default_cart
@@ -50,16 +51,16 @@ class Dealer < ApplicationRecord
 
   private
 
-  def generate_password
-    return if password.present?
+  # def generate_password
+  #   return if password.present?
 
-    year = Time.current.year.to_s
-    email_part = email.to_s.split('@').first.to_s[0, 3]
-    email_part = email_part.ljust(3, "x")
-    generated_password = "#{email_part}@#{year}"
-    self.password = generated_password
-    self.password_confirmation = generated_password
-  end
+  #   year = Time.current.year.to_s
+  #   email_part = email.to_s.split('@').first.to_s[0, 3]
+  #   email_part = email_part.ljust(3, "x")
+  #   generated_password = "#{email_part}@#{year}"
+  #   self.password = generated_password
+  #   self.password_confirmation = generated_password
+  # end
 
   def normalize_phone
     return if phone.blank?
@@ -69,6 +70,10 @@ class Dealer < ApplicationRecord
       self.phone = phone.sub(/^0+/, '')
       self.phone = "#{code}#{self.phone}" unless self.phone.start_with?(code)
     end
+  end
+
+  def normalize_email
+    self.email = email.to_s.strip.downcase.presence
   end
 
   def create_default_cart
