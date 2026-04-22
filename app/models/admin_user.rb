@@ -10,7 +10,14 @@ class AdminUser < ApplicationRecord
 
   enum :status, { active: 'active', inactive: 'inactive' }
 
-  validates :email, uniqueness: { case_sensitive: false }, allow_blank: true, format: { with: URI::MailTo::EMAIL_REGEXP }
+  # validates :email, uniqueness: { case_sensitive: false }, allow_blank: true, format: { with: URI::MailTo::EMAIL_REGEXP }
+  validates :email,
+    allow_blank: true,
+    uniqueness: { case_sensitive: false },
+    format: {
+      with: /\A[a-zA-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@
+            [a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)*\.[a-zA-Z]{2,}\z/x
+    }
   validates :phone, uniqueness: true, allow_blank: true
 
   before_create :generate_password
