@@ -179,6 +179,7 @@ module Api
         rating: post.rating.to_f,
         rating_count: post.rating_count.to_i,
         current_user_rating: current_user_rating&.to_f,
+        approve_status: post.approve_status,
         is_owner: current_dealer.present? && post.dealer_id == current_dealer.id,
         dealer_id: post.dealer_id,
         dealer_product_id: post.dealer_product_id,
