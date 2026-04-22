@@ -45,7 +45,6 @@ class Account < ApplicationRecord
   private
 
   def normalize_phone
-    return if phone.blank?
     mobile = phone.to_s.gsub(/\D/, '').sub(/^0+/, '')
     self.phone = mobile.presence
     if country_code.present?

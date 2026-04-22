@@ -69,12 +69,10 @@ class Dealer < ApplicationRecord
   # end
 
   def normalize_phone
-    return if phone.blank?
-    self.phone = phone.gsub(/\D/, '')
+    mobile = phone.to_s.gsub(/\D/, '').sub(/^0+/, '')
+    self.phone = mobile.presence
     if country_code.present?
-      code = country_code.gsub(/\D/, '')
-      self.phone = phone.sub(/^0+/, '')
-      self.phone = "#{code}#{self.phone}" unless self.phone.start_with?(code)
+      self.country_code = "+#{country_code.gsub(/\D/, '')}"
     end
   end
 

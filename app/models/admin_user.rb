@@ -22,6 +22,7 @@ class AdminUser < ApplicationRecord
 
   before_create :generate_password
   before_validation :normalize_email
+  before_validation :normalize_phone
 
   def super_admin?
     is_super_admin
@@ -47,6 +48,14 @@ class AdminUser < ApplicationRecord
 
   def normalize_email
     self.email = email.to_s.strip.downcase.presence
+  end
+
+  def normalize_phone
+    mobile = phone.to_s.gsub(/\D/, '').sub(/^0+/, '')
+    self.phone = mobile.presence
+    if country_code.present?
+      self.country_code = "+#{country_code.gsub(/\D/, '')}"
+    end
   end
 
   def generate_password
