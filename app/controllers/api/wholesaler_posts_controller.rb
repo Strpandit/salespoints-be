@@ -56,6 +56,47 @@ module Api
       end
     end
 
+    # GET /api/wholesaler_posts/pending
+    def pending
+      posts = WholesalerPost.where(approve_status: "pending")
+        .includes(:media_attachments, dealer: :dealer_profile)
+                .order(created_at: :desc)
+                .page(params[:page])
+                .per(params[:per_page] || 15)
+
+      render json: {
+        data: posts.map { |post| post_payload(post) },
+        meta: {
+          current_page: posts.current_page,
+          total_pages: posts.total_pages
+        }
+      }
+    end
+
+    # PATCH /api/wholesaler_posts/:id/approve
+    def approve
+      post = WholesalerPost.find_by(id: params[:id])
+      return render json: { error: "Not found" }, status: :not_found unless post
+
+      post.update!(approve_status: "approved", reviewed_at: Time.current)
+
+      render json: { message: "Post approved" }
+    end
+
+    # PATCH /api/wholesaler_posts/:id/reject
+    def reject
+      post = WholesalerPost.find_by(id: params[:id])
+      return render json: { error: "Not found" }, status: :not_found unless post
+
+      post.update!(
+        approve_status: "rejected",
+        rejection_reason: params[:rejection_reason],
+        reviewed_at: Time.current
+      )
+
+      render json: { message: "Post rejected" }
+    end
+
     # PATCH/PUT /api/wholesaler_posts/:id
     def update
       return render json: { error: 'Only dealers can edit posts' }, status: :forbidden unless current_dealer

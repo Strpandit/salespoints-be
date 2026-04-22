@@ -133,7 +133,15 @@ Rails.application.routes.draw do
     post "dealer/bulk_upload", to: "dealer_bulk_uploads#create"
 
     # Wholesaler posts (facebook-like posts by dealers) and quick buy endpoint
-    resources :wholesaler_posts, only: [:index, :create, :show, :update, :destroy] do
+    resources :wholesaler_posts do
+      collection do
+        get :pending
+      end
+
+      member do
+        patch :approve
+        patch :reject
+      end
       post :buy, on: :member
       post :rate, on: :member
     end
