@@ -21,16 +21,28 @@ module Api
     end
 
     def active_dealers
-      dealers = Dealer.active.includes(:dealer_profile, :dealer_location).order(created_at: :desc).page(params[:page]).per(params[:per_page] || 20)
+      dealers = Dealer.includes(:dealer_profile, :dealer_location)
+      selected_status = params[:status].presence || "active"
+
+      if selected_status != "all"
+        unless Dealer.statuses.key?(selected_status)
+          return render json: { error: "Invalid dealer status" }, status: :unprocessable_entity
+        end
+
+        dealers = dealers.where(status: selected_status)
+      end
+
+      dealers = dealers.order(created_at: :desc).page(params[:page]).per(params[:per_page] || 20)
       render json: serialize_resource(dealers, DealerSerializer).merge(
         meta: {
           current_page: dealers.current_page,
           next_page: dealers.next_page,
           prev_page: dealers.prev_page,
           total_pages: dealers.total_pages,
-          total_count: dealers.total_count
+          total_count: dealers.total_count,
+          statuses: ["all"] + Dealer.statuses.keys
         },
-        message: "Active dealers fetched successfully"
+        message: "Dealers fetched successfully"
       ), status: :ok
     end
 
