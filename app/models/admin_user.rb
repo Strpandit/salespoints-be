@@ -7,6 +7,10 @@ class AdminUser < ApplicationRecord
   has_many :notifications, as: :receiver, dependent: :destroy
   has_many :admin_deletion_requests, foreign_key: :admin_user_id, dependent: :destroy, inverse_of: :admin_user
   has_many :push_subscriptions, as: :subscriber, dependent: :destroy
+  has_many :support_tickets, foreign_key: 'admin_user_id', dependent: :destroy
+  has_many :assigned_tickets, class_name: 'SupportTicket', foreign_key: 'assigned_to_id', dependent: :nullify
+  has_many :ticket_messages, foreign_key: 'admin_user_id', dependent: :destroy
+  has_many :contact_form_submissions, dependent: :destroy
 
   enum :status, { active: 'active', inactive: 'inactive' }
 

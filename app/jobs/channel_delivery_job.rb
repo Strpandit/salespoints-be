@@ -5,6 +5,7 @@ class ChannelDeliveryJob < ApplicationJob
     notification = Notification.find_by(id: notification_id)
     return unless notification
 
+    MetaWhatsappCloudService.new.deliver(notification)
     PlivoChannelService.new.deliver(notification)
   end
 end

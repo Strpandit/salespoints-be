@@ -3,9 +3,15 @@ class OrderSerializer < ApplicationSerializer
              :payment_method, :payment_status, :billing_address, :shipping_address,
              :status_display, :total_items, :items_count, :subtotal, :subtotal_amount,
              :tax_amount, :shipping_amount, :discount_amount, :total_amount,
-             :customer_name, :customer_email, :buyer_name, :seller_name
+             :customer_name, :customer_email, :buyer_name, :seller_name,
+             :commission_rate, :commission_amount, :marketplace_fee_amount,
+             :seller_settlement_amount, :settlement_status, :settlement_due_at,
+             :settled_at, :hold_released_at, :refund_status, :refund_amount,
+             :refunded_at, :refund_reason, :return_window_closes_at, :payment_reference,
+             :status_note
 
   has_many :order_items
+  has_many :return_requests
 
   def status_display
     object.status.to_s.humanize
@@ -41,6 +47,26 @@ class OrderSerializer < ApplicationSerializer
 
   def total_amount
     object.total_amount.to_f
+  end
+
+  def commission_rate
+    object.commission_rate.to_f
+  end
+
+  def commission_amount
+    object.commission_amount.to_f
+  end
+
+  def marketplace_fee_amount
+    object.marketplace_fee_amount.to_f
+  end
+
+  def seller_settlement_amount
+    object.seller_settlement_amount.to_f
+  end
+
+  def refund_amount
+    object.refund_amount.to_f
   end
 
   def customer_name

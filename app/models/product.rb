@@ -1,6 +1,9 @@
 class Product < ApplicationRecord
+  include AttachableMediaValidations
+
   belongs_to :category
   belongs_to :brand
+  has_many_attached :media
 
   has_many :product_variants, dependent: :destroy, inverse_of: :product
   has_many :product_specifications, dependent: :destroy, inverse_of: :product
@@ -11,6 +14,8 @@ class Product < ApplicationRecord
 
   validates :name, :slug, :sku, presence: true
   validates :slug, :sku, uniqueness: true
+  validate :catalog_media_presence
+  validate :media_files_valid
 
   scope :featured, -> { where(is_featured: true) }
   scope :new_arrivals, -> { where('created_at >= ?', 15.days.ago) } 
@@ -40,6 +45,16 @@ class Product < ApplicationRecord
   end
 
   private
+
+  def catalog_media_presence
+    return if media.attached? || product_variants.any? { |variant| !variant.marked_for_destruction? && variant.media.attached? }
+
+    errors.add(:base, "Add at least one image or video on the product or one of its variants")
+  end
+
+  def media_files_valid
+    validate_attachment_set(:media)
+  end
 
   def set_slug
     self.slug = name.to_s.parameterize if name.present?

@@ -8,7 +8,7 @@ module Api
 
     def index
       dealers = Dealer.where(status: "pending").includes(:dealer_profile, :dealer_location).order(created_at: :desc).page(params[:page]).per(params[:per_page] || 20)
-      render json: serialize_resource(dealers, DealerSerializer).merge(
+      render json: serialize_resource(dealers, DealerSerializer, base_url: request.base_url).merge(
         meta: {
           current_page: dealers.current_page,
           next_page: dealers.next_page,
@@ -33,7 +33,7 @@ module Api
       end
 
       dealers = dealers.order(created_at: :desc).page(params[:page]).per(params[:per_page] || 20)
-      render json: serialize_resource(dealers, DealerSerializer).merge(
+      render json: serialize_resource(dealers, DealerSerializer, base_url: request.base_url).merge(
         meta: {
           current_page: dealers.current_page,
           next_page: dealers.next_page,
@@ -60,7 +60,7 @@ module Api
         # Notify admins about new dealer creation
         notify_admins_about_dealer_creation(dealer)
         
-        render json: serialize_resource(dealer, DealerSerializer).merge(
+        render json: serialize_resource(dealer, DealerSerializer, base_url: request.base_url).merge(
           message: "Dealer created successfully. Welcome email sent."
         ), status: :created
       else
@@ -69,14 +69,14 @@ module Api
     end
 
     def show
-      render json: serialize_resource(@dealer, DealerSerializer).merge(
+      render json: serialize_resource(@dealer, DealerSerializer, base_url: request.base_url).merge(
         message: "Dealer fetched successfully"
       ), status: :ok
     end
 
     def update
       if @dealer.update(dealer_params)
-        render json: serialize_resource(@dealer, DealerSerializer).merge(message: "Dealer updated successfully"), status: :ok
+        render json: serialize_resource(@dealer, DealerSerializer, base_url: request.base_url).merge(message: "Dealer updated successfully"), status: :ok
       else
         render json: {
           error: @dealer.errors.full_messages
@@ -106,7 +106,7 @@ module Api
         # Notify admins about approval
         notify_admins_about_dealer_action(@dealer, "approved")
         
-        render json: serialize_resource(@dealer, DealerSerializer).merge(
+        render json: serialize_resource(@dealer, DealerSerializer, base_url: request.base_url).merge(
           message: "Dealer approved successfully. Approval email sent."
         ), status: :ok
       else
@@ -128,7 +128,7 @@ module Api
         # Notify admins about rejection
         notify_admins_about_dealer_action(@dealer, "rejected", rejection_reason)
         
-        render json: serialize_resource(@dealer, DealerSerializer).merge(
+        render json: serialize_resource(@dealer, DealerSerializer, base_url: request.base_url).merge(
           message: "Dealer rejected successfully. Rejection email sent."
         ), status: :ok
       else
@@ -204,7 +204,8 @@ module Api
         dealer_profile_attributes: [
           :business_name, :business_type, :gst_number, :pan_number, :aadhar_number,
           :bank_name, :bank_account_number, :ifsc_code, :business_address,
-          :business_contact_number, :business_email, :is_verified
+          :business_contact_number, :business_email, :work_category, :associated_brands,
+          :is_verified, { store_image: [] }
         ],
         dealer_location_attributes: [:latitude, :longitude, :service_radius_km, :is_active]
       )

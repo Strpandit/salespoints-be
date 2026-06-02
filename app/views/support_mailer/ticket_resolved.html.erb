@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <style>
+      body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        margin: 0;
+        padding: 20px;
+      }
+      .container {
+        max-width: 600px;
+        margin: 0 auto;
+        background: white;
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+      }
+      .header {
+        background: linear-gradient(135deg, #6bcf7f 0%, #4caf50 100%);
+        color: white;
+        padding: 30px;
+        text-align: center;
+      }
+      .header h2 {
+        margin: 0;
+        font-size: 24px;
+      }
+      .content {
+        padding: 30px;
+      }
+      .ticket-info {
+        background: #f0f0f0;
+        border-radius: 5px;
+        padding: 20px;
+        margin: 20px 0;
+        border-left: 4px solid #6bcf7f;
+      }
+      .info-row {
+        display: flex;
+        justify-content: space-between;
+        margin: 10px 0;
+        font-size: 14px;
+      }
+      .label {
+        font-weight: bold;
+        color: #7f8c8d;
+      }
+      .resolution-box {
+        background: #e8f5e9;
+        padding: 15px;
+        border-radius: 5px;
+        border-left: 3px solid #6bcf7f;
+        margin: 15px 0;
+      }
+      .cta-button {
+        display: inline-block;
+        background: #6bcf7f;
+        color: white;
+        padding: 12px 30px;
+        border-radius: 5px;
+        text-decoration: none;
+        font-weight: bold;
+        margin: 20px 0;
+      }
+      .footer {
+        background: #ecf0f1;
+        padding: 20px;
+        text-align: center;
+        font-size: 12px;
+        color: #7f8c8d;
+        border-top: 1px solid #bdc3c7;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h2>✅ Ticket Resolved</h2>
+      </div>
+
+      <div class="content">
+        <p>Hi <strong><%= @requester_name %></strong>,</p>
+
+        <p>Great news! Your support ticket has been resolved by our support team.</p>
+
+        <div class="ticket-info">
+          <div class="info-row">
+            <span class="label">Ticket Number:</span>
+            <span><strong><%= @ticket.ticket_number %></strong></span>
+          </div>
+          <div class="info-row">
+            <span class="label">Subject:</span>
+            <span><%= @ticket.subject %></span>
+          </div>
+          <div class="info-row">
+            <span class="label">Resolved At:</span>
+            <span><%= @ticket.resolved_at.strftime("%B %d, %Y at %I:%M %p") %></span>
+          </div>
+        </div>
+
+        <p><strong>Resolution Summary:</strong></p>
+        <div class="resolution-box">
+          <%= simple_format(@ticket.resolution_summary) %>
+        </div>
+
+        <p>
+          <a href="<%= ENV['FRONTEND_URL'] %>/support/tickets/<%= @ticket.ticket_number %>" class="cta-button">
+            View Complete Ticket
+          </a>
+        </p>
+
+        <h3>Next Steps</h3>
+        <ul>
+          <li>The ticket will automatically close in 7 days</li>
+          <li>If the issue recurs, you can reopen it anytime</li>
+          <li>Please provide feedback on your support experience</li>
+        </ul>
+
+        <p>We appreciate your patience and would love to hear your feedback. If you have a few minutes, please let us know how we did!</p>
+
+        <p>Thank you for using SalesPoints!<br>
+        <strong>SalesPoints Support Team</strong></p>
+      </div>
+
+      <div class="footer">
+        <p style="margin: 0;">© <%= Date.today.year %> SalesPoints. All rights reserved.</p>
+        <p style="margin: 10px 0 0 0;">Ticket ID: <%= @ticket.id %></p>
+      </div>
+    </div>
+  </body>
+</html>

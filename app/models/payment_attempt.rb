@@ -10,6 +10,7 @@ class PaymentAttempt < ApplicationRecord
   before_validation :assign_attempt_number, on: :create
 
   scope :recent, -> { order(created_at: :desc) }
+  scope :incomplete, -> { where(status: %w[pending paid]) }
 
   def paid?
     status == "paid"
@@ -21,6 +22,17 @@ class PaymentAttempt < ApplicationRecord
 
   def terminal?
     %w[processed failed cancelled].include?(status)
+  end
+
+  def mark_paid!(reference:, gateway_payload: {})
+    return if processed?
+
+    update!(
+      status: "paid",
+      paid_at: paid_at || Time.current,
+      payment_reference: reference.presence || payment_reference,
+      payment_gateway_payload: payment_gateway_payload.merge(gateway_payload || {})
+    )
   end
 
   private

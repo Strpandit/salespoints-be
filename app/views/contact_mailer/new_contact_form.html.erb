@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <style>
+      body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        margin: 0;
+        padding: 20px;
+      }
+      .container {
+        max-width: 600px;
+        margin: 0 auto;
+        background: white;
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+      }
+      .header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 30px;
+        text-align: center;
+      }
+      .header h2 {
+        margin: 0;
+        font-size: 24px;
+      }
+      .content {
+        padding: 30px;
+      }
+      .info-box {
+        background: #f0f0f0;
+        border-radius: 5px;
+        padding: 20px;
+        margin: 20px 0;
+        border-left: 4px solid #667eea;
+      }
+      .footer {
+        background: #ecf0f1;
+        padding: 20px;
+        text-align: center;
+        font-size: 12px;
+        color: #7f8c8d;
+        border-top: 1px solid #bdc3c7;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h2>📨 New Contact Form Submission</h2>
+      </div>
+
+      <div class="content">
+        <p>Hello <strong><%= @admin.first_name %></strong>,</p>
+
+        <p>A new contact form submission has been received that requires your attention.</p>
+
+        <div class="info-box">
+          <p style="margin: 0 0 10px 0; color: #7f8c8d; font-size: 12px; text-transform: uppercase;">Submitter Information</p>
+          <p style="margin: 5px 0;"><strong>Name:</strong> <%= @submission.name %></p>
+          <p style="margin: 5px 0;"><strong>Email:</strong> <%= @submission.email %></p>
+          <% if @submission.phone.present? %>
+            <p style="margin: 5px 0;"><strong>Phone:</strong> <%= @submission.phone %></p>
+          <% end %>
+          <p style="margin: 5px 0;"><strong>Subject:</strong> <%= @submission.subject %></p>
+          <p style="margin: 5px 0;"><strong>Received:</strong> <%= @submission.created_at.strftime("%B %d, %Y at %I:%M %p") %></p>
+        </div>
+
+        <p><strong>Message:</strong></p>
+        <div style="background: #f9f9f9; padding: 15px; border-radius: 5px; border-left: 3px solid #667eea;">
+          <%= simple_format(@submission.message) %>
+        </div>
+
+        <p>Please log into the admin panel to review and respond to this submission.</p>
+
+        <p>Thank you!<br>
+        <strong>SalesPoints Support System</strong></p>
+      </div>
+
+      <div class="footer">
+        <p style="margin: 0;">© <%= Date.today.year %> SalesPoints. All rights reserved.</p>
+      </div>
+    </div>
+  </body>
+</html>

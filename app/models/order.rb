@@ -3,23 +3,37 @@ class Order < ApplicationRecord
   belongs_to :seller_dealer, class_name: "Dealer", optional: true
   has_many :order_items, dependent: :destroy
   has_many :notifications, as: :notifiable, dependent: :nullify
+  has_many :return_requests, dependent: :destroy
+  has_many :dealer_ledger_entries, dependent: :nullify
 
   enum :status, {
     pending: "pending",
     processing: "processing",
     shipped: "shipped",
     delivered: "delivered",
-    cancelled: "cancelled"
+    cancelled: "cancelled",
+    return_requested: "return_requested",
+    return_approved: "return_approved",
+    return_in_transit: "return_in_transit",
+    returned: "returned",
+    replacement_requested: "replacement_requested",
+    replacement_approved: "replacement_approved",
+    replacement_shipped: "replacement_shipped",
+    replacement_delivered: "replacement_delivered"
   }
 
   PAYMENT_METHODS = %w[cod online].freeze
-  PAYMENT_STATUSES = %w[pending paid failed refunded].freeze
+  PAYMENT_STATUSES = %w[pending paid failed partially_refunded refunded].freeze
+  SETTLEMENT_STATUSES = %w[on_hold pending partially_refunded settled refunded].freeze
+  REFUND_STATUSES = %w[none partial completed].freeze
 
   validates :order_number, presence: true, uniqueness: true
   validates :buyer_type, :buyer_id, presence: true
   validates :payment_method, :payment_status, presence: true
   validates :payment_method, inclusion: { in: PAYMENT_METHODS }
   validates :payment_status, inclusion: { in: PAYMENT_STATUSES }
+  validates :settlement_status, inclusion: { in: SETTLEMENT_STATUSES }, allow_blank: false
+  validates :refund_status, inclusion: { in: REFUND_STATUSES }, allow_blank: false
 
   before_validation :assign_order_number, on: :create
   before_validation :set_placed_at, on: :create
@@ -37,7 +51,15 @@ class Order < ApplicationRecord
       "pending" => %w[processing cancelled],
       "processing" => %w[shipped cancelled],
       "shipped" => %w[delivered cancelled],
-      "delivered" => [],
+      "delivered" => %w[return_requested replacement_requested],
+      "return_requested" => %w[return_approved cancelled],
+      "return_approved" => %w[return_in_transit cancelled],
+      "return_in_transit" => %w[returned cancelled],
+      "returned" => [],
+      "replacement_requested" => %w[replacement_approved cancelled],
+      "replacement_approved" => %w[replacement_shipped cancelled],
+      "replacement_shipped" => %w[replacement_delivered cancelled],
+      "replacement_delivered" => [],
       "cancelled" => []
     }
 
@@ -58,6 +80,43 @@ class Order < ApplicationRecord
       payment_status: "failed",
       payment_gateway_payload: payment_gateway_payload.merge(gateway_payload || {})
     )
+  end
+
+  def mark_payment_refunded!(amount:, gateway_payload: {}, reason: nil)
+    next_refund_amount = (refund_amount.to_d + BigDecimal(amount.to_s)).round(2)
+    fully_refunded = next_refund_amount >= total_amount.to_d.round(2)
+    refunds = Array(payment_gateway_payload["refunds"])
+
+    update!(
+      payment_status: fully_refunded ? "refunded" : "partially_refunded",
+      refund_status: fully_refunded ? "completed" : "partial",
+      refund_amount: next_refund_amount,
+      refunded_at: Time.current,
+      refund_reason: reason.presence || refund_reason,
+      payment_gateway_payload: payment_gateway_payload.merge(
+        "refunds" => refunds + [gateway_payload],
+        "latest_refund" => gateway_payload
+      )
+    )
+  end
+
+  def refundable?
+    payment_status.in?(%w[paid partially_refunded refunded]) && refundable_amount_remaining.positive?
+  end
+
+  def refundable_amount_remaining
+    [(total_amount.to_d - refund_amount.to_d).round(2), 0.to_d].max
+  end
+
+  def return_window_open?
+    return false unless delivered_at.present?
+    return false if return_window_closes_at.blank?
+
+    Time.current <= return_window_closes_at
+  end
+
+  def active_return_request?
+    return_requests.where(status: ReturnRequest::ACTIVE_STATUSES).exists?
   end
 
   private

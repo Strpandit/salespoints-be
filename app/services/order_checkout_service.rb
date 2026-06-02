@@ -30,6 +30,8 @@ class OrderCheckoutService
       totals = build_group_totals(grouped_items)
 
       grouped_items.each do |dealer_id, items|
+        financials = MarketplaceOrderFinancials.build(total_amount: totals.fetch(dealer_id)[:total])
+
         order = Order.create!(
           buyer: @buyer,
           seller_dealer_id: dealer_id,
@@ -43,7 +45,14 @@ class OrderCheckoutService
           payment_status: "pending",
           payment_gateway: @payment_method == "online" ? "cashfree" : nil,
           billing_address: @billing_address,
-          shipping_address: @shipping_address
+          shipping_address: @shipping_address,
+          commission_rate: financials[:commission_rate],
+          commission_amount: financials[:commission_amount],
+          marketplace_fee_amount: financials[:marketplace_fee_amount],
+          seller_settlement_amount: financials[:seller_settlement_amount],
+          settlement_status: financials[:settlement_status],
+          refund_status: financials[:refund_status],
+          refund_amount: financials[:refund_amount]
         )
 
         items.each do |ci|

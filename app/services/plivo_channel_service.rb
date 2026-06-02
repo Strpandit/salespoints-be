@@ -2,9 +2,8 @@ require 'net/http'
 require 'uri'
 require 'json'
 
-# Sends SMS and WhatsApp messages through Plivo.
+# Sends SMS messages through Plivo.
 # ENV: PLIVO_AUTH_ID, PLIVO_AUTH_TOKEN, PLIVO_SMS_FROM (+E.164)
-# Optional: PLIVO_WHATSAPP_FROM (whatsapp:+<number>)
 class PlivoChannelService
   BASE = 'https://api.plivo.com/v1/Account'.freeze
 
@@ -18,9 +17,6 @@ class PlivoChannelService
     channels = notification.delivery_channels
 
     send_sms(to, text) unless channels.key?('sms') && channels['sms'] == false
-    return if whatsapp_from.blank? || (channels.key?('whatsapp') && channels['whatsapp'] == false)
-
-    send_whatsapp(to, text)
   rescue StandardError => e
   end
 
@@ -40,10 +36,6 @@ class PlivoChannelService
 
   def sms_from
     ENV['PLIVO_SMS_FROM'].to_s.presence
-  end
-
-  def whatsapp_from
-    ENV['PLIVO_WHATSAPP_FROM'].to_s.presence
   end
 
   def e164_for(receiver)
@@ -66,20 +58,6 @@ class PlivoChannelService
     request.set_form_data(
       Src: sms_from,
       Dst: to,
-      Text: body
-    )
-    response = http_client(uri).request(request)
-    response.is_a?(Net::HTTPSuccess)
-  end
-
-  def send_whatsapp(to, body)
-    wa_to = to.start_with?('whatsapp:') ? to : "whatsapp:#{to}"
-    uri = URI("#{BASE}/#{auth_id}/Message/")
-    request = Net::HTTP::Post.new(uri)
-    request.basic_auth(auth_id, auth_token)
-    request.set_form_data(
-      Src: whatsapp_from,
-      Dst: wa_to,
       Text: body
     )
     response = http_client(uri).request(request)

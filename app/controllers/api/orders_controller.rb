@@ -4,6 +4,7 @@ module Api
       orders = scoped_orders
       orders = apply_filters(orders)
       paginated = orders.recent.page(params[:page]).per(params[:per_page] || 20)
+      paginated.each { |order| OrderSettlementService.process_if_due!(order) }
 
       render json: serialize_resource(paginated, OrderSerializer).merge(
         meta: pagination_meta(paginated),
@@ -15,8 +16,9 @@ module Api
     def show
       order = scoped_orders.includes(order_items: [:dealer_product, :product_variant]).find_by(id: params[:id])
       return render json: { error: "Order not found" }, status: :not_found unless order
+      OrderSettlementService.process_if_due!(order)
 
-      render json: serialize_resource(order, OrderSerializer).merge(
+      render json: serialize_resource(order, OrderSerializer, include: [:order_items, :return_requests]).merge(
         message: "Order fetched successfully"
       ), status: :ok
     end
@@ -28,20 +30,54 @@ module Api
 
       next_status = params[:status].to_s
       return render json: { error: "Status is required" }, status: :unprocessable_entity if next_status.blank?
-      return render json: { error: "Invalid status transition" }, status: :unprocessable_entity unless order.can_transition_to?(next_status)
-
-      attrs = { status: next_status, status_note: params[:status_note] }
-      attrs[:processing_at] = Time.current if next_status == "processing"
-      attrs[:shipped_at] = Time.current if next_status == "shipped"
-      attrs[:delivered_at] = Time.current if next_status == "delivered"
-      attrs[:cancelled_at] = Time.current if next_status == "cancelled"
-
-      order.update!(attrs.compact)
+      OrderLifecycleService.new(order: order, actor: current_user, status_note: params[:status_note]).transition!(next_status: next_status)
       OrderNotificationJob.perform_later(order.id, "status_updated", current_user.class.name, current_user.id)
 
       render json: serialize_resource(order.reload, OrderSerializer).merge(
         message: "Order updated successfully"
       ), status: :ok
+    rescue StandardError => e
+      render json: { error: e.message }, status: :unprocessable_entity
+    end
+
+    def refund
+      order = manageable_financial_orders.find_by(id: params[:id])
+      return render json: { error: "Order not found" }, status: :not_found unless order
+
+      refund_amount = params[:amount].presence || order.refundable_amount_remaining
+      result = OrderRefundService.new(
+        order: order,
+        actor: current_user,
+        amount: refund_amount,
+        reason: params[:reason]
+      ).call
+
+      render json: {
+        data: OrderSerializer.render(result.order),
+        refund: result.refund_payload,
+        dealer_balance: result.dealer_balance.to_f,
+        message: "Refund initiated successfully"
+      }, status: :ok
+    rescue StandardError => e
+      render json: { error: e.message }, status: :unprocessable_entity
+    end
+
+    def release_settlement
+      order = manageable_financial_orders.find_by(id: params[:id])
+      return render json: { error: "Order not found" }, status: :not_found unless order
+
+      result = OrderSettlementService.new(
+        order: order,
+        actor: current_user,
+        force: ActiveModel::Type::Boolean.new.cast(params[:force])
+      ).call
+
+      render json: {
+        data: OrderSerializer.render(result.order),
+        released_amount: result.released_amount.to_f,
+        dealer_balance: result.dealer_balance.to_f,
+        message: "Settlement released successfully"
+      }, status: :ok
     rescue StandardError => e
       render json: { error: e.message }, status: :unprocessable_entity
     end
@@ -103,6 +139,13 @@ module Api
       return order.seller_dealer_id == current_dealer.id if current_dealer.present?
 
       false
+    end
+
+    def manageable_financial_orders
+      return Order.all if current_admin
+      return Order.where(seller_dealer_id: current_dealer.id) if current_dealer
+
+      Order.none
     end
   end
 end

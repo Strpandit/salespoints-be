@@ -1,11 +1,13 @@
 class OnlinePaymentAttemptService
   Result = Struct.new(:attempt, :payment_data, keyword_init: true)
 
-  def initialize(cart:, buyer:, billing_address:, shipping_address:)
+  def initialize(cart:, buyer:, billing_address:, shipping_address:, context: "retail_order", metadata: {})
     @cart = cart
     @buyer = buyer
     @billing_address = billing_address || {}
     @shipping_address = shipping_address || {}
+    @context = context
+    @metadata = metadata || {}
   end
 
   def call
@@ -25,7 +27,11 @@ class OnlinePaymentAttemptService
         coupon_code: @cart.coupon_code,
         billing_address: @billing_address,
         shipping_address: @shipping_address,
-        cart_snapshot: build_cart_snapshot
+        cart_snapshot: build_cart_snapshot,
+        result_payload: {
+          checkout_context: @context,
+          request_metadata: @metadata
+        }
       )
 
       payload = CashfreeService.new.create_payment_attempt(attempt: attempt, customer: @buyer)

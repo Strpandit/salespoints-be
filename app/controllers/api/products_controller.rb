@@ -7,7 +7,7 @@ module Api
 
     def index
       products = Product.all.order(created_at: :desc).page(params[:page]).per(params[:per_page] || 20)
-      render json: serialize_resource(products, ProductSerializer).merge(
+      render json: serialize_resource(products, ProductSerializer, base_url: request.base_url).merge(
         meta: {
           current_page: products.current_page,
           next_page: products.next_page,
@@ -21,7 +21,7 @@ module Api
 
     def active_products
       products = Product.active.order(created_at: :desc).page(params[:page]).per(params[:per_page] || 20)
-      render json: serialize_resource(products, ProductSerializer).merge(
+      render json: serialize_resource(products, ProductSerializer, base_url: request.base_url).merge(
         meta: {
           current_page: products.current_page,
           next_page: products.next_page,
@@ -34,7 +34,7 @@ module Api
     end
 
     def show
-      render json: serialize_resource(@product, ProductSerializer).merge(
+      render json: serialize_resource(@product, ProductSerializer, base_url: request.base_url).merge(
         message: "Product fetched successfully"
       ), status: :ok
     end
@@ -45,7 +45,7 @@ module Api
                         .limit(4)
     
       if products.present?
-        render json: serialize_resource(products, ProductSerializer).merge(
+        render json: serialize_resource(products, ProductSerializer, base_url: request.base_url).merge(
           message: "Similar products fetched successfully"
         ), status: :ok
       else
@@ -58,7 +58,7 @@ module Api
 
       if product.save
         notify_admins_entity_created(product)
-        render json: serialize_resource(product, ProductSerializer).merge(
+        render json: serialize_resource(product, ProductSerializer, base_url: request.base_url).merge(
           message: "Product created successfully"
         ), status: :created
       else
@@ -69,7 +69,7 @@ module Api
     def update
       if @product.update(product_params)
         notify_admins_entity_updated(@product)
-        render json: serialize_resource(@product, ProductSerializer).merge(
+        render json: serialize_resource(@product, ProductSerializer, base_url: request.base_url).merge(
           message: "Product updated successfully"
         ), status: :ok
       else
@@ -89,11 +89,13 @@ module Api
       params.require(:product).permit(
         :name, :slug, :sku, :desc, :material, :brand_id, :category_id,
         :is_featured, :is_new, :is_active, :tax_rate,
+        media: [],
         features: [], care_instructions: [],
         product_specifications_attributes: [:id, :key, :value, :_destroy],
         product_variants_attributes: [
           :id, :variant_sku, :price, :selling_price, :dealer_price,
-          :dealer_selling_price, :discount_percentage, :is_active, :_destroy, variant_attributes: [:key, :value]
+          :dealer_selling_price, :discount_percentage, :is_active, :_destroy,
+          { media: [], variant_attributes: [:key, :value] }
         ]
       )
     end

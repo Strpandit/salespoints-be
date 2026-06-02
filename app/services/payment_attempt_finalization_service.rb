@@ -1,16 +1,18 @@
 class PaymentAttemptFinalizationService
-  Result = Struct.new(:orders, keyword_init: true)
+  Result = Struct.new(:orders, :b2b_order, keyword_init: true)
 
   def initialize(payment_attempt:)
     @payment_attempt = payment_attempt
   end
 
   def call
+    return finalize_b2b_request! if checkout_context == "b2b_request"
+
     orders = []
 
     ActiveRecord::Base.transaction do
       attempt = PaymentAttempt.lock.find(@payment_attempt.id)
-      return Result.new(orders: load_orders(attempt)) if attempt.processed?
+      return Result.new(orders: load_orders(attempt), b2b_order: nil) if attempt.processed?
       raise StandardError, "Payment is not marked as paid" unless attempt.paid?
 
       items = Array(attempt.cart_snapshot["items"]).map(&:stringify_keys)
@@ -20,6 +22,8 @@ class PaymentAttemptFinalizationService
       totals = build_group_totals(grouped_items, attempt)
 
       grouped_items.each do |dealer_id, snapshot_items|
+        financials = MarketplaceOrderFinancials.build(total_amount: totals.fetch(dealer_id)[:total])
+
         order = Order.create!(
           buyer: attempt.buyer,
           seller_dealer_id: dealer_id,
@@ -40,6 +44,7 @@ class PaymentAttemptFinalizationService
           payment_session_id: attempt.payment_session_id,
           payment_gateway_payload: attempt.payment_gateway_payload
         )
+        order.update!(financials)
 
         snapshot_items.each do |snapshot_item|
           dealer_product = DealerProduct.lock.find(snapshot_item["dealer_product_id"])
@@ -76,10 +81,46 @@ class PaymentAttemptFinalizationService
       )
     end
 
-    Result.new(orders: orders)
+    Result.new(orders: orders, b2b_order: nil)
   end
 
   private
+
+  def finalize_b2b_request!
+    order = nil
+
+    ActiveRecord::Base.transaction do
+      attempt = PaymentAttempt.lock.find(@payment_attempt.id)
+      existing_order = B2bOrder.find_by(buyer_payment_attempt_id: attempt.id)
+      return Result.new(orders: [], b2b_order: existing_order) if attempt.processed? && existing_order.present?
+      raise StandardError, "Payment is not marked as paid" unless attempt.paid?
+
+      metadata = attempt.result_payload.fetch("request_metadata", {}).stringify_keys
+      order = B2bOrderCreationService.new(
+        buyer: attempt.buyer,
+        cart: attempt.buyer.cart,
+        latitude: metadata["latitude"],
+        longitude: metadata["longitude"],
+        radius_km: metadata["radius_km"],
+        payment_method: "online",
+        payment_status: "paid",
+        buyer_payment_attempt: attempt,
+        cart_snapshot: attempt.cart_snapshot
+      ).call(clear_cart: false)
+
+      clear_cart_items!(attempt)
+      attempt.update!(
+        status: "processed",
+        processed_at: Time.current,
+        result_payload: attempt.result_payload.merge(
+          "b2b_order_id" => order.id,
+          "b2b_order_status" => order.status
+        )
+      )
+    end
+
+    Result.new(orders: [], b2b_order: order)
+  end
 
   def load_orders(attempt)
     ids = Array(attempt.result_payload["order_ids"])
@@ -145,5 +186,9 @@ class PaymentAttemptFinalizationService
 
   def dealer_id_for(dealer_product_id)
     DealerProduct.find(dealer_product_id).dealer_id
+  end
+
+  def checkout_context
+    @payment_attempt.result_payload.fetch("checkout_context", "retail_order")
   end
 end

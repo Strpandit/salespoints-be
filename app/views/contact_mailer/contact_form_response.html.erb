@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <style>
+      body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        margin: 0;
+        padding: 20px;
+      }
+      .container {
+        max-width: 600px;
+        margin: 0 auto;
+        background: white;
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+      }
+      .header {
+        background: linear-gradient(135deg, #6bcf7f 0%, #4caf50 100%);
+        color: white;
+        padding: 30px;
+        text-align: center;
+      }
+      .header h2 {
+        margin: 0;
+        font-size: 24px;
+      }
+      .content {
+        padding: 30px;
+      }
+      .response-box {
+        background: #e8f5e9;
+        padding: 15px;
+        border-radius: 5px;
+        border-left: 3px solid #6bcf7f;
+        margin: 20px 0;
+      }
+      .original-message {
+        background: #f9f9f9;
+        padding: 15px;
+        border-radius: 5px;
+        margin: 20px 0;
+        border-left: 3px solid #ccc;
+      }
+      .footer {
+        background: #ecf0f1;
+        padding: 20px;
+        text-align: center;
+        font-size: 12px;
+        color: #7f8c8d;
+        border-top: 1px solid #bdc3c7;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h2>💬 Response to Your Inquiry</h2>
+      </div>
+
+      <div class="content">
+        <p>Hi <strong><%= @submission.name %></strong>,</p>
+
+        <p>Thank you for your message! We've reviewed your inquiry and here's our response:</p>
+
+        <p><strong>Regarding:</strong> <%= @submission.subject %></p>
+
+        <div class="response-box">
+          <%= simple_format(@submission.admin_response) %>
+        </div>
+
+        <p><strong>Your Original Message:</strong></p>
+        <div class="original-message">
+          <%= simple_format(@submission.message) %>
+        </div>
+
+        <p>If you have any follow-up questions or need further assistance, please don't hesitate to reach out.</p>
+
+        <p>Thank you for choosing SalesPoints!<br>
+        <strong>SalesPoints Team</strong></p>
+      </div>
+
+      <div class="footer">
+        <p style="margin: 0;">© <%= Date.today.year %> SalesPoints. All rights reserved.</p>
+      </div>
+    </div>
+  </body>
+</html>

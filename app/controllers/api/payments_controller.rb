@@ -51,24 +51,10 @@ module Api
     end
 
     def cashfree_webhook
-      order_ref = params[:data].is_a?(Hash) ? params[:data]["order"]["order_id"] : params[:order_id]
-      attempt = PaymentAttempt.find_by(attempt_number: order_ref) || PaymentAttempt.find_by(gateway_order_reference: order_ref)
-      return process_attempt_webhook(attempt) if attempt.present?
-
-      order = Order.find_by(order_number: order_ref) || Order.find_by(gateway_order_reference: order_ref)
-      return head :ok if order.blank?
-
-      status = params[:data].dig("payment", "payment_status").to_s.upcase
-      if status == "SUCCESS"
-        order.mark_payment_paid!(reference: params[:data].dig("payment", "cf_payment_id"), gateway_payload: params.to_unsafe_h)
-        OrderNotificationJob.perform_later(order.id, "payment_paid")
-      elsif status.present?
-        order.mark_payment_failed!(gateway_payload: params.to_unsafe_h)
-      end
-
+      CashfreeWebhookProcessingService.new(headers: request.headers, raw_body: request.raw_post).call
       head :ok
-    rescue StandardError
-      head :ok
+    rescue StandardError => e
+      render json: { error: e.message }, status: unauthorized_webhook_error?(e) ? :unauthorized : :unprocessable_entity
     end
 
     private
@@ -85,18 +71,28 @@ module Api
       when "PAID"
         mark_attempt_paid!(attempt, payload)
         finalization = PaymentAttemptFinalizationService.new(payment_attempt: attempt).call
-        finalization.orders.each do |order|
-          OrderNotificationJob.perform_later(order.id, "placed", attempt.buyer_type, attempt.buyer_id)
-          OrderNotificationJob.perform_later(order.id, "payment_paid", attempt.buyer_type, attempt.buyer_id)
-        end
+        if finalization.b2b_order.present?
+          render json: {
+            data: B2bOrderSerializer.render(finalization.b2b_order),
+            b2b_order: B2bOrderSerializer.render(finalization.b2b_order),
+            payment_attempt: serialize_payment_attempt(attempt.reload),
+            payment_gateway_status: status,
+            message: "B2B request broadcasted after successful payment"
+          }, status: :ok
+        else
+          finalization.orders.each do |order|
+            OrderNotificationJob.perform_later(order.id, "placed", attempt.buyer_type, attempt.buyer_id)
+            OrderNotificationJob.perform_later(order.id, "payment_paid", attempt.buyer_type, attempt.buyer_id)
+          end
 
-        render json: {
-          data: OrderSerializer.render(finalization.orders),
-          orders: OrderSerializer.render(finalization.orders),
-          payment_attempt: serialize_payment_attempt(attempt.reload),
-          payment_gateway_status: status,
-          message: "#{finalization.orders.size} order(s) created after successful payment"
-        }, status: :ok
+          render json: {
+            data: OrderSerializer.render(finalization.orders),
+            orders: OrderSerializer.render(finalization.orders),
+            payment_attempt: serialize_payment_attempt(attempt.reload),
+            payment_gateway_status: status,
+            message: "#{finalization.orders.size} order(s) created after successful payment"
+          }, status: :ok
+        end
       when "ACTIVE"
         attempt.update!(payment_gateway_payload: attempt.payment_gateway_payload.merge(payload))
         render json: {
@@ -114,23 +110,6 @@ module Api
           message: "Payment was not completed. Cart remains unchanged."
         }, status: :ok
       end
-    end
-
-    def process_attempt_webhook(attempt)
-      status = params[:data].dig("payment", "payment_status").to_s.upcase
-
-      if status == "SUCCESS"
-        mark_attempt_paid!(attempt, params.to_unsafe_h)
-        finalization = PaymentAttemptFinalizationService.new(payment_attempt: attempt).call
-        finalization.orders.each do |order|
-          OrderNotificationJob.perform_later(order.id, "placed", attempt.buyer_type, attempt.buyer_id)
-          OrderNotificationJob.perform_later(order.id, "payment_paid", attempt.buyer_type, attempt.buyer_id)
-        end
-      elsif status.present?
-        mark_attempt_failed!(attempt, params.to_unsafe_h, status)
-      end
-
-      head :ok
     end
 
     def mark_attempt_paid!(attempt, payload)
@@ -191,6 +170,10 @@ module Api
       else
         PaymentAttempt.none
       end
+    end
+
+    def unauthorized_webhook_error?(error)
+      error.message.match?(/signature|timestamp/i)
     end
   end
 end

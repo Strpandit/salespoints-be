@@ -15,7 +15,7 @@ class Role < ApplicationRecord
   validate :validate_module_access
   validate :validate_module_permissions
 
-  ALLOWED_MODULES = %w[ accounts account_deletion_requests admin_deletion_requests addresses admin_users roles admin_roles brands categories cat_filters contact_us dealers dealer_locations dealer_profiles dealer_products products product_specifications product_variants reviews notifications orders analytics coupons settings dealer_deletion_requests wholesaler_posts ]
+  ALLOWED_MODULES = %w[ accounts account_deletion_requests admin_deletion_requests admin_users roles brands categories cat_filters dealers dealer_locations dealer_profiles dealer_products products reviews notifications orders analytics coupons settings dealer_deletion_requests wholesaler_posts ]
   ALLOWED_PERMISSIONS = %w[read write]
 
   def validate_module_access

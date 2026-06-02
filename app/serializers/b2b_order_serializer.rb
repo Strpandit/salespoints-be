@@ -2,7 +2,8 @@ class B2bOrderSerializer < ApplicationSerializer
   attributes :status, :coupon_code, :requested_radius_km, :accepted_at, :cancelled_at,
              :expires_at, :created_at, :buyer_dealer_id, :seller_dealer_id,
              :subtotal_amount, :tax_amount, :discount_amount, :total_amount,
-             :buyer_name, :seller_name, :open_items_count, :accepted_items_count, :latitude, :longitude
+             :buyer_name, :seller_name, :open_items_count, :accepted_items_count, :latitude, :longitude,
+             :payment_method, :payment_status
 
   has_many :b2b_order_items
 

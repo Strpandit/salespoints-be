@@ -1,11 +1,15 @@
 class ProductVariant < ApplicationRecord
   belongs_to :product
+  include AttachableMediaValidations
+
+  has_many_attached :media
   has_many :dealer_products
   has_many :cart_items
   has_many :order_items
 
   validates :variant_sku, presence: true, uniqueness: true
   validates :selling_price, :dealer_selling_price, presence: true, numericality: true
+  validate :media_files_valid
 
   scope :active, -> { where(is_active: true, deleted_at: nil) }
 
@@ -34,5 +38,11 @@ class ProductVariant < ApplicationRecord
 
   def sellable?
     is_active && !deleted?
+  end
+
+  private
+
+  def media_files_valid
+    validate_attachment_set(:media)
   end
 end

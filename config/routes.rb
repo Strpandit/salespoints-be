@@ -33,7 +33,14 @@ Rails.application.routes.draw do
     post '/cart/apply_coupon', to: 'carts#apply_coupon'
     delete '/cart/remove_coupon', to: 'carts#remove_coupon'
     post '/cart/checkout', to: 'carts#checkout'
-    resources :orders, only: [:index, :show, :update]
+    resources :orders, only: [:index, :show, :update] do
+      member do
+        post :refund
+        post :release_settlement
+      end
+
+      resources :return_requests, only: [:index, :create, :update]
+    end
     resources :notifications, only: [:index] do
       collection do
         get :unread_count
@@ -43,9 +50,13 @@ Rails.application.routes.draw do
         patch :mark_read
       end
     end
+    resources :dealer_ledger_entries, only: [:index]
+    resources :dealer_payouts, only: [:index, :create, :update]
     get "payments/cashfree/verify", to: "payments#verify_cashfree"
     post "payments/cashfree/cancel", to: "payments#cancel_cashfree"
     post "payments/cashfree/webhook", to: "payments#cashfree_webhook"
+    get "whatsapp/webhook", to: "whatsapp_webhooks#verify"
+    post "whatsapp/webhook", to: "whatsapp_webhooks#receive"
 
     # Admin routes
     resources :admin_users
@@ -86,6 +97,28 @@ Rails.application.routes.draw do
     end
     get "active_products", to: "products#active_products"
 
+    #Reviews
+    resources :reviews
+
+    #Accounts Deletions
+    resources :account_deletions, only: [:index] do
+      member do
+        patch :approve
+        patch :reject
+      end
+    end
+    resources :dealer_deletion_requests, only: [:index] do
+      member do
+        patch :approve
+        patch :reject
+      end
+    end
+    resources :admin_deletion_requests, only: [:index] do
+      member do
+        patch :approve
+        patch :reject
+      end
+    end
     # Dealers routes
     resources :dealers do
       get :active_dealers, on: :collection
@@ -121,6 +154,7 @@ Rails.application.routes.draw do
       end
       member do
         post :accept
+        post :reject
       end
     end
     resources :dealer_notifications, only: [:index] do
@@ -151,6 +185,38 @@ Rails.application.routes.draw do
 
     # Dealer coupons
     resources :coupons
+
+    # Analytics and Reports
+    get 'analytics/dashboard', to: 'analytics#dashboard'
+    get 'analytics/revenue', to: 'analytics#revenue'
+    get 'analytics/orders', to: 'analytics#orders'
+    get 'analytics/payments', to: 'analytics#payments'
+    get 'analytics/sellers', to: 'analytics#sellers'
+    get 'analytics/products', to: 'analytics#products'
+    get 'analytics/customers', to: 'analytics#customers'
+    get 'analytics/real_time', to: 'analytics#real_time'
+
+    get 'reports/list', to: 'reports#list'
+    post 'reports/generate', to: 'reports#generate'
+    get 'reports/download/:filename', to: 'reports#download'
+    post 'reports/schedule', to: 'reports#schedule'
+
+    # Support Tickets
+    post 'support_tickets', to: 'support_tickets#create'
+    get 'support_tickets', to: 'support_tickets#index'
+    get 'support_tickets/:id', to: 'support_tickets#show'
+    patch 'support_tickets/:id', to: 'support_tickets#update'
+    post 'support_tickets/:id/messages', to: 'support_tickets#add_message'
+    post 'support_tickets/:id/assign', to: 'support_tickets#assign'
+    post 'support_tickets/:id/resolve', to: 'support_tickets#resolve'
+    post 'support_tickets/:id/close', to: 'support_tickets#close'
+    get 'support_tickets_statistics', to: 'support_tickets#statistics'
+
+    # Contact Form
+    post 'contact_forms', to: 'contact_forms#create'
+    get 'contact_forms', to: 'contact_forms#index'
+    get 'contact_forms/:id', to: 'contact_forms#show'
+    post 'contact_forms/:id/respond', to: 'contact_forms#respond'
 
   end
 

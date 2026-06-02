@@ -50,3 +50,8 @@ production:
   #   migrations_paths: db/cable_migrate
   <<: *default
   url: <%= ENV["DATABASE_URL"] %>
+  # database: salespoints_prod
+  # username: <%= ENV['DB_USERNAME'] %>
+  # password: <%= ENV['DB_PASSWORD'] %>
+  # host: <%= ENV['DB_HOST'] %>
+  # port: <%= ENV['DB_PORT'] %>

@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <style>
+      body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        margin: 0;
+        padding: 20px;
+      }
+      .container {
+        max-width: 600px;
+        margin: 0 auto;
+        background: white;
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+      }
+      .header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 30px;
+        text-align: center;
+      }
+      .header h2 {
+        margin: 0;
+        font-size: 24px;
+      }
+      .content {
+        padding: 30px;
+      }
+      .ticket-info {
+        background: #f0f0f0;
+        border-radius: 5px;
+        padding: 20px;
+        margin: 20px 0;
+        border-left: 4px solid #667eea;
+      }
+      .info-row {
+        display: flex;
+        justify-content: space-between;
+        margin: 10px 0;
+        font-size: 14px;
+      }
+      .label {
+        font-weight: bold;
+        color: #7f8c8d;
+      }
+      .cta-button {
+        display: inline-block;
+        background: #667eea;
+        color: white;
+        padding: 12px 30px;
+        border-radius: 5px;
+        text-decoration: none;
+        font-weight: bold;
+        margin: 20px 0;
+      }
+      .footer {
+        background: #ecf0f1;
+        padding: 20px;
+        text-align: center;
+        font-size: 12px;
+        color: #7f8c8d;
+        border-top: 1px solid #bdc3c7;
+      }
+      .badge {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: bold;
+        margin: 5px 5px 5px 0;
+      }
+      .badge-high {
+        background: #ff6b6b;
+        color: white;
+      }
+      .badge-medium {
+        background: #ffd93d;
+        color: #333;
+      }
+      .badge-low {
+        background: #6bcf7f;
+        color: white;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h2>🎫 Support Ticket Created</h2>
+      </div>
+
+      <div class="content">
+        <p>Hi <strong><%= @requester_name %></strong>,</p>
+
+        <p>Thank you for contacting our support team. We've received your support ticket and our team is already looking into it.</p>
+
+        <div class="ticket-info">
+          <div class="info-row">
+            <span class="label">Ticket Number:</span>
+            <span><strong><%= @ticket.ticket_number %></strong></span>
+          </div>
+          <div class="info-row">
+            <span class="label">Subject:</span>
+            <span><%= @ticket.subject %></span>
+          </div>
+          <div class="info-row">
+            <span class="label">Category:</span>
+            <span><%= @ticket.category_display %></span>
+          </div>
+          <div class="info-row">
+            <span class="label">Priority:</span>
+            <span>
+              <span class="badge" style="background: <%= case @ticket.priority when 'urgent' then '#ff6b6b' when 'high' then '#ffd93d' else '#6bcf7f' end %>; color: <%= @ticket.priority == 'high' ? '#333' : 'white' %>;">
+                <%= @ticket.priority.upcase %>
+              </span>
+            </span>
+          </div>
+          <div class="info-row">
+            <span class="label">Status:</span>
+            <span>
+              <span class="badge" style="background: #667eea; color: white;">
+                <%= @ticket.status.upcase %>
+              </span>
+            </span>
+          </div>
+        </div>
+
+        <p><strong>Your Message:</strong></p>
+        <div style="background: #f9f9f9; padding: 15px; border-radius: 5px; border-left: 3px solid #667eea;">
+          <%= simple_format(@ticket.description) %>
+        </div>
+
+        <h3>What happens next?</h3>
+        <ul>
+          <li>Our support team will review your ticket within 24 hours</li>
+          <li>You'll receive email updates whenever there's activity on your ticket</li>
+          <li>You can check the status anytime using your ticket number</li>
+        </ul>
+
+        <p>
+          <a href="<%= ENV['FRONTEND_URL'] %>/support/tickets/<%= @ticket.ticket_number %>" class="cta-button">
+            View Your Ticket
+          </a>
+        </p>
+
+        <p>If you have any questions in the meantime, feel free to reply to this email or contact us at support@salespoints.com</p>
+
+        <p>Thank you for choosing SalesPoints!<br>
+        <strong>SalesPoints Support Team</strong></p>
+      </div>
+
+      <div class="footer">
+        <p style="margin: 0;">© <%= Date.today.year %> SalesPoints. All rights reserved.</p>
+        <p style="margin: 10px 0 0 0;">Ticket ID: <%= @ticket.id %></p>
+      </div>
+    </div>
+  </body>
+</html>

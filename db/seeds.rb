@@ -7,7 +7,7 @@
 #   ["Action", "Comedy", "Drama", "Horror"].each do |genre_name|
 #     MovieGenre.find_or_create_by!(name: genre_name)
 #   end
-super_admin = AdminUser.find_or_create_by!(email: 'super_admin@yopmail.com') do |user|
+super_admin = AdminUser.find_or_create_by!(email: 'salespointecom@gmail.com') do |user|
   user.password = 'Salespoints@2026'
   user.password_confirmation = 'Salespoints@2026'
   user.first_name = 'Sales'

@@ -7,7 +7,25 @@ module Api
     before_action :authorize_account!, only: [:show, :update, :request_deletion, :cancel_deletion_request]
 
     def index
-      @accounts = Account.all.order(created_at: :desc).page(params[:page]).per(params[:per_page] || 20)
+      @accounts = Account.all.order(created_at: :desc)
+
+      if params[:status].present? && params[:status] != "all"
+        @accounts = @accounts.where(status: params[:status])
+      end
+
+      if params[:search].present?
+        search = "%#{params[:search].strip.downcase}%"
+
+        @accounts = @accounts.where(
+          "LOWER(first_name) LIKE :search
+          OR LOWER(last_name) LIKE :search
+          OR LOWER(email) LIKE :search
+          OR phone LIKE :search",
+          search: search
+        )
+      end
+
+      @accounts = @accounts.page(params[:page]).per(params[:per_page] || 20)
       if @accounts.exists?
         render json: serialize_resource(@accounts, AccountSerializer).merge(
           meta: {
@@ -15,7 +33,8 @@ module Api
             next_page: @accounts.next_page,
             prev_page: @accounts.prev_page,
             total_pages: @accounts.total_pages,
-            total_count: @accounts.total_count
+            total_count: @accounts.total_count,
+            statuses: ["all"] + Account.statuses.keys
           },
           message: 'Account list fetched successfully'
         ), status: :ok

@@ -11,6 +11,8 @@ class Account < ApplicationRecord
   has_many :notifications, as: :receiver, dependent: :destroy
   has_many :account_deletion_requests, dependent: :destroy
   has_many :push_subscriptions, as: :subscriber, dependent: :destroy
+  has_many :support_tickets, foreign_key: "account_id", dependent: :destroy
+  has_many :ticket_messages, foreign_key: "account_id", dependent: :destroy
 
   enum :status, { pending: 'pending', active: 'active', inactive: 'inactive', banned: 'banned' }
   enum :gender, { male: 'male', female: 'female', other: 'other' }

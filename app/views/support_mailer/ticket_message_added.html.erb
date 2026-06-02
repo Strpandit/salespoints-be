@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <style>
+      body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        margin: 0;
+        padding: 20px;
+      }
+      .container {
+        max-width: 600px;
+        margin: 0 auto;
+        background: white;
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+      }
+      .header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 30px;
+        text-align: center;
+      }
+      .header h2 {
+        margin: 0;
+        font-size: 24px;
+      }
+      .content {
+        padding: 30px;
+      }
+      .ticket-info {
+        background: #f0f0f0;
+        border-radius: 5px;
+        padding: 20px;
+        margin: 20px 0;
+        border-left: 4px solid #667eea;
+      }
+      .info-row {
+        display: flex;
+        justify-content: space-between;
+        margin: 10px 0;
+        font-size: 14px;
+      }
+      .label {
+        font-weight: bold;
+        color: #7f8c8d;
+      }
+      .message-box {
+        background: #f9f9f9;
+        padding: 15px;
+        border-radius: 5px;
+        border-left: 3px solid #667eea;
+        margin: 15px 0;
+      }
+      .cta-button {
+        display: inline-block;
+        background: #667eea;
+        color: white;
+        padding: 12px 30px;
+        border-radius: 5px;
+        text-decoration: none;
+        font-weight: bold;
+        margin: 20px 0;
+      }
+      .footer {
+        background: #ecf0f1;
+        padding: 20px;
+        text-align: center;
+        font-size: 12px;
+        color: #7f8c8d;
+        border-top: 1px solid #bdc3c7;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h2>💬 New Message on Your Ticket</h2>
+      </div>
+
+      <div class="content">
+        <p>Hi <strong><%= @requester_name %></strong>,</p>
+
+        <p>There's a new response on your support ticket. Here's the latest update:</p>
+
+        <div class="ticket-info">
+          <div class="info-row">
+            <span class="label">Ticket Number:</span>
+            <span><strong><%= @ticket.ticket_number %></strong></span>
+          </div>
+          <div class="info-row">
+            <span class="label">Subject:</span>
+            <span><%= @ticket.subject %></span>
+          </div>
+        </div>
+
+        <p><strong>Latest Message from <%= @message.sender_name %>:</strong></p>
+        <div class="message-box">
+          <%= simple_format(@message.message) %>
+        </div>
+
+        <p>
+          <a href="<%= ENV['FRONTEND_URL'] %>/support/tickets/<%= @ticket.ticket_number %>" class="cta-button">
+            View Full Conversation
+          </a>
+        </p>
+
+        <p>Current Status: <strong><%= @ticket.status.humanize %></strong></p>
+
+        <p>If you have any additional information to add, please reply to this email or log in to your account.</p>
+
+        <p>Thank you for using SalesPoints!<br>
+        <strong>SalesPoints Support Team</strong></p>
+      </div>
+
+      <div class="footer">
+        <p style="margin: 0;">© <%= Date.today.year %> SalesPoints. All rights reserved.</p>
+        <p style="margin: 10px 0 0 0;">Ticket ID: <%= @ticket.id %></p>
+      </div>
+    </div>
+  </body>
+</html>
