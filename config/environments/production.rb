@@ -59,8 +59,8 @@ Rails.application.configure do
 
   # Set host to be used by links generated in mailer templates.
   # config.action_mailer.default_url_options = { host: "example.com" }
-  Rails.application.routes.default_url_options[:host] = "http://salespoints-be.onrender.com"
-  config.active_storage.default_url_options = { host: "http://salespoints-be.onrender.com" }
+  Rails.application.routes.default_url_options[:host] = "http://api.salespoints.in"
+  config.active_storage.default_url_options = { host: "http://api.salespoints.in" }
 
   # Specify outgoing SMTP server. Remember to add smtp/* credentials via rails credentials:edit.
   # config.action_mailer.smtp_settings = {
@@ -90,7 +90,7 @@ Rails.application.configure do
   # Skip DNS rebinding protection for the default health check endpoint.
   # config.host_authorization = { exclude: ->(request) { request.path == "/up" } }
   config.action_mailer.perform_deliveries = true
-  config.action_mailer.default_url_options = { :host => 'salespoints-be.onrender.com' }
+  config.action_mailer.default_url_options = { :host => 'api.salespoints.in' }
 
   config.action_mailer.delivery_method = :smtp
   config.action_mailer.smtp_settings = {
