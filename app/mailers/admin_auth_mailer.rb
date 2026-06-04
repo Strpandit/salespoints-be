@@ -9,7 +9,7 @@ class AdminAuthMailer < ApplicationMailer
   def admin_created(admin, password)
     @admin = admin
     @password = password
-    @login_url = ENV['ADMIN_LOGIN_URL'] || 'http://localhost:3000/admin/login'
+    @login_url = ENV['ADMIN_LOGIN_URL'] || 'https://salespoints.in/admin/login'
     mail(to: admin.email, subject: "SalesPoints Admin Account Created - Credentials Inside")
   end
 

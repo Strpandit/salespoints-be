@@ -1,5 +1,5 @@
 class SupportMailer < ApplicationMailer
-  default from: ENV['MAILER_FROM'] || 'support@salespoints.com'
+  default from: "Sales Points <salespointecom@gmail.com>"
 
   def ticket_created(ticket)
     @ticket = ticket

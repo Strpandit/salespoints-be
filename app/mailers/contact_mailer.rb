@@ -1,5 +1,5 @@
 class ContactMailer < ApplicationMailer
-  default from: ENV['MAILER_FROM'] || 'contact@salespoints.com'
+  default from: "Sales Points <salespointecom@gmail.com>"
 
   def contact_form_received(submission)
     @submission = submission
