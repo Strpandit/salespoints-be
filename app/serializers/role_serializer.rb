@@ -1,5 +1,5 @@
 class RoleSerializer < ApplicationSerializer
-  attributes :name, :is_active, :module_access
+  attributes :name, :is_active, :module_access, :module_permissions
 
   belongs_to :created_by, serializer: AdminUserSerializer
 

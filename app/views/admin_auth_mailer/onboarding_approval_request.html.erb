@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <style>
+      body { font-family: Arial, sans-serif; background: #f4f6f8; margin: 0; padding: 24px; }
+      .card { max-width: 640px; margin: 0 auto; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08); }
+      .header { background: #16324f; color: #fff; padding: 24px; }
+      .content { padding: 24px; color: #334155; line-height: 1.6; }
+      .table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+      .table td { border-bottom: 1px solid #e2e8f0; padding: 10px 0; vertical-align: top; }
+      .label { color: #64748b; width: 180px; font-weight: bold; }
+      .btn { display: inline-block; margin-top: 18px; padding: 12px 20px; background: #2563eb; color: #fff !important; text-decoration: none; border-radius: 8px; font-weight: bold; }
+      .note { margin-top: 18px; padding: 14px; background: #eff6ff; border-left: 4px solid #2563eb; border-radius: 8px; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="header">
+        <h2 style="margin:0;">New Admin Approval Required</h2>
+      </div>
+      <div class="content">
+        <p>A new admin onboarding form has been submitted and is awaiting approval.</p>
+
+        <table class="table">
+          <tr><td class="label">Name</td><td><%= @admin.full_name %></td></tr>
+          <tr><td class="label">Email</td><td><%= @admin.email %></td></tr>
+          <tr><td class="label">Phone</td><td><%= @admin.phone %></td></tr>
+          <tr><td class="label">Assigned Roles</td><td><%= @admin.roles.active.pluck(:name).join(", ").presence || "No role assigned" %></td></tr>
+          <tr><td class="label">Approval Status</td><td><%= @admin.approval_status.to_s.humanize %></td></tr>
+        </table>
+
+        <div class="note">
+          Offer letter PDF with submitted joining details is attached for your review.
+        </div>
+
+        <p>
+          <a href="<%= @reviewer_portal_url %>" class="btn">Open Admin Panel</a>
+        </p>
+      </div>
+    </div>
+  </body>
+</html>

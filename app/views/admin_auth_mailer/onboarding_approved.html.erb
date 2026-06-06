@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <style>
+      body { font-family: Arial, sans-serif; background: #f4f6f8; margin: 0; padding: 24px; }
+      .card { max-width: 640px; margin: 0 auto; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08); }
+      .header { background: #14532d; color: #fff; padding: 24px; }
+      .content { padding: 24px; color: #334155; line-height: 1.6; }
+      .btn { display: inline-block; margin-top: 16px; padding: 12px 20px; background: #2563eb; color: #fff !important; text-decoration: none; border-radius: 8px; font-weight: bold; }
+      .note { margin-top: 18px; padding: 14px; background: #ecfdf5; border-left: 4px solid #22c55e; border-radius: 8px; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="header">
+        <h2 style="margin:0;">Admin Onboarding Approved</h2>
+      </div>
+      <div class="content">
+        <p>Hello <strong><%= @admin.full_name %></strong>,</p>
+
+        <p>Your SalesPoints admin onboarding has been approved. Your offer letter PDF is attached with this email.</p>
+
+        <div class="note">
+          Use the admin portal and the "Forgot Password" option to set your password before first login if you have not received credentials separately.
+        </div>
+
+        <p>
+          <a href="<%= @login_url %>" class="btn">Go to Admin Portal</a>
+        </p>
+      </div>
+    </div>
+  </body>
+</html>

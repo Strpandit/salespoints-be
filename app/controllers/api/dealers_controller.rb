@@ -1,8 +1,10 @@
 module Api
   class DealersController < ApplicationController
+    skip_before_action :authenticate_request!, only: [:verify_otp]
     before_action :authenticate_request!
     before_action :require_admin, only: [:create, :index, :active_dealers, :block, :unblock, :destroy, :approve, :reject]
-    before_action :set_dealer, only: [:show, :update, :block, :unblock, :approve, :reject, :request_deletion, :cancel_deletion_request]
+    before_action :require_admin_approver!, only: [:approve, :reject]
+    before_action :set_dealer, only: [:show, :update, :block, :unblock, :approve, :reject, :verify_otp, :request_deletion, :cancel_deletion_request]
     before_action :authorize_dealer_update, only: [:update, :show]
     before_action :authorize_dealer_self!, only: [:request_deletion, :cancel_deletion_request]
 
@@ -47,21 +49,23 @@ module Api
     end
 
     def create
-      dealer = Dealer.new(dealer_params)
+      dealer = Dealer.new(dealer_params.except(:status))
+      dealer.status = "pending"
+      dealer.otp_pin = rand(1000..9999)
+      dealer.otp_sent_at = Time.current
+
+      unless dealer.email.present?
+        return render json: { error: "Dealer email is required for OTP verification" }, status: :unprocessable_entity
+      end
 
       if dealer.save
-        # Generate temporary password and send welcome email
-        temp_password = SecureRandom.hex(6)
-        dealer.update(password: temp_password, password_confirmation: temp_password)
-        
-        # Send welcome email to dealer
-        DealerMailer.welcome_email(dealer, temp_password).deliver_later
-        
-        # Notify admins about new dealer creation
+        DealerAuthMailer.signup_otp(dealer).deliver_later if dealer.email.present?
         notify_admins_about_dealer_creation(dealer)
-        
+
+        verify_url = "#{ENV['FRONTEND_URL'] || request.base_url}/dealer/verify-otp?id=#{dealer.id}&email=#{CGI.escape(dealer.email)}"
         render json: serialize_resource(dealer, DealerSerializer, base_url: request.base_url).merge(
-          message: "Dealer created successfully. Welcome email sent."
+          message: "Dealer created successfully. OTP sent to dealer email.",
+          verify_url: verify_url
         ), status: :created
       else
         render json: { error: dealer.errors.full_messages }, status: :unprocessable_entity
@@ -99,13 +103,14 @@ module Api
         return render json: { error: "Dealer is already processed" }, status: :unprocessable_entity
       end
 
+      if @dealer.otp_pin.present?
+        return render json: { error: "Dealer must verify signup OTP before approval" }, status: :unprocessable_entity
+      end
+
       if @dealer.update(status: "active")
-        # Send approval email to dealer
         DealerMailer.approval_email(@dealer).deliver_later
-        
-        # Notify admins about approval
         notify_admins_about_dealer_action(@dealer, "approved")
-        
+
         render json: serialize_resource(@dealer, DealerSerializer, base_url: request.base_url).merge(
           message: "Dealer approved successfully. Approval email sent."
         ), status: :ok
@@ -122,18 +127,27 @@ module Api
       rejection_reason = params[:reason] || "Application does not meet requirements"
 
       if @dealer.update(status: "rejected")
-        # Send rejection email to dealer
         DealerMailer.rejection_email(@dealer, rejection_reason).deliver_later
-        
-        # Notify admins about rejection
         notify_admins_about_dealer_action(@dealer, "rejected", rejection_reason)
-        
+
         render json: serialize_resource(@dealer, DealerSerializer, base_url: request.base_url).merge(
           message: "Dealer rejected successfully. Rejection email sent."
         ), status: :ok
       else
         render json: { error: @dealer.errors.full_messages }, status: :unprocessable_entity
       end
+    end
+
+    def verify_otp
+      unless @dealer.otp_valid?(params[:otp].to_s)
+        return render json: { error: "Invalid or expired OTP" }, status: :unauthorized
+      end
+
+      temp_password = SecureRandom.hex(6)
+      @dealer.update!(password: temp_password, password_confirmation: temp_password, otp_pin: nil, otp_sent_at: nil)
+      DealerMailer.welcome_email(@dealer, temp_password).deliver_later if @dealer.email.present?
+
+      render json: { message: "Dealer OTP verified successfully. Credentials have been emailed." }, status: :ok
     end
 
     def destroy
@@ -230,7 +244,7 @@ module Api
     end
 
     def get_admin_emails
-      AdminUser.where(is_super_admin: true).pluck(:email)
+      AdminUser.active.select { |admin| admin.approver_admin? && admin.email.present? }.map(&:email)
     end
 
     def notify_admins_about_dealer_creation(dealer)
@@ -245,6 +259,15 @@ module Api
       admin_emails.each do |email|
         AdminNotificationMailer.dealer_action(email, dealer.full_name, action, details).deliver_later
       end
+    end
+
+    def require_admin_approver!
+      return if current_admin&.approver_admin?
+      render json: { error: "Only Super Admin or Sub Admin can approve dealer onboarding" }, status: :forbidden
+    end
+
+    def current_admin
+      current_user
     end
   end
 end

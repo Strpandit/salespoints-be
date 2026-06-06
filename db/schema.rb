@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_06_01_101000) do
+ActiveRecord::Schema[8.0].define(version: 2026_06_04_113000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -146,6 +146,27 @@ ActiveRecord::Schema[8.0].define(version: 2026_06_01_101000) do
     t.boolean "is_super_admin", default: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "alternate_phone"
+    t.text "address"
+    t.string "aadhar_number"
+    t.string "pan_number"
+    t.string "bank_name"
+    t.string "bank_account_number"
+    t.string "ifsc_code"
+    t.string "account_holder_name"
+    t.string "tenth_school_name"
+    t.string "tenth_board"
+    t.string "tenth_passing_year"
+    t.string "tenth_percentage"
+    t.string "twelfth_school_name"
+    t.string "twelfth_board"
+    t.string "twelfth_passing_year"
+    t.string "twelfth_percentage"
+    t.string "approval_status", default: "pending", null: false
+    t.datetime "approved_at"
+    t.bigint "approved_by_id"
+    t.index ["approval_status"], name: "index_admin_users_on_approval_status"
+    t.index ["approved_by_id"], name: "index_admin_users_on_approved_by_id"
     t.index ["email"], name: "index_admin_users_on_email", unique: true
     t.index ["is_super_admin"], name: "index_admin_users_on_is_super_admin"
     t.index ["phone"], name: "index_admin_users_on_phone", unique: true
@@ -839,6 +860,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_06_01_101000) do
   add_foreign_key "admin_deletion_requests", "admin_users", column: "reviewed_by_admin_id"
   add_foreign_key "admin_roles", "admin_users"
   add_foreign_key "admin_roles", "roles"
+  add_foreign_key "admin_users", "admin_users", column: "approved_by_id"
   add_foreign_key "b2b_order_items", "b2b_orders"
   add_foreign_key "b2b_order_items", "dealer_products"
   add_foreign_key "b2b_order_items", "product_variants"
