@@ -7,11 +7,11 @@ require "sidekiq-scheduler"
 
 # Process pending settlements every 30 minutes
 # This checks orders that are 7+ days post-delivery and have no active return requests
-Sidekiq.configure_server do |config|
-  config.server_middleware do |chain|
-    chain.add SidekiqScheduler::MiddleWare
-  end
-end if Sidekiq.server?
+#Sidekiq.configure_server do |config|
+ # config.server_middleware do |chain|
+  #  chain.add SidekiqScheduler::MiddleWare
+ # end
+#end if Sidekiq.server?
 
 # Define recurring jobs using Sidekiq::Cron
 if defined?(Sidekiq::Cron)
