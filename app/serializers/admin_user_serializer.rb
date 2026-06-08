@@ -1,5 +1,5 @@
 class AdminUserSerializer < ApplicationSerializer
-  attributes :first_name, :last_name, :email, :phone, :alternate_phone, :address,
+  attributes :first_name, :last_name, :email, :phone, :alternate_phone, :address, :salary,
              :aadhar_number, :pan_number, :bank_name, :bank_account_number,
              :ifsc_code, :account_holder_name, :tenth_school_name, :tenth_board,
              :tenth_passing_year, :tenth_percentage, :twelfth_school_name,

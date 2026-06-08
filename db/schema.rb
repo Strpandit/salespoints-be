@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_06_04_113000) do
+ActiveRecord::Schema[8.0].define(version: 2026_06_08_174135) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -165,6 +165,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_06_04_113000) do
     t.string "approval_status", default: "pending", null: false
     t.datetime "approved_at"
     t.bigint "approved_by_id"
+    t.decimal "salary", precision: 15, scale: 2
     t.index ["approval_status"], name: "index_admin_users_on_approval_status"
     t.index ["approved_by_id"], name: "index_admin_users_on_approved_by_id"
     t.index ["email"], name: "index_admin_users_on_email", unique: true

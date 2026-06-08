@@ -3,7 +3,7 @@ module Api
     skip_before_action :authenticate_request!, only: [:index, :show]
     before_action :require_admin, except: [:index, :show]
     before_action :check_permission, except: [:index, :show]
-    before_action :set_category, only: [:show, :update, :deactivate, :reactivate]
+    before_action :set_category, only: [:show, :update, :deactivate, :reactivate, :destroy]
 
     def index
       if params[:slug].present?
@@ -83,6 +83,23 @@ module Api
     def reactivate
       @category.update(is_active: true)
       render json: { message: "Category reactivated successfully" }
+    end
+
+    def destroy
+      if @category.products.exists?
+        render json: {
+          error: "Cannot delete category because products are present in this category"
+        }, status: :unprocessable_entity
+        return
+      end
+
+      if @category.destroy
+        render json: { message: "Category deleted successfully" }, status: :ok
+      else
+        render json: {
+          error: @category.errors.full_messages.join(", ")
+        }, status: :unprocessable_entity
+      end
     end
 
     private

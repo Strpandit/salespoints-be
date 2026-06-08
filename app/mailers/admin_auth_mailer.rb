@@ -8,6 +8,13 @@ class AdminAuthMailer < ApplicationMailer
     mail(to: admin.email, subject: "Admin Password Reset OTP - SalesPoints")
   end
 
+  def login_otp(admin)
+    @admin = admin
+    @otp = admin.otp_pin
+    @expires_in_minutes = 10
+    mail(to: admin.email, subject: "Verify your profile - SalesPoints")
+  end
+
   def signup_otp(admin)
     @admin = admin
     @otp = admin.otp_pin

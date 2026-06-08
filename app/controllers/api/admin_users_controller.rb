@@ -15,7 +15,7 @@ module Api
 
       if admin.super_admin?
         admin.update!(otp_pin: rand(1000..9999), otp_sent_at: Time.current)
-        AdminAuthMailer.forgot_password_otp(admin).deliver_later if admin.email.present?
+        AdminAuthMailer.login_otp(admin).deliver_later if admin.email.present?
 
         render json: {
           otp_required: true,
@@ -303,7 +303,7 @@ module Api
         :ifsc_code, :account_holder_name, :tenth_school_name, :tenth_board,
         :tenth_passing_year, :tenth_percentage, :twelfth_school_name,
         :twelfth_board, :twelfth_passing_year, :twelfth_percentage,
-        :password, :password_confirmation, :status, :staff_profile_pic,
+        :password, :password_confirmation, :status, :staff_profile_pic, :salary,
         { marksheets: [] }
       )
     end
