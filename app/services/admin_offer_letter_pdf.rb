@@ -59,24 +59,6 @@ class AdminOfferLetterPdf
       info_row(pdf, "Full Name", @admin.full_name)
       info_row(pdf, "Email", @admin.email)
       info_row(pdf, "Primary Mobile", format_phone(@admin.phone))
-      info_row(pdf, "Alternate Mobile", format_phone(@admin.alternate_phone))
-      info_row(pdf, "Address", @admin.address)
-
-      pdf.move_down 15
-
-      section_heading(pdf, "IDENTITY DETAILS")
-
-      info_row(pdf, "Aadhaar Number", @admin.aadhar_number)
-      info_row(pdf, "PAN Number", @admin.pan_number)
-
-      pdf.move_down 15
-
-      section_heading(pdf, "BANK DETAILS")
-
-      info_row(pdf, "Bank Name", @admin.bank_name)
-      info_row(pdf, "Account Holder", @admin.account_holder_name)
-      info_row(pdf, "Account Number", @admin.bank_account_number)
-      info_row(pdf, "IFSC Code", @admin.ifsc_code)
 
       pdf.move_down 15
 
@@ -102,7 +84,7 @@ class AdminOfferLetterPdf
 
       pdf.move_down 15
 
-      section_heading(pdf, "REQUIRED DOCUMENTS")
+      section_heading(pdf, "REQUIRED FEW DOCS COMPLETE JOINING PROCESS")
 
       documents = [
         "Aadhaar Card",
