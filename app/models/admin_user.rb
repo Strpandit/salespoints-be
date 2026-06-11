@@ -1,5 +1,6 @@
 class AdminUser < ApplicationRecord
   has_secure_password validations: false
+  acts_as_paranoid
   attr_accessor :generated_password
 
   DOCUMENT_TYPES = %w[
@@ -14,13 +15,15 @@ class AdminUser < ApplicationRecord
   has_many :admin_roles, dependent: :destroy
   has_many :roles, through: :admin_roles
   has_many :notifications, as: :receiver, dependent: :destroy
-  has_many :admin_deletion_requests, foreign_key: :admin_user_id, dependent: :destroy, inverse_of: :admin_user
+  has_many :deletion_requests, as: :requestable, dependent: :destroy
   has_many :push_subscriptions, as: :subscriber, dependent: :destroy
   has_many :support_tickets, foreign_key: 'admin_user_id', dependent: :destroy
   has_many :assigned_tickets, class_name: 'SupportTicket', foreign_key: 'assigned_to_id', dependent: :nullify
   has_many :ticket_messages, foreign_key: 'admin_user_id', dependent: :destroy
   has_many :contact_form_submissions, dependent: :destroy
   belongs_to :approved_by, class_name: "AdminUser", optional: true
+  belongs_to :deleted_by, class_name: "AdminUser", optional: true
+  has_many :deleted_admins, class_name: "AdminUser", foreign_key: :deleted_by_id
   has_one_attached :staff_profile_pic
   has_many_attached :marksheets
 

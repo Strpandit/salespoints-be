@@ -104,25 +104,15 @@ Rails.application.routes.draw do
     #Reviews
     resources :reviews
 
-    #Accounts Deletions
-    resources :account_deletions, only: [:index] do
+    #Deletion Requests
+    resources :deletion_requests, only: [:create, :index] do
       member do
         patch :approve
         patch :reject
+        delete :cancel
       end
     end
-    resources :dealer_deletion_requests, only: [:index] do
-      member do
-        patch :approve
-        patch :reject
-      end
-    end
-    resources :admin_deletion_requests, only: [:index] do
-      member do
-        patch :approve
-        patch :reject
-      end
-    end
+
     # Dealers routes
     resources :dealers do
       get :active_dealers, on: :collection

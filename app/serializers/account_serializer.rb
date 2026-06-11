@@ -4,6 +4,6 @@ class AccountSerializer < ApplicationSerializer
   has_many :addresses
 
   def pending_deletion_request
-    object.account_deletion_requests.pending.exists?
+    object.deletion_requests.pending.exists?
   end
 end

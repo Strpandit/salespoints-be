@@ -1,0 +1,24 @@
+<%= render layout: "deletion_request_mailer/layout",
+locals: { title: "🗑️ Account Deletion Request" } do %>
+
+<p>A new account deletion request has been submitted.</p>
+
+<div class="info-block">
+
+  <div class="label">Account Type</div>
+  <div class="value"><%= @request.requestable_type %></div>
+
+  <div class="label" style="margin-top:15px;">Name</div>
+  <div class="value"><%= @request.requestable.full_name %></div>
+
+  <div class="label" style="margin-top:15px;">Email</div>
+  <div class="value"><%= @request.requestable.email %></div>
+
+  <div class="label" style="margin-top:15px;">Reason</div>
+  <div class="value"><%= @request.reason.presence || "Not Provided" %></div>
+
+</div>
+
+<p>Please login and review this deletion request.</p>
+
+<% end %>

@@ -1,0 +1,18 @@
+<%= render layout: "deletion_request_mailer/layout",
+locals: { title: "❌ Account Deletion Rejected" } do %>
+
+<p>Your account deletion request has been reviewed.</p>
+
+<div class="info-block">
+
+  <div class="label">Status</div>
+  <div class="value">REJECTED</div>
+
+  <div class="label" style="margin-top:15px;">Reason</div>
+  <div class="value"><%= @reason %></div>
+
+</div>
+
+<p>Your account remains active.</p>
+
+<% end %>

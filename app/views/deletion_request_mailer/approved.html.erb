@@ -1,0 +1,21 @@
+<%= render layout: "deletion_request_mailer/layout",
+locals: { title: "✅ Account Deletion Approved" } do %>
+
+<p>Your account deletion request has been approved.</p>
+
+<div class="info-block">
+
+  <div class="label">Account</div>
+  <div class="value"><%= @account.full_name %></div>
+
+  <div class="label" style="margin-top:15px;">Approved By</div>
+  <div class="value"><%= @approved_by.full_name %></div>
+
+  <div class="label" style="margin-top:15px;">Status</div>
+  <div class="value">APPROVED</div>
+
+</div>
+
+<p>Your account has been successfully removed from SalesPoints.</p>
+
+<% end %>

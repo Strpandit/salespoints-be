@@ -6,10 +6,10 @@ class AdminUserSerializer < ApplicationSerializer
              :twelfth_board, :twelfth_passing_year, :twelfth_percentage, :status,
              :country_code, :is_super_admin, :full_name, :pending_deletion_request,
              :role, :staff_profile_pic, :marksheets, :joining_form_completed,
-             :approval_status, :approved_at, :approved_by_name, :otp_verified
+             :approval_status, :approved_at, :approved_by_name, :otp_verified, :deleted_at, :deleted_by
 
   def pending_deletion_request
-    object.admin_deletion_requests.pending.exists?
+    object.deletion_requests.pending.exists?
   end
 
   def joining_form_completed

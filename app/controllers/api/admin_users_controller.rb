@@ -3,9 +3,8 @@ module Api
     skip_before_action :authenticate_request!, only: [:login, :login_otp, :forgot_password, :otp_confirmation, :reset_user_password, :verify_otp]
     before_action :require_admin, except: [:login, :login_otp, :forgot_password, :otp_confirmation, :reset_user_password, :verify_otp]
     before_action :require_super_admin, only: [:create, :destroy, :deactivate, :reactivate]
-    before_action :find_admin_user, only: [:show, :update, :destroy, :deactivate, :reactivate, :approve, :verify_otp, :request_deletion, :cancel_deletion_request, :login_otp]
+    before_action :find_admin_user, only: [:show, :update, :destroy, :deactivate, :reactivate, :approve, :verify_otp, :login_otp]
     before_action :require_admin_approver!, only: [:approve]
-    before_action :authorize_self_deletion_request!, only: [:request_deletion, :cancel_deletion_request]
 
     def login
       admin = AdminUser.find_by(email: params[:email]&.downcase, status: 'active')
@@ -55,7 +54,7 @@ module Api
 
       admins =
       if current_admin.super_admin?
-        AdminUser.all.order(created_at: :desc).page(params[:page]).per(params[:per_page] || 20)
+        AdminUser.order(created_at: :desc).page(params[:page]).per(params[:per_page] || 20)
       else
         AdminUser.where(is_super_admin: false)
       end
@@ -132,10 +131,6 @@ module Api
       render json: { error: e.record.errors.full_messages }, status: :unprocessable_entity
     end
 
-    def destroy
-      forbidden("Admin removal requires an approved deletion request from the staff member profile.")
-    end
-
     def approve
       return render json: { error: "Admin user is already approved" }, status: :unprocessable_entity if @admin_user.approved?
       return render json: { error: "Admin must verify signup OTP before approval" }, status: :unprocessable_entity if @admin_user.otp_pin.present?
@@ -153,53 +148,36 @@ module Api
         message: "Admin user approved successfully"
       ), status: :ok
     end
+      
+    def destroy
 
-    def request_deletion
-      unless params[:password].present?
-        return render json: { message: "Password is required" }, status: :unprocessable_entity
-      end
+      return forbidden(
+        "You cannot delete your own account"
+      ) if @admin_user.id == current_admin.id
 
-      unless @admin_user.authenticate(params[:password])
-        return render json: { message: "Incorrect password" }, status: :unauthorized
-      end
-
-      if @admin_user.admin_deletion_requests.pending.exists?
-        return render json: { message: "A deletion request is already pending review" }, status: :unprocessable_entity
-      end
-
-      req = @admin_user.admin_deletion_requests.create!(
-        status: "pending",
-        reason: params[:reason].to_s.presence,
-        requested_at: Time.current,
-        password_verified_at: Time.current
-      )
-
-      AdminUser.where(is_super_admin: true).find_each do |admin|
-        next if admin.id == @admin_user.id
-
-        NotificationService.deliver(
-          recipient: admin,
-          actor: @admin_user,
-          notifiable: req,
-          kind: "admin_deletion_requested",
-          title: "Admin staff deletion requested",
-          message: "#{@admin_user.full_name.presence || 'Admin'} (#{@admin_user.email}) requested profile removal.",
-          payload: { admin_deletion_request_id: req.id, admin_user_id: @admin_user.id }
+      unless current_admin.super_admin?
+        return forbidden(
+          "Only super admin can directly delete users"
         )
       end
 
+      return forbidden(
+        "Super admin accounts cannot be deleted"
+      ) if @admin_user.super_admin?
+
+      ActiveRecord::Base.transaction do
+        @admin_user.update!(
+          deleted_by: current_admin
+        )
+        @admin_user.destroy
+      end
+
+      DeletionNotificationService.direct_deleted(@admin_user, current_admin)
+      DeletionMailService.direct_deleted(@admin_user, current_admin)
+
       render json: {
-        message: "Deletion request submitted. A super administrator will review it.",
-        data: { pending_deletion_request: true }
+        message: "Admin deleted successfully"
       }, status: :ok
-    end
-
-    def cancel_deletion_request
-      req = @admin_user.admin_deletion_requests.pending.order(created_at: :desc).first
-      return render json: { message: "No pending deletion request" }, status: :not_found unless req
-
-      req.destroy!
-      render json: { message: "Deletion request cancelled", data: { pending_deletion_request: false } }, status: :ok
     end
 
     def forgot_password
@@ -327,11 +305,6 @@ module Api
 
     def can_view_profile?
       current_admin.super_admin? || current_admin.id == @admin_user.id
-    end
-
-    def authorize_self_deletion_request!
-      return forbidden("You can only request deletion for your own profile") unless current_admin.id == @admin_user.id
-      return forbidden("Super admin cannot use this deletion request flow") if @admin_user.is_super_admin?
     end
 
     def normalized_role_ids

@@ -1,5 +1,6 @@
 class Dealer < ApplicationRecord
   has_secure_password validations: false
+  acts_as_paranoid
 
   has_one :dealer_profile, dependent: :destroy, inverse_of: :dealer
   has_one :dealer_location, dependent: :destroy, inverse_of: :dealer
@@ -9,7 +10,7 @@ class Dealer < ApplicationRecord
   has_many :seller_b2b_orders, class_name: "B2bOrder", foreign_key: :seller_dealer_id, dependent: :nullify
   has_many :b2b_order_offers, dependent: :destroy
   has_many :notifications, as: :receiver, dependent: :destroy
-  has_many :dealer_deletion_requests, dependent: :destroy
+  has_many :deletion_requests, as: :requestable, dependent: :destroy
   has_many :push_subscriptions, as: :subscriber, dependent: :destroy
   has_many :products, through: :dealer_products
   has_many :wholesaler_posts, dependent: :destroy
@@ -23,6 +24,7 @@ class Dealer < ApplicationRecord
   has_many :dealer_payouts, dependent: :destroy
   has_many :support_tickets, foreign_key: "dealer_id", dependent: :destroy
   has_many :ticket_messages, foreign_key: "dealer_id", dependent: :destroy
+  belongs_to :deleted_by, class_name: "AdminUser", optional: true
 
   accepts_nested_attributes_for :dealer_profile, reject_if: :all_blank
   accepts_nested_attributes_for :dealer_location, reject_if: :all_blank

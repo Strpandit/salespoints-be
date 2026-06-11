@@ -10,26 +10,9 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_06_08_174135) do
+ActiveRecord::Schema[8.0].define(version: 2026_06_11_093651) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
-
-  create_table "account_deletion_requests", force: :cascade do |t|
-    t.bigint "account_id", null: false
-    t.bigint "reviewed_by_admin_id"
-    t.string "status", default: "pending", null: false
-    t.text "reason"
-    t.text "rejection_reason"
-    t.datetime "requested_at", null: false
-    t.datetime "reviewed_at"
-    t.datetime "password_verified_at"
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["account_id", "status"], name: "index_account_deletion_requests_on_account_id_and_status"
-    t.index ["account_id"], name: "index_account_deletion_requests_on_account_id"
-    t.index ["reviewed_by_admin_id"], name: "index_account_deletion_requests_on_reviewed_by_admin_id"
-    t.index ["status"], name: "index_account_deletion_requests_on_status"
-  end
 
   create_table "accounts", force: :cascade do |t|
     t.string "first_name"
@@ -102,23 +85,6 @@ ActiveRecord::Schema[8.0].define(version: 2026_06_08_174135) do
     t.index ["account_id"], name: "index_addresses_on_account_id"
   end
 
-  create_table "admin_deletion_requests", force: :cascade do |t|
-    t.bigint "admin_user_id", null: false
-    t.bigint "reviewed_by_admin_id"
-    t.string "status", default: "pending", null: false
-    t.text "reason"
-    t.text "rejection_reason"
-    t.datetime "requested_at", null: false
-    t.datetime "reviewed_at"
-    t.datetime "password_verified_at"
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["admin_user_id", "status"], name: "index_admin_deletion_requests_on_admin_user_id_and_status"
-    t.index ["admin_user_id"], name: "index_admin_deletion_requests_on_admin_user_id"
-    t.index ["reviewed_by_admin_id"], name: "index_admin_deletion_requests_on_reviewed_by_admin_id"
-    t.index ["status"], name: "index_admin_deletion_requests_on_status"
-  end
-
   create_table "admin_roles", force: :cascade do |t|
     t.integer "admin_user_id", null: false
     t.integer "role_id", null: false
@@ -166,8 +132,10 @@ ActiveRecord::Schema[8.0].define(version: 2026_06_08_174135) do
     t.datetime "approved_at"
     t.bigint "approved_by_id"
     t.decimal "salary", precision: 15, scale: 2
+    t.bigint "deleted_by_id"
     t.index ["approval_status"], name: "index_admin_users_on_approval_status"
     t.index ["approved_by_id"], name: "index_admin_users_on_approved_by_id"
+    t.index ["deleted_by_id"], name: "index_admin_users_on_deleted_by_id"
     t.index ["email"], name: "index_admin_users_on_email", unique: true
     t.index ["is_super_admin"], name: "index_admin_users_on_is_super_admin"
     t.index ["phone"], name: "index_admin_users_on_phone", unique: true
@@ -366,23 +334,6 @@ ActiveRecord::Schema[8.0].define(version: 2026_06_08_174135) do
     t.index ["created_by_dealer_id"], name: "index_coupons_on_created_by_dealer_id"
   end
 
-  create_table "dealer_deletion_requests", force: :cascade do |t|
-    t.bigint "dealer_id", null: false
-    t.bigint "reviewed_by_admin_id"
-    t.string "status", default: "pending", null: false
-    t.text "reason"
-    t.text "rejection_reason"
-    t.datetime "requested_at", null: false
-    t.datetime "reviewed_at"
-    t.datetime "password_verified_at"
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["dealer_id", "status"], name: "index_dealer_deletion_requests_on_dealer_id_and_status"
-    t.index ["dealer_id"], name: "index_dealer_deletion_requests_on_dealer_id"
-    t.index ["reviewed_by_admin_id"], name: "index_dealer_deletion_requests_on_reviewed_by_admin_id"
-    t.index ["status"], name: "index_dealer_deletion_requests_on_status"
-  end
-
   create_table "dealer_ledger_entries", force: :cascade do |t|
     t.bigint "dealer_id", null: false
     t.bigint "order_id"
@@ -497,9 +448,28 @@ ActiveRecord::Schema[8.0].define(version: 2026_06_08_174135) do
     t.datetime "updated_at", null: false
     t.string "dealer_code", null: false
     t.decimal "settlement_balance", precision: 14, scale: 2, default: "0.0", null: false
+    t.bigint "deleted_by_id"
     t.index ["dealer_code"], name: "index_dealers_on_dealer_code", unique: true
+    t.index ["deleted_by_id"], name: "index_dealers_on_deleted_by_id"
     t.index ["email"], name: "index_dealers_on_email", unique: true
     t.index ["phone"], name: "index_dealers_on_phone", unique: true
+  end
+
+  create_table "deletion_requests", force: :cascade do |t|
+    t.string "requestable_type", null: false
+    t.bigint "requestable_id", null: false
+    t.bigint "reviewed_by_admin_id"
+    t.string "status", default: "pending", null: false
+    t.text "reason"
+    t.text "rejection_reason"
+    t.datetime "requested_at", null: false
+    t.datetime "reviewed_at"
+    t.datetime "password_verified_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["requestable_type", "requestable_id"], name: "index_deletion_requests_on_requestable"
+    t.index ["reviewed_by_admin_id"], name: "index_deletion_requests_on_reviewed_by_admin_id"
+    t.index ["status"], name: "index_deletion_requests_on_status"
   end
 
   create_table "notifications", force: :cascade do |t|
@@ -852,16 +822,13 @@ ActiveRecord::Schema[8.0].define(version: 2026_06_08_174135) do
     t.index ["reviewed_by_admin_id"], name: "index_wholesaler_posts_on_reviewed_by_admin_id"
   end
 
-  add_foreign_key "account_deletion_requests", "accounts"
-  add_foreign_key "account_deletion_requests", "admin_users", column: "reviewed_by_admin_id"
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
   add_foreign_key "addresses", "accounts"
-  add_foreign_key "admin_deletion_requests", "admin_users"
-  add_foreign_key "admin_deletion_requests", "admin_users", column: "reviewed_by_admin_id"
   add_foreign_key "admin_roles", "admin_users"
   add_foreign_key "admin_roles", "roles"
   add_foreign_key "admin_users", "admin_users", column: "approved_by_id"
+  add_foreign_key "admin_users", "admin_users", column: "deleted_by_id"
   add_foreign_key "b2b_order_items", "b2b_orders"
   add_foreign_key "b2b_order_items", "dealer_products"
   add_foreign_key "b2b_order_items", "product_variants"
@@ -879,8 +846,6 @@ ActiveRecord::Schema[8.0].define(version: 2026_06_08_174135) do
   add_foreign_key "contact_form_submissions", "admin_users"
   add_foreign_key "coupon_usages", "coupons"
   add_foreign_key "coupons", "dealers", column: "created_by_dealer_id"
-  add_foreign_key "dealer_deletion_requests", "admin_users", column: "reviewed_by_admin_id"
-  add_foreign_key "dealer_deletion_requests", "dealers"
   add_foreign_key "dealer_ledger_entries", "dealers"
   add_foreign_key "dealer_ledger_entries", "orders"
   add_foreign_key "dealer_ledger_entries", "return_requests"
@@ -892,6 +857,8 @@ ActiveRecord::Schema[8.0].define(version: 2026_06_08_174135) do
   add_foreign_key "dealer_products", "product_variants"
   add_foreign_key "dealer_products", "products"
   add_foreign_key "dealer_profiles", "dealers"
+  add_foreign_key "dealers", "admin_users", column: "deleted_by_id"
+  add_foreign_key "deletion_requests", "admin_users", column: "reviewed_by_admin_id"
   add_foreign_key "order_items", "dealer_products"
   add_foreign_key "order_items", "orders"
   add_foreign_key "order_items", "product_variants"

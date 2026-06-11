@@ -7,7 +7,7 @@ class DealerSerializer < ApplicationSerializer
   has_one :dealer_location
 
   def pending_deletion_request
-    object.dealer_deletion_requests.pending.exists?
+    object.deletion_requests.pending.exists?
   end
 
   def settlement_balance

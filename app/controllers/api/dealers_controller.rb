@@ -4,9 +4,8 @@ module Api
     before_action :authenticate_request!
     before_action :require_admin, only: [:create, :index, :active_dealers, :block, :unblock, :destroy, :approve, :reject]
     before_action :require_admin_approver!, only: [:approve, :reject]
-    before_action :set_dealer, only: [:show, :update, :block, :unblock, :approve, :reject, :verify_otp, :request_deletion, :cancel_deletion_request]
+    before_action :set_dealer, only: [:show, :update, :destroy, :block, :unblock, :approve, :reject, :verify_otp]
     before_action :authorize_dealer_update, only: [:update, :show]
-    before_action :authorize_dealer_self!, only: [:request_deletion, :cancel_deletion_request]
 
     def index
       dealers = Dealer.where(status: "pending").includes(:dealer_profile, :dealer_location).order(created_at: :desc).page(params[:page]).per(params[:per_page] || 20)
@@ -151,66 +150,25 @@ module Api
     end
 
     def destroy
-      render json: {
-        error: "Direct deletion is disabled. Dealers must submit a deletion request; an administrator will approve it."
-      }, status: :forbidden
-    end
+      return render json: {
+        error: "Only super admin can delete dealers"
+      }, status: :forbidden unless current_admin.super_admin?
 
-    def request_deletion
-      unless params[:password].present?
-        return render json: { message: "Password is required" }, status: :unprocessable_entity
-      end
-
-      unless @dealer.authenticate(params[:password])
-        return render json: { message: "Incorrect password" }, status: :unauthorized
-      end
-
-      if @dealer.dealer_deletion_requests.pending.exists?
-        return render json: { message: "A deletion request is already pending review" }, status: :unprocessable_entity
-      end
-
-      req = @dealer.dealer_deletion_requests.create!(
-        status: "pending",
-        reason: params[:reason].to_s.presence,
-        requested_at: Time.current,
-        password_verified_at: Time.current
+      @dealer.update!(
+        deleted_by: current_admin
       )
 
-      AdminUser.find_each do |admin|
-        next unless admin.can_access?(:dealers, :write)
+      @dealer.destroy
 
-        NotificationService.deliver(
-          recipient: admin,
-          actor: @dealer,
-          notifiable: req,
-          kind: "dealer_deletion_requested",
-          title: "Dealer deletion requested",
-          message: "#{@dealer.full_name.presence || 'Dealer'} (#{@dealer.email}) requested account deletion.",
-          payload: { dealer_deletion_request_id: req.id, dealer_id: @dealer.id }
-        )
-      end
+      DeletionNotificationService.direct_deleted(@dealer, current_admin)
+      DeletionMailService.direct_deleted(@dealer, current_admin)
 
       render json: {
-        message: "Deletion request submitted. An administrator will review it.",
-        data: { pending_deletion_request: true }
-      }, status: :ok
-    end
-
-    def cancel_deletion_request
-      req = @dealer.dealer_deletion_requests.pending.order(created_at: :desc).first
-      return render json: { message: "No pending deletion request" }, status: :not_found unless req
-
-      req.destroy!
-      render json: { message: "Deletion request cancelled", data: { pending_deletion_request: false } }, status: :ok
+        message: "Dealer deleted successfully"
+      }
     end
 
     private
-
-    def authorize_dealer_self!
-      return if current_user_type == "Dealer" && current_dealer.present? && current_dealer.id == @dealer.id
-
-      render json: { error: "Unauthorized" }, status: :forbidden
-    end
 
     def dealer_params
       params.require(:dealer).permit(

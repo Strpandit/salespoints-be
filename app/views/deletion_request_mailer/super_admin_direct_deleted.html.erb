@@ -1,0 +1,27 @@
+<%= render layout: "deletion_request_mailer/layout",
+locals: { title: "⚠️ Account Deleted" } do %>
+
+<p>An account has been deleted from the system.</p>
+
+<div class="info-block">
+
+  <div class="label">Account Type</div>
+  <div class="value"><%= @account.class.name %></div>
+
+  <div class="label" style="margin-top:15px;">Name</div>
+  <div class="value"><%= @account.full_name %></div>
+
+  <div class="label" style="margin-top:15px;">Email</div>
+  <div class="value"><%= @account.email %></div>
+
+  <div class="label" style="margin-top:15px;">Deleted By</div>
+  <div class="value"><%= @actor.full_name %></div>
+
+  <div class="label" style="margin-top:15px;">Deleted At</div>
+  <div class="value"><%= Time.current.strftime("%d %B %Y %I:%M %p") %></div>
+
+</div>
+
+<p>This notification was sent to all Super Administrators.</p>
+
+<% end %>
