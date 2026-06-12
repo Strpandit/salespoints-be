@@ -1,4 +1,4 @@
-class ProcessDealerPayoutsJob
+class ProcessDealerPayoutsJob < ApplicationJob
   queue_as :default
 
   limits_concurrency to: 1, group: "dealer_payouts"

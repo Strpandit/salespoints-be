@@ -1,4 +1,4 @@
-class ProcessPendingSettlementsJob
+class ProcessPendingSettlementsJob < ApplicationJob
   queue_as :default
 
   limits_concurrency to: 1, group: "pending_settlements"

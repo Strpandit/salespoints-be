@@ -1,4 +1,4 @@
-class CheckPayoutTransferStatusJob
+class CheckPayoutTransferStatusJob < ApplicationJob
   queue_as :default
 
   limits_concurrency to: 1, key: ->(payout_id) { payout_id }, group: "payout_status"
