@@ -10,6 +10,7 @@ module SalespointsBe
   class Application < Rails::Application
     # Initialize configuration defaults for originally generated Rails version.
     config.load_defaults 8.0
+    config.solid_queue.connects_to = { database: { writing: :production, reading: :production } }
     
     config.action_mailer.deliver_later_queue_name = :mailers
 
