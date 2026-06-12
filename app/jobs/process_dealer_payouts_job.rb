@@ -1,7 +1,9 @@
 class ProcessDealerPayoutsJob
-  include Sidekiq::Job
+  queue_as :default
 
-  sidekiq_options retry: 3, lock: :until_executed, on_conflict: :log
+  limits_concurrency to: 1, group: "dealer_payouts"
+
+  retry_on StandardError, attempts: 3, wait: :exponentially_longer
 
   def perform
     result = SettlementAndPayoutAutomationService.process_dealer_payouts!

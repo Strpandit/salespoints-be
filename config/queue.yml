@@ -10,9 +10,40 @@ default: &default
 
 development:
   <<: *default
+  recurring_tasks:
+    process_pending_settlements:
+      class: ProcessPendingSettlementsJob
+      cron: "*/30 * * * *"
+      active: true
+
+    cleanup_expired_b2b_offers:
+      class: B2bOrderOfferCleanupJob
+      cron: "*/5 * * * *"
+      active: true
 
 test:
   <<: *default
 
 production:
   <<: *default
+  # Production me yeh aapke .env variables ke hisab se chalenge
+  recurring_tasks:
+    process_pending_settlements:
+      class: ProcessPendingSettlementsJob
+      cron: "*/30 * * * *" # Every 30 minutes
+      active: <%= ENV["ENABLE_SETTLEMENT_AUTOMATION"] == "true" %>
+
+    process_dealer_payouts:
+      class: ProcessDealerPayoutsJob
+      cron: "0 2 * * *" # Daily at 2 AM
+      active: <%= ENV["ENABLE_PAYOUT_AUTOMATION"] == "true" %>
+
+    retry_failed_webhooks:
+      class: RetryFailedWebhooksJob
+      cron: "0 * * * *" # Hourly
+      active: <%= ENV["ENABLE_WEBHOOK_RETRY"] == "true" %>
+
+    cleanup_expired_b2b_offers:
+      class: B2bOrderOfferCleanupJob
+      cron: "*/5 * * * *" # Every 5 minutes
+      active: <%= ENV.fetch("ENABLE_B2B_OFFER_CLEANUP", "true") == "true" %>

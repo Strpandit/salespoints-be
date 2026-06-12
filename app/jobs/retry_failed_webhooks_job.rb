@@ -1,23 +1,20 @@
-# Create this job for retrying failed webhooks
-class RetryFailedWebhooksJob
-  include Sidekiq::Job
+class RetryFailedWebhooksJob < ApplicationJob
+  queue_as :default
 
-  sidekiq_options retry: 3
+  retry_on StandardError, attempts: 3, wait: :exponentially_longer
 
   def perform
-    # Find payment gateway webhook events that failed and are within retry window
     failed_events = PaymentGatewayWebhookEvent
-      .where(status: "failed")
-      .where("created_at > ?", 24.hours.ago)
-      .where("attempts < 3")
-      .order(created_at: :asc)
-      .limit(10)
+                      .where(status: "failed")
+                      .where("created_at > ?", 24.hours.ago)
+                      .where("attempts < 3")
+                      .order(created_at: :asc)
+                      .limit(10)
 
     processed = 0
 
     failed_events.each do |event|
       begin
-        # Reprocess the event
         processor = EnhancedPaymentWebhookProcessor.new(
           headers: event.headers,
           raw_body: event.payload.to_json

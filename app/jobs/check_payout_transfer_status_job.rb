@@ -1,7 +1,9 @@
 class CheckPayoutTransferStatusJob
-  include Sidekiq::Job
+  queue_as :default
 
-  sidekiq_options retry: 5, lock: :until_executed, on_conflict: :log
+  limits_concurrency to: 1, key: ->(payout_id) { payout_id }, group: "payout_status"
+
+  retry_on StandardError, attempts: 5, wait: :exponentially_longer
 
   def perform(payout_id)
     payout = DealerPayout.find_by(id: payout_id)
@@ -16,12 +18,6 @@ class CheckPayoutTransferStatusJob
     Rails.logger.info("Payout transfer status checked for payout #{payout_id}")
   rescue StandardError => e
     Rails.logger.error("Transfer status check job failed for payout #{payout_id}: #{e.message}")
-    raise if retries < max_retries
-  end
-
-  private
-
-  def max_retries
-    5
+    raise
   end
 end
