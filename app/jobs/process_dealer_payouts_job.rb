@@ -1,7 +1,7 @@
 class ProcessDealerPayoutsJob < ApplicationJob
   queue_as :default
 
-  limits_concurrency to: 1, group: "dealer_payouts"
+ limits_concurrency( to: 1, key: ->(*) {"dealer_payouts"})
 
   retry_on StandardError, attempts: 3, wait: :exponentially_longer
 

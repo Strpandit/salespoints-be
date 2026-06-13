@@ -366,10 +366,6 @@ GEM
       activejob (>= 7.2)
       activerecord (>= 7.2)
       railties (>= 7.2)
-    solid_cache (1.0.10)
-      activejob (>= 7.2)
-      activerecord (>= 7.2)
-      railties (>= 7.2)
     solid_queue (1.4.0)
       activejob (>= 7.1)
       activerecord (>= 7.1)
@@ -440,6 +436,7 @@ DEPENDENCIES
   jwt (~> 2.6)
   kamal
   kaminari
+  matrix (~> 0.4.3)
   pg
   phonelib
   plivo
@@ -452,7 +449,6 @@ DEPENDENCIES
   rubocop-rails-omakase
   selenium-webdriver
   solid_cable
-  solid_cache
   solid_queue
   stimulus-rails
   thruster

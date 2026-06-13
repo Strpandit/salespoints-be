@@ -27,7 +27,7 @@ gem 'jwt', '~> 2.6'
 gem "tzinfo-data", platforms: %i[ windows jruby ]
 
 # Use the database-backed adapters for Rails.cache, Active Job, and Action Cable
-gem "solid_cache"
+#gem "solid_cache"
 gem "solid_queue"
 gem "solid_cable"
 
@@ -82,3 +82,5 @@ gem 'prawn'
 # gem "sidekiq", "~> 8.1"
 # gem "sidekiq-scheduler", "~> 6.0"
 gem 'caxlsx'
+
+gem "matrix", "~> 0.4.3"

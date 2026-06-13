@@ -1,7 +1,10 @@
 class ProcessPendingSettlementsJob < ApplicationJob
   queue_as :default
 
-  limits_concurrency to: 1, group: "pending_settlements"
+  limits_concurrency(
+    to: 1,
+    key: ->(*) { "pending_settlements" }
+  )
 
   retry_on StandardError, attempts: 3, wait: :exponentially_longer
 
