@@ -93,6 +93,7 @@ module Api
         return
       end
 
+      notify_admins_entity_deleted(@category)
       if @category.destroy
         render json: { message: "Category deleted successfully" }, status: :ok
       else
@@ -141,6 +142,12 @@ module Api
     def notify_admins_entity_updated(category)
       get_admin_emails.each do |email|
         AdminNotificationMailer.entity_updated(email, "Category", category.name, current_admin&.email).deliver_later
+      end
+    end
+
+    def notify_admins_entity_deleted(category)
+      get_admin_emails.each do |email|
+        AdminNotificationMailer.entity_deleted(email, "Category", category.name, current_admin&.email).deliver_later
       end
     end
   end

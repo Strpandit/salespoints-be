@@ -74,6 +74,7 @@ module Api
     end
 
     def destroy
+      notify_admins_entity_deleted(@role)
       @role.destroy
       render json: { message: "Role deleted successfully" }, status: :ok
     end
@@ -158,6 +159,12 @@ module Api
     def notify_admins_entity_updated(role)
       get_admin_emails.each do |email|
         AdminNotificationMailer.entity_updated(email, "Role", role.name, current_admin&.email).deliver_later
+      end
+    end
+
+    def notify_admins_entity_deleted(role)
+      get_admin_emails.each do |email|
+        AdminNotificationMailer.entity_deleted(email, "Role", role.name, current_admin&.email).deliver_later
       end
     end
   end

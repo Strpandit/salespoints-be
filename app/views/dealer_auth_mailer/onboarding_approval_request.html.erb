@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background: #f4f6f8;
+        margin: 0;
+        padding: 24px;
+      }
+
+      .card {
+        max-width: 640px;
+        margin: 0 auto;
+        background: #fff;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+      }
+
+      .header {
+        background: #16324f;
+        color: #fff;
+        padding: 24px;
+      }
+
+      .content {
+        padding: 24px;
+        color: #334155;
+        line-height: 1.6;
+      }
+
+      .table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 16px;
+      }
+
+      .table td {
+        border-bottom: 1px solid #e2e8f0;
+        padding: 10px 0;
+        vertical-align: top;
+      }
+
+      .label {
+        color: #64748b;
+        width: 180px;
+        font-weight: bold;
+      }
+
+      .btn {
+        display: inline-block;
+        margin-top: 18px;
+        padding: 12px 20px;
+        background: #2563eb;
+        color: #fff !important;
+        text-decoration: none;
+        border-radius: 8px;
+        font-weight: bold;
+      }
+
+      .note {
+        margin-top: 18px;
+        padding: 14px;
+        background: #eff6ff;
+        border-left: 4px solid #2563eb;
+        border-radius: 8px;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="card">
+
+      <div class="header">
+        <h2 style="margin:0;">New Dealer Approval Required</h2>
+      </div>
+
+      <div class="content">
+
+        <p>
+          A new dealer registration has been submitted and is awaiting your approval.
+        </p>
+
+        <table class="table">
+          <tr>
+            <td class="label">Dealer Name</td>
+            <td><%= @dealer.full_name %></td>
+          </tr>
+
+          <tr>
+            <td class="label">Email</td>
+            <td><%= @dealer.email %></td>
+          </tr>
+
+          <tr>
+            <td class="label">Phone</td>
+            <td><%= @dealer.phone %></td>
+          </tr>
+
+          <tr>
+            <td class="label">Business Name</td>
+            <td><%= @dealer.dealer_profile&.business_name.presence || "-" %></td>
+          </tr>
+
+          <tr>
+            <td class="label">Business Type</td>
+            <td><%= @dealer.dealer_profile&.business_type.presence || "-" %></td>
+          </tr>
+
+          <tr>
+            <td class="label">Work Category</td>
+            <td><%= @dealer.dealer_profile&.work_category.presence || "-" %></td>
+          </tr>
+
+          <tr>
+            <td class="label">GST Number</td>
+            <td><%= @dealer.dealer_profile&.gst_number.presence || "-" %></td>
+          </tr>
+
+          <tr>
+            <td class="label">PAN Number</td>
+            <td><%= @dealer.dealer_profile&.pan_number.presence || "-" %></td>
+          </tr>
+
+          <tr>
+            <td class="label">Status</td>
+            <td><%= @dealer.status.to_s.humanize %></td>
+          </tr>
+
+          <tr>
+            <td class="label">Registered On</td>
+            <td><%= @dealer.created_at.strftime("%d %B %Y, %I:%M %p") %></td>
+          </tr>
+        </table>
+
+        <div class="note">
+          Please review the dealer information and approve or reject the registration from the Admin Panel.
+        </div>
+
+        <p>
+          <a href="<%= @reviewer_portal_url %>" class="btn">
+            Open Admin Panel
+          </a>
+        </p>
+
+      </div>
+
+    </div>
+  </body>
+</html>

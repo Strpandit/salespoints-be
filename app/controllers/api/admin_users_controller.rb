@@ -1,7 +1,7 @@
 module Api
   class AdminUsersController < ApplicationController
-    skip_before_action :authenticate_request!, only: [:login, :login_otp, :forgot_password, :otp_confirmation, :reset_user_password, :verify_otp]
-    before_action :require_admin, except: [:login, :login_otp, :forgot_password, :otp_confirmation, :reset_user_password, :verify_otp]
+    skip_before_action :authenticate_request!, only: [:login, :login_otp, :forgot_password, :otp_confirmation, :reset_user_password, :verify_otp, :resend_signup_otp]
+    before_action :require_admin, except: [:login, :login_otp, :forgot_password, :otp_confirmation, :reset_user_password, :verify_otp, :resend_signup_otp]
     before_action :require_super_admin, only: [:create, :destroy, :deactivate, :reactivate]
     before_action :find_admin_user, only: [:show, :update, :destroy, :deactivate, :reactivate, :approve, :verify_otp, :login_otp]
     before_action :require_admin_approver!, only: [:approve]
@@ -96,13 +96,32 @@ module Api
       AdminAuthMailer.signup_otp(admin).deliver_later if admin.email.present?
       notify_admin_approvers(admin)
 
-      verify_url = "#{ENV['FRONTEND_URL'] || request.base_url}/admin/verify-otp?id=#{admin.id}&email=#{CGI.escape(admin.email)}"
+      verify_url = "#{ENV['FRONTEND_URL'] || request.base_url}/admin/signup-verify-otp?id=#{admin.id}&email=#{CGI.escape(admin.email)}"
       render json: serialize_resource(admin.reload, AdminUserSerializer, serializer_options).merge(
         message: "Admin user created successfully. OTP sent to admin email.",
         verify_url: verify_url
       ), status: :created
     rescue ActiveRecord::RecordInvalid => e
       render json: { error: e.record.errors.full_messages }, status: :unprocessable_entity
+    end
+
+    def resend_signup_otp
+      admin = AdminUser.find(params[:id])
+
+      return render json: {
+        error: "Admin already verified"
+      }, status: :unprocessable_entity if admin.otp_pin.blank?
+
+      admin.update!(
+        otp_pin: rand(1000..9999),
+        otp_sent_at: Time.current
+      )
+
+      AdminAuthMailer.signup_otp(admin).deliver_later
+
+      render json: {
+        message: "Signup OTP sent successfully"
+      }
     end
 
     def show
@@ -325,12 +344,18 @@ module Api
     end
 
     def notify_admin_approvers(admin)
-      approver_scope = AdminUser.active.select { |user| user.approver_admin? && user.email.present? && user.id != admin.id }
-      approver_scope.each do |approver|
-        AdminAuthMailer.onboarding_approval_request(admin, approver.email).deliver_later
+      AdminUser.where(status: "active", is_super_admin: true).find_each do |super_admin|
+        next if super_admin.email.blank?
+        AdminAuthMailer.onboarding_approval_request(admin, super_admin.email).deliver_later
       end
-    rescue StandardError
     end
+    # def notify_admin_approvers(admin)
+    #   approver_scope = AdminUser.active.select { |user| user.approver_admin? && user.email.present? && user.id != admin.id }
+    #   approver_scope.each do |approver|
+    #     AdminAuthMailer.onboarding_approval_request(admin, approver.email).deliver_later
+    #   end
+    # rescue StandardError
+    # end
 
     def current_admin
       current_user

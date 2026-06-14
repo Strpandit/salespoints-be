@@ -67,6 +67,7 @@ Rails.application.routes.draw do
     post "admin/forgot_password", to: "admin_users#forgot_password"
     post "admin/otp_confirmation", to: "admin_users#otp_confirmation"
     post "admin/verify_otp", to: "admin_users#verify_otp"
+    post "admin/resend_signup_otp", to: "admin_users#resend_signup_otp"
     post "admin/reset_password", to: "admin_users#reset_user_password"
     put "admin/change_password", to: "admin_users#change_password"
     put "admin/:id/deactivate", to: "admin_users#deactivate"
@@ -122,6 +123,7 @@ Rails.application.routes.draw do
       patch :reject, on: :member
     end
     post "dealer/verify_otp", to: "dealers#verify_otp"
+    post "dealer/resend_signup_otp", to: "dealers#resend_signup_otp"
     # Dealer and dealer products
     post "dealer/login", to: "dealer_sessions#login"
     post 'dealer/change_password', to: 'dealer_sessions#change_password'

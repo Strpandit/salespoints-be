@@ -80,6 +80,7 @@ module Api
     def destroy
       @product.update(deleted_at: Time.current, is_active: false, is_featured: false, is_new: false)
       @product.product_variants.update_all(is_active: false)
+      notify_admins_entity_deleted(@product)
       render json: { message: "Product deleted successfully" }, status: :ok
     end
 
@@ -133,6 +134,12 @@ module Api
     def notify_admins_entity_updated(product)
       get_admin_emails.each do |email|
         AdminNotificationMailer.entity_updated(email, "Product", product.name, current_admin&.email).deliver_later
+      end
+    end
+
+    def notify_admins_entity_deleted(product)
+      get_admin_emails.each do |email|
+        AdminNotificationMailer.entity_deleted(email, "Product", product.name, current_admin&.email).deliver_later
       end
     end
   end

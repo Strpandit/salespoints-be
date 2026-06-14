@@ -77,6 +77,7 @@ module Api
     end
 
     def destroy
+      notify_admins_entity_deleted(@brand)
       @brand.destroy
       render json: { message: "Brand deleted successfully" }, status: :ok
     end
@@ -120,6 +121,12 @@ module Api
     def notify_admins_entity_updated(brand)
       get_admin_emails.each do |email|
         AdminNotificationMailer.entity_updated(email, "Brand", brand.name, current_admin&.email).deliver_later
+      end
+    end
+
+    def notify_admins_entity_deleted(brand)
+      get_admin_emails.each do |email|
+        AdminNotificationMailer.entity_deleted(email, "Brand", brand.name, current_admin&.email).deliver_later
       end
     end
   end
