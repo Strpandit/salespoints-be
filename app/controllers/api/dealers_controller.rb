@@ -1,7 +1,7 @@
 module Api
   class DealersController < ApplicationController
     skip_before_action :authenticate_request!, only: [:verify_otp]
-    before_action :authenticate_request!
+    # before_action :authenticate_request!, except: [:verify_otp]
     before_action :require_admin, only: [:create, :index, :active_dealers, :block, :unblock, :destroy, :approve, :reject]
     before_action :require_admin_approver!, only: [:approve, :reject]
     before_action :set_dealer, only: [:show, :update, :destroy, :block, :unblock, :approve, :reject, :verify_otp]
@@ -177,7 +177,7 @@ module Api
           :business_name, :business_type, :gst_number, :pan_number, :aadhar_number,
           :bank_name, :bank_account_number, :ifsc_code, :business_address,
           :business_contact_number, :business_email, :work_category, :associated_brands,
-          :is_verified, { store_image: [] }
+          :is_verified, :aadhar_card, :pan_card, :gst_certificate, { store_image: [] }
         ],
         dealer_location_attributes: [:latitude, :longitude, :service_radius_km, :is_active]
       )

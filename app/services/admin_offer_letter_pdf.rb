@@ -21,7 +21,7 @@ class AdminOfferLetterPdf
 
       pdf.move_down 20
 
-      pdf.text "Ref No: SPIN/#{@admin.id}/#{Date.current.year}",
+      pdf.text "Ref No: SPINAD-#{@admin.id}/#{Date.current.year}",
                size: 11
 
       pdf.text "Date: #{Date.current.strftime('%d-%m-%Y')}",
@@ -35,18 +35,14 @@ class AdminOfferLetterPdf
         We are pleased to offer you the position of #{@admin.roles.active.pluck(:name).join(", ").presence || "Pending assignment"}
         in our organization SalesPoints India Pvt. Ltd. and Salespoints.in Retails store.
 
-        Your date of joining shall be effective from
-        #{formatted_date(@admin.created_at + 4.days)}.
+        Your date of joining shall be effective from #{formatted_date(@admin.joining_date)}.
 
         You will be responsible for handling assigned roles and responsibilities related to your position.
 
-        Your monthly salary will be Rs.#{formatted_salary(@admin.salary)} in hand and 
-        you will be eligible for benefits and incentives 
-        depends on your work profile and performance
-        as applicable under company policy.
+        Your monthly salary will be Rs.#{formatted_salary(@admin.salary)} in hand and you will be eligible for benefits and incentives 
+        depends on your work profile and performance as applicable under company policy.
 
-        We are confident that your skills, dedication and professional
-        approach will contribute significantly to the continued growth
+        We are confident that your skills, dedication and professional approach will contribute significantly to the continued growth
         and success of our organisation.
         TEXT
 

@@ -4,8 +4,8 @@ class AdminUserSerializer < ApplicationSerializer
              :ifsc_code, :account_holder_name, :tenth_school_name, :tenth_board,
              :tenth_passing_year, :tenth_percentage, :twelfth_school_name,
              :twelfth_board, :twelfth_passing_year, :twelfth_percentage, :status,
-             :country_code, :is_super_admin, :full_name, :pending_deletion_request,
-             :role, :staff_profile_pic, :marksheets, :joining_form_completed,
+             :country_code, :is_super_admin, :full_name, :pending_deletion_request, :joining_date,
+             :role, :staff_profile_pic, :aadhar_card, :pan_card, :marksheets, :joining_form_completed,
              :approval_status, :approved_at, :approved_by_name, :otp_verified, :deleted_at, :deleted_by
 
   def pending_deletion_request
@@ -36,6 +36,18 @@ class AdminUserSerializer < ApplicationSerializer
     return nil unless object.staff_profile_pic.attached?
 
     file_payload(object.staff_profile_pic)
+  end
+
+  def aadhar_card
+    return nil unless object.aadhar_card.attached?
+
+    file_payload(object.aadhar_card)
+  end
+
+  def pan_card
+    return nil unless object.pan_card.attached?
+
+    file_payload(object.pan_card)
   end
 
   def approved_by_name

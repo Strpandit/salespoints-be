@@ -18,7 +18,16 @@ module AttachableMediaValidations
     video/mpeg
   ].freeze
 
-  MAX_IMAGE_SIZE = 5.megabytes
+  DOCUMENT_TYPES = %w[
+    image/jpeg
+    image/png
+    image/webp
+    image/jpg
+    application/pdf
+  ].freeze
+
+  MAX_DOCUMENT_SIZE = 15.megabytes
+  MAX_IMAGE_SIZE = 10.megabytes
   MAX_VIDEO_SIZE = 50.megabytes
 
   private
@@ -65,12 +74,64 @@ module AttachableMediaValidations
   def validate_image_size(name, blob)
     return unless blob.byte_size > MAX_IMAGE_SIZE
 
-    errors.add(name, "images must be 5 MB or smaller")
+    errors.add(name, "images must be 10 MB or smaller")
   end
 
   def validate_video_size(name, blob)
     return unless blob.byte_size > MAX_VIDEO_SIZE
 
     errors.add(name, "videos must be 50 MB or smaller")
+  end
+
+  def validate_document_attachment(name, required: false)
+    attachment = public_send(name)
+
+    unless attachment.attached?
+      errors.add(name, "is required") if required
+      return
+    end
+
+    blob = attachment.blob
+
+    unless blob
+      errors.add(name, "contains an invalid file")
+      return
+    end
+
+    unless DOCUMENT_TYPES.include?(blob.content_type.to_s)
+      errors.add(name, "must be JPG, PNG, WEBP or PDF")
+      return
+    end
+
+    if blob.byte_size > MAX_DOCUMENT_SIZE
+      errors.add(name, "must be 15 MB or smaller")
+    end
+  end
+
+  def validate_document_attachment_set(name, required: false)
+    attachments = public_send(name)
+
+    unless attachments.attached?
+      errors.add(name, "is required") if required
+      return
+    end
+
+    attachments.each do |attachment|
+      blob = attachment.blob
+
+      unless blob
+        errors.add(name, "contains an invalid file")
+        next
+      end
+
+      unless DOCUMENT_TYPES.include?(blob.content_type.to_s)
+        errors.add(name, "must be JPG, PNG, WEBP or PDF")
+        next
+      end
+
+      if blob.byte_size > MAX_DOCUMENT_SIZE
+        errors.add(name, "must be 15 MB or smaller")
+      end
+    end
   end
 end

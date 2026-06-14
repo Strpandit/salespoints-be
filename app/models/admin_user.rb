@@ -2,14 +2,8 @@ class AdminUser < ApplicationRecord
   has_secure_password validations: false
   acts_as_paranoid
   attr_accessor :generated_password
+  include AttachableMediaValidations
 
-  DOCUMENT_TYPES = %w[
-    image/jpeg
-    image/png
-    image/webp
-    image/jpg
-    application/pdf
-  ].freeze
   APPROVAL_STATUSES = %w[pending approved rejected].freeze
 
   has_many :admin_roles, dependent: :destroy
@@ -24,14 +18,16 @@ class AdminUser < ApplicationRecord
   belongs_to :approved_by, class_name: "AdminUser", optional: true
   belongs_to :deleted_by, class_name: "AdminUser", optional: true
   has_many :deleted_admins, class_name: "AdminUser", foreign_key: :deleted_by_id
-  has_one_attached :staff_profile_pic
+
   has_many_attached :marksheets
+  has_one_attached :staff_profile_pic
+  has_one_attached :aadhar_card
+  has_one_attached :pan_card
 
   enum :status, { active: 'active', inactive: 'inactive' }
   scope :approved, -> { where(approval_status: "approved") }
   scope :pending_approval, -> { where(approval_status: "pending") }
 
-  # validates :email, uniqueness: { case_sensitive: false }, allow_blank: true, format: { with: URI::MailTo::EMAIL_REGEXP }
   validates :email,
     allow_blank: true,
     uniqueness: { case_sensitive: false },
@@ -47,7 +43,7 @@ class AdminUser < ApplicationRecord
   #           :tenth_passing_year, :tenth_percentage, :twelfth_school_name, :twelfth_board,
   #           :twelfth_passing_year, :twelfth_percentage, presence: true
   # validate :staff_profile_pic_presence_and_validity
-  validate :marksheets_validity
+  validate :attachments_validity
 
   before_create :generate_password
   before_validation :normalize_email
@@ -118,42 +114,11 @@ class AdminUser < ApplicationRecord
     end
   end
 
-  # def staff_profile_pic_presence_and_validity
-  #   # unless staff_profile_pic.attached?
-  #   #   errors.add(:staff_profile_pic, "is required")
-  #   #   return
-  #   # end
-
-  #   blob = staff_profile_pic.blob
-  #   # if blob.blank?
-  #   #   errors.add(:staff_profile_pic, "contains an invalid file")
-  #   #   return
-  #   # end
-
-  #   # unless blob.content_type.to_s.start_with?("image/")
-  #   #   errors.add(:staff_profile_pic, "must be an image")
-  #   # end
-
-  #   errors.add(:staff_profile_pic, "must be 5 MB or smaller") if blob.byte_size > 5.megabytes
-  # end
-
-  def marksheets_validity
-    return unless marksheets.attached?
-
-    marksheets.each do |attachment|
-      blob = attachment.blob
-
-      if blob.blank?
-        errors.add(:marksheets, "contains an invalid file")
-        next
-      end
-
-      unless DOCUMENT_TYPES.include?(blob.content_type.to_s)
-        errors.add(:marksheets, "must be JPG, PNG, WEBP, or PDF")
-      end
-
-      errors.add(:marksheets, "files must be 5 MB or smaller") if blob.byte_size > 5.megabytes
-    end
+  def attachments_validity
+    validate_document_attachment_set(:marksheets)
+    validate_document_attachment(:staff_profile_pic)
+    validate_document_attachment(:aadhar_card)
+    validate_document_attachment(:pan_card)
   end
 
   def generate_password
