@@ -54,11 +54,12 @@ module Api
 
       admins =
       if current_admin.super_admin?
-        AdminUser.order(created_at: :desc).page(params[:page]).per(params[:per_page] || 20)
+        AdminUser.order(created_at: :desc)
       else
         AdminUser.where(is_super_admin: false)
       end
 
+      admins = admins.page(params[:page]).per(params[:per_page] || 20)
       render json: serialize_resource(admins, AdminUserSerializer, serializer_options).merge(
         meta: {
           current_page: admins.current_page,
