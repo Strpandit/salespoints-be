@@ -1,6 +1,8 @@
 class Brand < ApplicationRecord
   has_many :products, dependent: :nullify
-
+  has_many :brand_categories, dependent: :destroy
+  has_many :categories, through: :brand_categories
+  
   validates :name, :slug, presence: true, uniqueness: true
 
   before_validation :set_slug, on: [:create, :update]

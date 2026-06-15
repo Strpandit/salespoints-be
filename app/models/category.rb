@@ -1,6 +1,9 @@
 class Category < ApplicationRecord
   has_many :products, dependent: :nullify
   has_many :cat_filters
+  has_many :brand_categories, dependent: :destroy
+  has_many :brands, through: :brand_categories
+  
   has_one_attached :cat_icon
 
   validates :name, :slug, presence: true, uniqueness: true

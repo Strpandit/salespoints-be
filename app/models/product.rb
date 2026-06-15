@@ -16,6 +16,7 @@ class Product < ApplicationRecord
   validates :slug, :sku, uniqueness: true
   validate :catalog_media_presence
   validate :media_files_valid
+  validate :brand_category_relation
 
   scope :featured, -> { where(is_featured: true) }
   scope :new_arrivals, -> { where('created_at >= ?', 15.days.ago) } 
@@ -54,6 +55,14 @@ class Product < ApplicationRecord
 
   def media_files_valid
     validate_attachment_set(:media)
+  end
+
+  def brand_category_relation
+    return if brand.blank? || category.blank?
+
+    unless brand.categories.exists?(id: category_id)
+      errors.add(:category, "does not belong to selected brand")
+    end
   end
 
   def set_slug

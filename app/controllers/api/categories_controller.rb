@@ -14,7 +14,7 @@ module Api
           render json: { error: "Category not found" }, status: :not_found
         end
       else
-        categories = Category.where(is_active: true).order(created_at: :desc).page(params[:page]).per(params[:per_page] || 20)
+        categories = Category.includes(:brands).where(is_active: true).order(created_at: :desc).page(params[:page]).per(params[:per_page] || 20)
         if categories.exists?
           render json: serialize_resource(categories, CategorySerializer, base_url: request.base_url).merge(
             meta: {
@@ -106,11 +106,11 @@ module Api
     private
 
     def category_params
-      params.require(:category).permit(:name, :slug, :is_active, :cat_icon)
+      params.require(:category).permit(:name, :slug, :is_active, :cat_icon, brand_ids: [])
     end
 
     def set_category
-      @category = Category.find_by(id: params[:id])
+      @category = Category.includes(:brands).find_by(id: params[:id])
       render json: { error: "Category not found" }, status: :not_found unless @category
     end
 

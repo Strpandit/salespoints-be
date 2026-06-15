@@ -6,7 +6,7 @@ module Api
     before_action :set_brand, only: [:show, :update, :destroy, :deactivate , :reactivate]
     
     def index
-      brands = Brand.where(is_active: true).order(created_at: :desc).page(params[:page]).per(params[:per_page] || 20)
+      brands = Brand.includes(:categories).where(is_active: true).order(created_at: :desc).page(params[:page]).per(params[:per_page] || 20)
       if brands.exists?
         render json: serialize_resource(brands, BrandSerializer).merge(
           meta: {
@@ -85,11 +85,11 @@ module Api
     private
 
     def brand_params
-      params.require(:brand).permit(:name, :slug, :is_active)
+      params.require(:brand).permit(:name, :slug, :is_active, category_ids: [])
     end
     
     def set_brand
-      @brand = Brand.find_by(id: params[:id])
+      @brand = Brand.includes(:categories).find_by(id: params[:id])
       render json: { error: "Brand not found" }, status: :not_found unless @brand
     end
 
