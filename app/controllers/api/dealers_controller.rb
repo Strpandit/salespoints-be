@@ -8,7 +8,25 @@ module Api
     before_action :authorize_dealer_update, only: [:update, :show]
 
     def index
-      dealers = Dealer.where(status: "pending").includes(:dealer_profile, :dealer_location).order(created_at: :desc).page(params[:page]).per(params[:per_page] || 20)
+      dealers = Dealer.includes(:dealer_profile, :dealer_location)
+      dealers = if current_admin.super_admin?
+        Dealer.all
+      else
+        pincodes = current_admin.accessible_pincodes
+        if pincodes.present?
+          dealers = dealers.where(pincode: pincodes)
+        else
+          dealers = dealers.none
+        end
+      end
+
+      dealers = dealers.where(status: params[:status]) if params[:status].present?
+      dealers = dealers.where(pincode: params[:pincode]) if params[:pincode].present?
+      dealers = dealers.where("first_name ILIKE ? OR last_name ILIKE ?", 
+                               "%#{params[:search]}%", "%#{params[:search]}%") if params[:search].present?
+
+      dealers = dealers.order(created_at: :desc).page(params[:page]).per(params[:per_page] || 20)
+
       render json: serialize_resource(dealers, DealerSerializer, base_url: request.base_url).merge(
         meta: {
           current_page: dealers.current_page,
@@ -23,6 +41,12 @@ module Api
 
     def active_dealers
       dealers = Dealer.includes(:dealer_profile, :dealer_location)
+
+      unless current_admin.super_admin?
+        pincodes = current_admin.accessible_pincodes
+        dealers = pincodes.present? ? dealers.where(pincode: pincodes) : dealers.none
+      end
+      
       selected_status = params[:status].presence || "active"
 
       if selected_status != "all"
@@ -48,6 +72,12 @@ module Api
     end
 
     def create
+      if params[:dealer][:pincode].present?
+        unless current_admin.can_access_pincode?(params[:dealer][:pincode])
+          return render json: { error: "Access denied for pincode: #{params[:dealer][:pincode]}" }, status: :forbidden
+        end
+      end
+
       dealer = Dealer.new(dealer_params.except(:status))
       dealer.status = "pending"
       dealer.otp_pin = rand(1000..9999)
@@ -125,6 +155,11 @@ module Api
         return render json: { error: "Dealer must verify signup OTP before approval" }, status: :unprocessable_entity
       end
 
+      unless current_admin.can_access_pincode?(@dealer.pincode)
+        return render json: { error: "Access denied for pincode: #{@dealer.pincode}" }, 
+                    status: :forbidden
+      end
+
       if @dealer.update(status: "active")
         DealerMailer.approval_email(@dealer).deliver_later
         notify_admins_about_dealer_action(@dealer, "approved")
@@ -140,6 +175,10 @@ module Api
     def reject
       unless @dealer.status == "pending"
         return render json: { error: "Dealer is already processed" }, status: :unprocessable_entity
+      end
+
+      unless current_admin.can_access_pincode?(@dealer.pincode)
+        return render json: { error: "Access denied for pincode: #{@dealer.pincode}" }, status: :forbidden
       end
 
       rejection_reason = params[:reason] || "Application does not meet requirements"
@@ -192,7 +231,7 @@ module Api
 
     def dealer_params
       params.require(:dealer).permit(
-        :first_name, :last_name, :email, :phone, :gender, :country_code, :status, :password, :password_confirmation,
+        :first_name, :last_name, :email, :phone, :gender, :country_code, :status, :pincode, :password, :password_confirmation,
         dealer_profile_attributes: [
           :business_name, :business_type, :gst_number, :pan_number, :aadhar_number,
           :bank_name, :bank_account_number, :ifsc_code, :business_address,

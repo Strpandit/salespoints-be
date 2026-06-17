@@ -1,10 +1,36 @@
 class ProductSerializer < ApplicationSerializer
   attributes :name, :slug, :sku, :desc, :material, :features, :care_instructions,
-             :is_featured, :is_new, :is_active, :tax_rate, :deleted_at, :specifications, :media
+             :is_featured, :is_new, :is_active, :tax_rate, :deleted_at, :specifications, 
+             :media, :price, :selling_price, :dealer_price, :dealer_selling_price, :discount_percentage,
+             :price_source
 
   belongs_to :category
   belongs_to :brand
   has_many :product_variants
+
+  def price
+    object.best_price
+  end
+
+  def selling_price
+    object.best_selling_price
+  end
+
+  def dealer_price
+    object.best_dealer_price
+  end
+
+  def dealer_selling_price
+    object.best_dealer_selling_price
+  end
+
+  def discount_percentage
+    object.best_discount_percentage
+  end
+
+  def price_source
+    object.price_source
+  end
 
   def specifications
     object.product_specifications.each_with_object({}) do |spec, hash|

@@ -45,6 +45,48 @@ class Product < ApplicationRecord
     !deleted? && product_variants.active.any? { |v| v.sellable? }
   end
 
+  def has_price?
+    price.present? || selling_price.present? || 
+    dealer_price.present? || dealer_selling_price.present?
+  end
+
+  def has_variant_prices?
+    product_variants.active.exists?(
+      "price IS NOT NULL OR selling_price IS NOT NULL OR dealer_price IS NOT NULL OR dealer_selling_price IS NOT NULL"
+    )
+  end
+
+  def best_price
+    return price if price.present? && !has_variant_prices?
+    product_variants.active.first&.price || price || 0
+  end
+
+  def best_selling_price
+    return selling_price if selling_price.present? && !has_variant_prices?
+    product_variants.active.first&.selling_price || selling_price || 0
+  end
+
+  def best_dealer_price
+    return dealer_price if dealer_price.present? && !has_variant_prices?
+    product_variants.active.first&.dealer_price || dealer_price || 0
+  end
+
+  def best_dealer_selling_price
+    return dealer_selling_price if dealer_selling_price.present? && !has_variant_prices?
+    product_variants.active.first&.dealer_selling_price || dealer_selling_price || 0
+  end
+
+  def best_discount_percentage
+    return discount_percentage if discount_percentage.present? && !has_variant_prices?
+    product_variants.active.first&.discount_percentage || discount_percentage || 0
+  end
+
+  def price_source
+    return "variant" if has_variant_prices?
+    return "product" if has_price?
+    "none"
+  end
+  
   private
 
   def catalog_media_presence

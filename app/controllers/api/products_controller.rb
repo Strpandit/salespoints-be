@@ -90,6 +90,7 @@ module Api
       params.require(:product).permit(
         :name, :slug, :sku, :desc, :material, :brand_id, :category_id,
         :is_featured, :is_new, :is_active, :tax_rate,
+        :price, :selling_price, :dealer_price, :dealer_selling_price, :discount_percentage,
         media: [],
         features: [], care_instructions: [],
         product_specifications_attributes: [:id, :key, :value, :_destroy],

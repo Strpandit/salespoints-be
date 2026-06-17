@@ -44,13 +44,37 @@ class AdminUser < ApplicationRecord
   #           :twelfth_passing_year, :twelfth_percentage, presence: true
   # validate :staff_profile_pic_presence_and_validity
   validate :attachments_validity
+  validate :validate_pincodes_format
 
   before_create :generate_password
   before_validation :normalize_email
   before_validation :normalize_phone
 
   def super_admin?
-    is_super_admin
+    is_super_admin || roles.active.exists?(name: "super_admin")
+  end
+
+  def accessible_pincodes
+    return nil if super_admin?
+    pincodes.presence || []
+  end
+
+  def can_access_pincode?(pincode)
+    return true if super_admin?
+    return false if pincodes.blank?
+    pincodes.include?(pincode)
+  end
+
+  def accessible_dealers(dealers_scope = Dealer.all)
+    return dealers_scope if super_admin?
+    return dealers_scope.none if pincodes.blank?
+    dealers_scope.where(pincode: pincodes)
+  end
+
+  def accessible_wholesale_posts(posts_scope = WholesalerPost.all)
+    return posts_scope if super_admin?
+    return posts_scope.none if pincodes.blank?
+    posts_scope.where("pincodes && ARRAY[?]::varchar[]", pincodes)
   end
 
   def approver_admin?
@@ -132,5 +156,13 @@ class AdminUser < ApplicationRecord
     self.generated_password = generated_password
     self.password = generated_password
     self.password_confirmation = generated_password
+  end
+
+  def validate_pincodes_format
+    return if pincodes.blank?
+    invalid = pincodes.reject { |p| p.to_s.match?(/\A[1-9][0-9]{5}\z/) }
+    if invalid.present?
+      errors.add(:pincodes, "contain invalid pincodes: #{invalid.join(', ')}")
+    end
   end
 end

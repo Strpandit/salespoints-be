@@ -3,7 +3,7 @@ class AdminUserSerializer < ApplicationSerializer
              :aadhar_number, :pan_number, :bank_name, :bank_account_number,
              :ifsc_code, :account_holder_name, :tenth_school_name, :tenth_board,
              :tenth_passing_year, :tenth_percentage, :twelfth_school_name,
-             :twelfth_board, :twelfth_passing_year, :twelfth_percentage, :status,
+             :twelfth_board, :twelfth_passing_year, :twelfth_percentage, :status, :pincodes,
              :country_code, :is_super_admin, :full_name, :pending_deletion_request, :joining_date,
              :role, :staff_profile_pic, :aadhar_card, :pan_card, :marksheets, :joining_form_completed,
              :approval_status, :approved_at, :approved_by_name, :otp_verified, :deleted_at, :deleted_by

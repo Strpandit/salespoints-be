@@ -51,6 +51,10 @@ class Dealer < ApplicationRecord
     allow_nil: true,
     format: { with: /\ASPIN\d{4,}\z/, message: "must follow SPIN0001 format" }
 
+  validates :pincode, presence: true,
+                      format: { with: /\A[1-9][0-9]{5}\z/, message: "must be valid 6-digit pincode" },
+                      allow_blank: true
+
   after_create :create_default_cart
 
   def full_name

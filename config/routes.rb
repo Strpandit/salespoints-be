@@ -61,6 +61,9 @@ Rails.application.routes.draw do
     # Admin routes
     resources :admin_users do
       patch :approve, on: :member
+      post :assign_pincodes, on: :member
+      get :admin_pincodes, on: :member
+      delete :remove_pincode, on: :member
     end
     post "admin/login", to: "admin_users#login"
     post "admin/login_otp", to: "admin_users#login_otp"
@@ -172,6 +175,7 @@ Rails.application.routes.draw do
       member do
         patch :approve
         patch :reject
+        patch :toggle_status
       end
       post :buy, on: :member
       post :rate, on: :member

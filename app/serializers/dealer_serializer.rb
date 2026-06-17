@@ -1,8 +1,8 @@
 class DealerSerializer < ApplicationSerializer
 
   attributes :first_name, :last_name, :email, :phone, :gender, :country_code, :status, :dealer_code, :full_name, :created_at, :updated_at,
-             :pending_deletion_request, :settlement_balance, :otp_verified
-
+             :pending_deletion_request, :settlement_balance, :otp_verified, :pincode
+ 
   has_one :dealer_profile
   has_one :dealer_location
 

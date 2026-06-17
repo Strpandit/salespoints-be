@@ -91,6 +91,10 @@ module Api
       ActiveRecord::Base.transaction do
         admin.save!
         assign_roles!(admin, role_ids) if role_ids.present?
+
+        if params[:admin_user][:pincodes].present?
+          assign_pincodes!(admin, params[:admin_user][:pincodes])
+        end
       end
 
       AdminAuthMailer.signup_otp(admin).deliver_later if admin.email.present?
@@ -142,6 +146,10 @@ module Api
       ActiveRecord::Base.transaction do
         @admin_user.update!(admin_user_params)
         assign_roles!(@admin_user, role_ids) if params.key?(:role_ids)
+
+        if params[:admin_user][:pincodes].present?
+          assign_pincodes!(@admin_user, params[:admin_user][:pincodes])
+        end
       end
 
       render json: serialize_resource(@admin_user.reload, AdminUserSerializer, serializer_options).merge(
@@ -149,6 +157,66 @@ module Api
       )
     rescue ActiveRecord::RecordInvalid => e
       render json: { error: e.record.errors.full_messages }, status: :unprocessable_entity
+    end
+
+    def assign_pincodes
+      admin = AdminUser.find(params[:id])
+
+      unless current_admin.super_admin?
+        return forbidden("Only super admin can assign pincodes")
+      end
+
+      pincodes = Array(params[:pincodes] || params[:admin_user][:pincodes]).uniq
+      
+      invalid = pincodes.reject { |p| p.to_s.match?(/\A[1-9][0-9]{5}\z/) }
+      if invalid.present?
+        return render json: { error: "Invalid pincodes: #{invalid.join(', ')}" }, status: :unprocessable_entity
+      end
+
+      assign_pincodes!(admin, pincodes)
+      
+      render json: {
+        message: "Pincodes assigned successfully",
+        admin_id: admin.id,
+        admin_name: admin.full_name,
+        pincodes: admin.pincodes
+      }, status: :ok
+    rescue => e
+      render json: { error: e.message }, status: :unprocessable_entity
+    end
+
+    def admin_pincodes
+      admin = AdminUser.find(params[:id])
+      
+      render json: {
+        admin_id: admin.id,
+        admin_name: admin.full_name,
+        pincodes: admin.pincodes
+      }, status: :ok
+    end
+
+    def remove_pincode
+      admin = AdminUser.find(params[:id])
+      
+      unless current_admin.super_admin?
+        return forbidden("Only super admin can remove pincodes")
+      end
+
+      pincode = params[:pincode]
+      
+      unless admin.pincodes.include?(pincode)
+        return render json: { error: "Pincode not assigned to this admin" }, status: :not_found
+      end
+
+      admin.pincodes = admin.pincodes - [pincode]
+      admin.save!
+
+      render json: {
+        message: "Pincode removed successfully",
+        admin_id: admin.id,
+        removed_pincode: pincode,
+        remaining_pincodes: admin.pincodes
+      }, status: :ok
     end
 
     def approve
@@ -302,13 +370,26 @@ module Api
         :tenth_passing_year, :tenth_percentage, :twelfth_school_name,
         :twelfth_board, :twelfth_passing_year, :twelfth_percentage, :joining_date,
         :password, :password_confirmation, :status, :salary, :staff_profile_pic,
-        :aadhar_card, :pan_card, { marksheets: [] }
+        :aadhar_card, :pan_card, { marksheets: [] },
+        { pincodes: [] }
       )
     end
 
     def find_admin_user
       @admin_user = AdminUser.find_by(id: params[:id])
       unauthorized("Admin user not found") unless @admin_user
+    end
+
+    def assign_pincodes!(admin, pincodes)
+      pincodes = Array(pincodes).map(&:to_s).uniq
+      
+      invalid = pincodes.reject { |p| p.match?(/\A[1-9][0-9]{5}\z/) }
+      if invalid.present?
+        raise "Invalid pincodes: #{invalid.join(', ')}"
+      end
+      
+      admin.pincodes = pincodes
+      admin.save!
     end
 
     def require_admin

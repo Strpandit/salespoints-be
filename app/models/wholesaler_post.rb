@@ -16,8 +16,11 @@ class WholesalerPost < ApplicationRecord
   validates :rating, numericality: { greater_than_or_equal_to: 0, less_than_or_equal_to: 5 }, allow_nil: true
   validates :rating_count, numericality: { greater_than_or_equal_to: 0 }, allow_nil: true
   validate :media_files_valid
+  validate :validate_pincodes_format
 
   scope :visible_to_marketplace, -> { where("created_at >= ?", 7.days.ago) }
+  scope :by_pincode, ->(pincode) { where("? = ANY(pincodes)", pincode) }
+  scope :by_pincodes, ->(pincodes) { where("pincodes && ARRAY[?]::varchar[]", pincodes) }
 
   def visible_to_others?
     created_at.present? && created_at >= 7.days.ago
@@ -33,4 +36,11 @@ class WholesalerPost < ApplicationRecord
     validate_attachment_set(:media)
   end
 
+  def validate_pincodes_format
+    return if pincodes.blank?
+    invalid = pincodes.reject { |p| p.to_s.match?(/\A[1-9][0-9]{5}\z/) }
+    if invalid.present?
+      errors.add(:pincodes, "contain invalid pincodes: #{invalid.join(', ')}")
+    end
+  end
 end
