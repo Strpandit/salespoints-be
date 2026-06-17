@@ -381,7 +381,7 @@ module Api
     end
 
     def assign_pincodes!(admin, pincodes)
-      pincodes = Array(pincodes).map(&:to_s).uniq
+      pincodes = Array(pincodes).flat_map { |p| p.to_s.split(',') }.map(&:strip).uniq.reject(&:blank?)
       
       invalid = pincodes.reject { |p| p.match?(/\A[1-9][0-9]{5}\z/) }
       if invalid.present?
