@@ -98,7 +98,8 @@ class B2bOrderDealerResponseService
       dealer_product = @dealer.dealer_products.live.find_by(product_variant_id: item.product_variant_id)
       return nil if dealer_product.blank? || dealer_product.stock_quantity.to_i < item.quantity.to_i
 
-      unit_price = dealer_product.product_variant.dealer_selling_price.to_d
+      unit_price = dealer_product.product_variant.inclusive_dealer_selling_price.to_d
+      unit_price = dealer_product.product_variant.dealer_selling_price.to_d if unit_price.zero?
       resolved << [item, dealer_product, unit_price]
     end
 

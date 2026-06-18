@@ -138,6 +138,7 @@ module Api
       serialize_resource(
         @cart,
         CartSerializer,
+        base_url: request.base_url,
         include: [
           :cart_items,
           :"cart_items.dealer_product",

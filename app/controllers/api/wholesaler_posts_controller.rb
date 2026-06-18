@@ -176,7 +176,7 @@ module Api
       item = cart.cart_items.find_or_initialize_by(dealer_product: post.dealer_product)
       qty = params[:quantity].to_i.positive? ? params[:quantity].to_i : 1
       item.quantity = (item.quantity || 0) + qty
-      item.total_price = post.dealer_product.product_variant.dealer_selling_price.to_f * item.quantity
+      item.total_price = post.dealer_product.product_variant.inclusive_dealer_selling_price.to_f * item.quantity
 
       if item.save
         render json: { data: item, message: "Added to cart" }, status: :ok

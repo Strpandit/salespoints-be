@@ -1,10 +1,33 @@
 class ProductVariantSerializer < ApplicationSerializer
   attributes :product_id, :variant_sku, :price, :selling_price, :dealer_price, :dealer_selling_price, 
-             :discount_percentage, :is_active, :formatted_variant_attributes, :deleted_at, :media
+             :discount_percentage, :is_active, :formatted_variant_attributes, :deleted_at, :media, :tax_rate, :tax_inclusive
 
+  def price
+    object.inclusive_price.to_f
+  end
+
+  def selling_price
+    object.inclusive_selling_price.to_f
+  end
+
+  def dealer_price
+    object.inclusive_dealer_price.to_f
+  end
+
+  def dealer_selling_price
+    object.inclusive_dealer_selling_price.to_f
+  end
 
   def media
-    object.media.map { |file| file_payload(file) }
+    object.display_media_attachments.map { |file| file_payload(file) }
+  end
+
+  def tax_rate
+    object.product.tax_rate.to_f
+  end
+
+  def tax_inclusive
+    true
   end
 
   def formatted_variant_attributes

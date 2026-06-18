@@ -15,22 +15,39 @@ class ProductVariant < ApplicationRecord
 
   before_save :calculate_discount_percentage
 
-  def calculate_discount_percentage
-    if selling_price.present? && price.present? && price > selling_price
-      self.discount_percentage = (((price - selling_price) / price.to_f) * 100).round
-    else
-      self.discount_percentage = 0
-    end
+  def inclusive_price
+    product.inclusive_amount(price || 0)
   end
 
-  # def destroy
-  #   if order_items.exists?
-  #     errors.add(:base, "Cannot delete variant tied to orders.")
-  #     throw(:abort)
-  #   else
-  #     update(deleted_at: Time.current)
-  #   end
-  # end
+  def inclusive_selling_price
+    product.inclusive_amount(selling_price || 0)
+  end
+
+  def inclusive_dealer_price
+    product.inclusive_amount(dealer_price || 0)
+  end
+
+  def inclusive_dealer_selling_price
+    product.inclusive_amount(dealer_selling_price || 0)
+  end
+
+  def tax_amount_from_inclusive(amount)
+    product.tax_amount_from_inclusive(amount)
+  end
+
+  def display_media_attachments
+    media.attached? ? media : product.media
+  end
+
+  def calculate_discount_percentage
+    if selling_price.present? && price.present? && price > selling_price
+      inclusive_mrp = inclusive_price
+      inclusive_selling = inclusive_selling_price
+      if inclusive_mrp > inclusive_selling
+        self.discount_percentage = (((inclusive_mrp - inclusive_selling) / inclusive_mrp.to_f) * 100).round
+      end
+    end
+  end
 
   def deleted?
     !!deleted_at

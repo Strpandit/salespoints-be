@@ -10,7 +10,7 @@ class Product < ApplicationRecord
   has_many :dealer_products
 
   accepts_nested_attributes_for :product_specifications, allow_destroy: true, reject_if: :all_blank
-  accepts_nested_attributes_for :product_variants, allow_destroy: true, reject_if: :all_blank
+  accepts_nested_attributes_for :product_variants, allow_destroy: true, reject_if: :reject_blank_product_variant?
 
   validates :name, :slug, :sku, presence: true
   validates :slug, :sku, uniqueness: true
@@ -28,15 +28,6 @@ class Product < ApplicationRecord
     slug
   end
 
-  # def destroy
-  #   if order_items.exists?
-  #     errors.add(:base, "Cannot delete a product in existing orders.")
-  #     throw(:abort)
-  #   else
-  #     update(deleted_at: Time.current)
-  #   end
-  # end
-
   def deleted?
     !!deleted_at
   end
@@ -46,8 +37,10 @@ class Product < ApplicationRecord
   end
 
   def has_price?
-    price.present? || selling_price.present? || 
-    dealer_price.present? || dealer_selling_price.present?
+    product_attribute_value(:price).present? ||
+      product_attribute_value(:selling_price).present? ||
+      product_attribute_value(:dealer_price).present? ||
+      product_attribute_value(:dealer_selling_price).present?
   end
 
   def has_variant_prices?
@@ -57,28 +50,47 @@ class Product < ApplicationRecord
   end
 
   def best_price
-    return price if price.present? && !has_variant_prices?
-    product_variants.active.first&.price || price || 0
+    direct_price = product_attribute_value(:price)
+    return direct_price.to_d if direct_price.present? && !has_variant_prices?
+    product_variants.active.first&.price.to_d || direct_price.to_d || 0.to_d
   end
 
   def best_selling_price
-    return selling_price if selling_price.present? && !has_variant_prices?
-    product_variants.active.first&.selling_price || selling_price || 0
+    direct_price = product_attribute_value(:selling_price)
+    return direct_price.to_d if direct_price.present? && !has_variant_prices?
+    product_variants.active.first&.selling_price.to_d || direct_price.to_d || 0.to_d
   end
 
   def best_dealer_price
-    return dealer_price if dealer_price.present? && !has_variant_prices?
-    product_variants.active.first&.dealer_price || dealer_price || 0
+    direct_price = product_attribute_value(:dealer_price)
+    return direct_price.to_d if direct_price.present? && !has_variant_prices?
+    product_variants.active.first&.dealer_price.to_d || direct_price.to_d || 0.to_d
   end
 
   def best_dealer_selling_price
-    return dealer_selling_price if dealer_selling_price.present? && !has_variant_prices?
-    product_variants.active.first&.dealer_selling_price || dealer_selling_price || 0
+    direct_price = product_attribute_value(:dealer_selling_price)
+    return direct_price.to_d if direct_price.present? && !has_variant_prices?
+    product_variants.active.first&.dealer_selling_price.to_d || direct_price.to_d || 0.to_d
   end
 
   def best_discount_percentage
-    return discount_percentage if discount_percentage.present? && !has_variant_prices?
-    product_variants.active.first&.discount_percentage || discount_percentage || 0
+    direct_discount = product_attribute_value(:discount_percentage)
+    return direct_discount.to_d if direct_discount.present? && !has_variant_prices?
+    product_variants.active.first&.discount_percentage.to_d || direct_discount.to_d || 0.to_d
+  end
+
+  def inclusive_amount(amount)
+    return 0.to_d if amount.blank?
+    base_amount = amount.to_d
+    (base_amount + (base_amount * tax_rate.to_d / 100)).round(2)
+  end
+
+  def tax_amount_from_inclusive(amount)
+    return 0.to_d if amount.blank?
+    gross_amount = amount.to_d
+    rate = tax_rate.to_d
+    return 0.to_d if rate <= 0
+    (gross_amount - (gross_amount / (1 + (rate / 100)))).round(2)
   end
 
   def price_source
@@ -97,6 +109,42 @@ class Product < ApplicationRecord
 
   def media_files_valid
     validate_attachment_set(:media)
+  end
+
+  def reject_blank_product_variant?(attributes)
+    attrs = attributes.to_h.stringify_keys.except("_destroy", "id", "is_active")
+    media = Array(attrs.delete("media")).reject(&:blank?)
+    variant_attrs = attrs.delete("variant_attributes")
+
+    attrs.values.all?(&:blank?) &&
+      media.empty? &&
+      blank_variant_attributes?(variant_attrs)
+  end
+
+  def blank_variant_attributes?(value)
+    case value
+    when nil
+      true
+    when Array
+      value.all? do |entry|
+        if entry.respond_to?(:to_h)
+          entry.to_h.values.all?(&:blank?)
+        else
+          entry.blank?
+        end
+      end
+    when Hash
+      value.values.all?(&:blank?)
+    else
+      value.blank?
+    end
+  end
+
+  def product_attribute_value(name)
+    return self[name] if has_attribute?(name)
+    return public_send(name) if respond_to?(name)
+
+    nil
   end
 
   def brand_category_relation

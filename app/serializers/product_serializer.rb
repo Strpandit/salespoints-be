@@ -2,30 +2,30 @@ class ProductSerializer < ApplicationSerializer
   attributes :name, :slug, :sku, :desc, :material, :features, :care_instructions,
              :is_featured, :is_new, :is_active, :tax_rate, :deleted_at, :specifications, 
              :media, :price, :selling_price, :dealer_price, :dealer_selling_price, :discount_percentage,
-             :price_source
+             :price_source, :tax_inclusive
 
   belongs_to :category
   belongs_to :brand
   has_many :product_variants
 
   def price
-    object.best_price
+    object.inclusive_amount(object.best_price || 0).to_f
   end
 
   def selling_price
-    object.best_selling_price
+    object.inclusive_amount(object.best_selling_price || 0).to_f
   end
 
   def dealer_price
-    object.best_dealer_price
+    object.inclusive_amount(object.best_dealer_price || 0).to_f
   end
 
   def dealer_selling_price
-    object.best_dealer_selling_price
+    object.inclusive_amount(object.best_dealer_selling_price || 0).to_f
   end
 
   def discount_percentage
-    object.best_discount_percentage
+    object.best_discount_percentage.to_f
   end
 
   def price_source
@@ -40,6 +40,10 @@ class ProductSerializer < ApplicationSerializer
 
   def media
     object.media.map { |file| file_payload(file) }
+  end
+
+  def tax_inclusive
+    true
   end
 
   private

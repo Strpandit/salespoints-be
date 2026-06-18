@@ -6,20 +6,22 @@ class CartItem < ApplicationRecord
   validates :quantity, numericality: { greater_than: 0 }
   validates :product_variant_id, uniqueness: { scope: [:cart_id, :dealer_product_id], message: "already in cart" }
 
-  before_validation :set_unit_price
+  before_validation :set_unit_price, if: :unit_price_blank?
   before_save :set_total_price
 
   validate :stock_available
   validate :dealer_cannot_buy_own_product
 
-  def set_unit_price
-    return unless product_variant && cart
+  def unit_price_blank?
+    unit_price.blank? || unit_price.zero?
+  end
 
+  def set_unit_price
     self.unit_price =
       if cart.dealer?
-        product_variant.dealer_selling_price
+        product_variant.inclusive_dealer_selling_price || product.dealer_selling_price || 0
       else
-        product_variant.selling_price
+        product_variant.inclusive_selling_price || product.selling_price || 0
       end
   end
 

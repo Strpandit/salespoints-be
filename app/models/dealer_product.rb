@@ -16,7 +16,7 @@ class DealerProduct < ApplicationRecord
   scope :live, -> { where(is_active: true, approve_status: 1).where("stock_quantity > 0") }
   
   def ranking_score
-    price_score = 1.0 / (product_variant.dealer_selling_price.to_f + 1)
+    price_score = 1.0 / (product_variant.inclusive_dealer_selling_price.to_f + 1)
 
     rating_score = reviews.average(:rating).to_f
 
@@ -33,5 +33,9 @@ class DealerProduct < ApplicationRecord
   
   def owner?(buyer)
     dealer_id == buyer.id
+  end
+
+  def display_media_attachments
+    product_variant&.display_media_attachments || product&.media || []
   end
 end

@@ -21,7 +21,7 @@ module Api
         end
 
       paginated = orders.respond_to?(:page) ? orders.page(params[:page]).per(params[:per_page] || 20) : Kaminari.paginate_array(orders).page(params[:page]).per(params[:per_page] || 20)
-      render json: serialize_resource(paginated, B2bOrderSerializer).merge(
+      render json: serialize_resource(paginated, B2bOrderSerializer, base_url: request.base_url).merge(
         meta: {
           current_page: paginated.current_page,
           next_page: paginated.next_page,
@@ -85,7 +85,7 @@ module Api
         payment_status: payment_method == "cod" ? "pending" : "paid"
       ).call
 
-      render json: serialize_resource(order, B2bOrderSerializer).merge(message: "B2B request broadcasted to matching nearby dealers"), status: :created
+      render json: serialize_resource(order, B2bOrderSerializer, base_url: request.base_url).merge(message: "B2B request broadcasted to matching nearby dealers"), status: :created
     rescue StandardError => e
       render json: { error: e.message }, status: :unprocessable_entity
     end

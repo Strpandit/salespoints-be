@@ -126,8 +126,7 @@ class OrderCheckoutService
     grouped_items.each_with_index do |(dealer_id, items), index|
       subtotal = items.sum { |item| item.total_price.to_d }
       tax = items.sum do |item|
-        rate = item.dealer_product&.product&.tax_rate.to_d
-        item.total_price.to_d * rate / 100
+        item.product_variant&.tax_amount_from_inclusive(item.total_price) || 0.to_d
       end
 
       discount =
@@ -144,7 +143,7 @@ class OrderCheckoutService
         subtotal: subtotal.round(2),
         tax: tax.round(2),
         discount: discount.round(2),
-        total: (subtotal + tax - discount).round(2)
+        total: (subtotal - discount).round(2)
       }
     end
 

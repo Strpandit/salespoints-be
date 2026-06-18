@@ -6,7 +6,7 @@ module Api
       paginated = orders.recent.page(params[:page]).per(params[:per_page] || 20)
       paginated.each { |order| OrderSettlementService.process_if_due!(order) }
 
-      render json: serialize_resource(paginated, OrderSerializer).merge(
+      render json: serialize_resource(paginated, OrderSerializer, base_url: request.base_url).merge(
         meta: pagination_meta(paginated),
         pagination: pagination_meta(paginated),
         message: "Orders fetched successfully"
@@ -18,7 +18,7 @@ module Api
       return render json: { error: "Order not found" }, status: :not_found unless order
       OrderSettlementService.process_if_due!(order)
 
-      render json: serialize_resource(order, OrderSerializer, include: [:order_items, :return_requests]).merge(
+      render json: serialize_resource(order, OrderSerializer, include: [:order_items, :return_requests], base_url: request.base_url).merge(
         message: "Order fetched successfully"
       ), status: :ok
     end
@@ -33,7 +33,7 @@ module Api
       OrderLifecycleService.new(order: order, actor: current_user, status_note: params[:status_note]).transition!(next_status: next_status)
       OrderNotificationJob.perform_later(order.id, "status_updated", current_user.class.name, current_user.id)
 
-      render json: serialize_resource(order.reload, OrderSerializer).merge(
+      render json: serialize_resource(order.reload, OrderSerializer, base_url: request.base_url).merge(
         message: "Order updated successfully"
       ), status: :ok
     rescue StandardError => e
@@ -53,7 +53,7 @@ module Api
       ).call
 
       render json: {
-        data: OrderSerializer.render(result.order),
+        data: OrderSerializer.render(result.order, base_url: request.base_url),
         refund: result.refund_payload,
         dealer_balance: result.dealer_balance.to_f,
         message: "Refund initiated successfully"
@@ -73,7 +73,7 @@ module Api
       ).call
 
       render json: {
-        data: OrderSerializer.render(result.order),
+        data: OrderSerializer.render(result.order, base_url: request.base_url),
         released_amount: result.released_amount.to_f,
         dealer_balance: result.dealer_balance.to_f,
         message: "Settlement released successfully"

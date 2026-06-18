@@ -22,10 +22,9 @@ class B2bOrder < ApplicationRecord
 
     self.subtotal_amount = priced_items.sum(&:total_price).to_d
     self.tax_amount = priced_items.sum do |item|
-      rate = item.product_variant&.product&.tax_rate.to_d
-      item.total_price.to_d * rate / 100
+      item.product_variant&.tax_amount_from_inclusive(item.total_price) || 0.to_d
     end
-    self.total_amount = subtotal_amount.to_d + tax_amount.to_d - discount_amount.to_d
+    self.total_amount = subtotal_amount.to_d - discount_amount.to_d
     save!
   end
 

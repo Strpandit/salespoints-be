@@ -54,7 +54,7 @@ module Api
     end
 
     def create
-      product = Product.new(product_params)
+      product = Product.new(normalized_product_params)
 
       if product.save
         notify_admins_entity_created(product)
@@ -67,7 +67,7 @@ module Api
     end
 
     def update
-      if @product.update(product_params)
+      if @product.update(normalized_product_params)
         notify_admins_entity_updated(@product)
         render json: serialize_resource(@product, ProductSerializer, base_url: request.base_url).merge(
           message: "Product updated successfully"
@@ -86,6 +86,18 @@ module Api
 
     private
 
+    VARIANT_FIELD_KEYS = %i[
+      variant_sku
+      price
+      selling_price
+      dealer_price
+      dealer_selling_price
+      discount_percentage
+      is_active
+      media
+      variant_attributes
+    ].freeze
+
     def product_params
       params.require(:product).permit(
         :name, :slug, :sku, :desc, :material, :brand_id, :category_id,
@@ -100,6 +112,40 @@ module Api
           { media: [], variant_attributes: [:key, :value] }
         ]
       )
+    end
+
+    def normalized_product_params
+      attrs = product_params.to_h.deep_dup
+      variant_attrs = attrs["product_variants_attributes"]
+      return attrs if variant_attrs.present?
+      return attrs if @product&.product_variants&.exists?
+
+      fallback_variant = build_fallback_variant_attributes(attrs)
+      return attrs if fallback_variant.blank?
+
+      attrs["product_variants_attributes"] = [fallback_variant]
+      attrs
+    end
+
+    def build_fallback_variant_attributes(attrs)
+      variant_attrs = {}
+      VARIANT_FIELD_KEYS.each do |key|
+        value = attrs.delete(key.to_s)
+        variant_attrs[key.to_s] = value if value.present?
+      end
+
+      variant_attrs["variant_sku"] ||= generated_default_variant_sku(attrs["sku"])
+      return if variant_attrs.except("variant_sku", "is_active").values.all?(&:blank?)
+
+      variant_attrs["is_active"] = true if variant_attrs["is_active"].nil?
+      variant_attrs
+    end
+
+    def generated_default_variant_sku(product_sku)
+      sku = product_sku.to_s.strip
+      return if sku.blank?
+
+      "#{sku}-DEFAULT"
     end
 
     def find_product

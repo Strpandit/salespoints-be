@@ -14,7 +14,7 @@ module Api
         return unauthorized("Unauthorized")
       end
 
-      render json: serialize_resource(items, DealerProductSerializer).merge(
+      render json: serialize_resource(items, DealerProductSerializer, base_url: request.base_url).merge(
         meta: {
           current_page: items.current_page,
           next_page: items.next_page,
@@ -58,7 +58,7 @@ module Api
 
       items = items.page(params[:page]).per(params[:per_page] || 20)
 
-      render json: serialize_resource(items, DealerProductSerializer).merge(
+      render json: serialize_resource(items, DealerProductSerializer, base_url: request.base_url).merge(
         meta: {
           current_page: items.current_page,
           next_page: items.next_page,
@@ -154,7 +154,7 @@ module Api
       end
 
       items = Kaminari.paginate_array(picked).page(params[:page]).per(params[:per_page] || 20)
-      render json: serialize_resource(items, DealerProductSerializer).merge(
+      render json: serialize_resource(items, DealerProductSerializer, base_url: request.base_url).merge(
         meta: {
           current_page: items.current_page,
           next_page: items.next_page,
@@ -169,19 +169,17 @@ module Api
     def create
       return unauthorized("Dealers only") unless current_dealer
 
-      dp = current_dealer.dealer_products.new(dealer_product_params)
-      dp.approve_status = :pending
-      dp.is_active = false
+      dealer_product = create_dealer_product_submission!
 
-      if dp.save
-        render json: serialize_resource(dp, DealerProductSerializer).merge(message: "Dealer product created and sent for approval"), status: :created
-      else
-        render json: { error: dp.errors.full_messages }, status: :unprocessable_entity
-      end
+      render json: serialize_resource(dealer_product, DealerProductSerializer, base_url: request.base_url).merge(
+        message: "Dealer product created and sent for approval"
+      ), status: :created
+    rescue ActiveRecord::RecordInvalid => e
+      render json: { error: e.record.errors.full_messages }, status: :unprocessable_entity
     end
 
     def show
-      render json: serialize_resource(@dealer_product, DealerProductSerializer)
+      render json: serialize_resource(@dealer_product, DealerProductSerializer, base_url: request.base_url)
     end
 
     # Dealer-only B2B product detail.
@@ -194,7 +192,7 @@ module Api
                           .find_by(id: params[:id])
       return render json: { error: "Dealer product not found" }, status: :not_found unless item
 
-      render json: serialize_resource(item, DealerProductSerializer).merge(
+      render json: serialize_resource(item, DealerProductSerializer, base_url: request.base_url).merge(
         message: "B2B dealer product fetched successfully"
       ), status: :ok
     end
@@ -206,7 +204,7 @@ module Api
       return render json: { error: "Invalid stock" }, status: :unprocessable_entity if stock < 0
 
       if @dealer_product.update(stock_quantity: stock)
-        render json: serialize_resource(@dealer_product, DealerProductSerializer).merge(message: "Stock updated"), status: :ok
+        render json: serialize_resource(@dealer_product, DealerProductSerializer, base_url: request.base_url).merge(message: "Stock updated"), status: :ok
       else
         render json: { error: @dealer_product.errors.full_messages }, status: :unprocessable_entity
       end
@@ -224,8 +222,10 @@ module Api
       end
 
       if @dealer_product.update(approve_status: :approved, is_active: true)
+        @dealer_product.product.update!(is_active: true) unless @dealer_product.product.is_active?
+        @dealer_product.product_variant.update!(is_active: true) unless @dealer_product.product_variant.is_active?
         notify_admins_about_product_action(@dealer_product.product.name, @dealer_product.dealer.full_name, "approved")
-        render json: serialize_resource(@dealer_product, DealerProductSerializer).merge(message: "Dealer product approved")
+        render json: serialize_resource(@dealer_product, DealerProductSerializer, base_url: request.base_url).merge(message: "Dealer product approved")
       else
         render json: { error: @dealer_product.errors.full_messages }, status: :unprocessable_entity
       end
@@ -242,7 +242,7 @@ module Api
 
       if @dealer_product.update(approve_status: :rejected, is_active: false)
         notify_admins_about_product_action(@dealer_product.product.name, @dealer_product.dealer.full_name, "rejected", rejection_reason)
-        render json: serialize_resource(@dealer_product, DealerProductSerializer).merge(message: "Dealer product rejected")
+        render json: serialize_resource(@dealer_product, DealerProductSerializer, base_url: request.base_url).merge(message: "Dealer product rejected")
       else
         render json: { error: @dealer_product.errors.full_messages }, status: :unprocessable_entity
       end
@@ -257,7 +257,7 @@ module Api
 
       if @dealer_product.update(approve_status: :pending, is_active: false)
         notify_admins_about_product_action(@dealer_product.product.name, @dealer_product.dealer.full_name, "reverted_to_pending")
-        render json: serialize_resource(@dealer_product, DealerProductSerializer).merge(message: "Dealer product reverted to pending")
+        render json: serialize_resource(@dealer_product, DealerProductSerializer, base_url: request.base_url).merge(message: "Dealer product reverted to pending")
       else
         render json: { error: @dealer_product.errors.full_messages }, status: :unprocessable_entity
       end
@@ -279,7 +279,7 @@ module Api
 
       @dealer_product.update!(is_active: !@dealer_product.is_active)
 
-      render json: serialize_resource(@dealer_product, DealerProductSerializer).merge(
+      render json: serialize_resource(@dealer_product, DealerProductSerializer, base_url: request.base_url).merge(
         message: "Product status updated successfully"
       )
     end
@@ -302,7 +302,7 @@ module Api
         items = base_scope.limit(8)
       end
 
-      render json: serialize_resource(items, DealerProductSerializer).merge(
+      render json: serialize_resource(items, DealerProductSerializer, base_url: request.base_url).merge(
         message: "Similar dealer products fetched successfully"
       ), status: :ok
     end
@@ -329,7 +329,7 @@ module Api
         items = base_scope.limit(8)
       end
 
-      render json: serialize_resource(items, DealerProductSerializer).merge(
+      render json: serialize_resource(items, DealerProductSerializer, base_url: request.base_url).merge(
         message: "Similar B2B dealer products fetched successfully"
       ), status: :ok
     end
@@ -337,7 +337,101 @@ module Api
     private
 
     def dealer_product_params
-      params.require(:dealer_product).permit(:product_id, :product_variant_id, :stock_quantity)
+      params.require(:dealer_product).permit(
+        :product_id,
+        :product_variant_id,
+        :stock_quantity,
+        product_attributes: [
+          :name, :slug, :sku, :desc, :material, :brand_id, :category_id,
+          :is_featured, :is_new, :tax_rate, :price, :selling_price, :dealer_price,
+          :dealer_selling_price, :discount_percentage, :variant_sku,
+          media: [],
+          features: [], care_instructions: [],
+          product_specifications_attributes: [:id, :key, :value, :_destroy],
+          product_variants_attributes: [
+            :id, :variant_sku, :price, :selling_price, :dealer_price,
+            :dealer_selling_price, :discount_percentage, :is_active, :_destroy,
+            { media: [], variant_attributes: [:key, :value] }
+          ]
+        ]
+      )
+    end
+
+    def create_dealer_product_submission!
+      ActiveRecord::Base.transaction do
+        product, variant = resolved_product_and_variant_for_submission
+        dealer_product = current_dealer.dealer_products.new(
+          product: product,
+          product_variant: variant,
+          stock_quantity: dealer_product_params[:stock_quantity],
+          approve_status: :pending,
+          is_active: false
+        )
+        dealer_product.save!
+        notify_admins_about_product_action(product.name, current_dealer.full_name, "submitted")
+        dealer_product
+      end
+    end
+
+    def resolved_product_and_variant_for_submission
+      if dealer_product_params[:product_id].present?
+        product = Product.find(dealer_product_params[:product_id])
+        variant =
+          if dealer_product_params[:product_variant_id].present?
+            product.product_variants.find(dealer_product_params[:product_variant_id])
+          else
+            product.product_variants.first
+          end
+
+        raise ActiveRecord::RecordInvalid.new(product.tap { |record| record.errors.add(:base, "Product variant is required for this product") }) unless variant
+
+        return [product, variant]
+      end
+
+      product_attrs = dealer_product_params[:product_attributes]
+      raise ActiveRecord::RecordInvalid.new(DealerProduct.new.tap { |dp| dp.errors.add(:base, "Product details are required") }) if product_attrs.blank?
+
+      normalized = normalize_product_submission_attributes(product_attrs.to_h.deep_dup)
+      product = Product.new(normalized.merge("is_active" => false))
+      product.save!
+
+      variant = product.product_variants.first
+      unless variant
+        raise ActiveRecord::RecordInvalid.new(product.tap { |record| record.errors.add(:base, "At least one price set is required to create a dealer product") })
+      end
+
+      variant.update!(is_active: false)
+      [product, variant]
+    end
+
+    def normalize_product_submission_attributes(attrs)
+      variant_attrs = attrs["product_variants_attributes"]
+      return attrs if variant_attrs.present?
+
+      fallback_variant = build_fallback_variant_attributes(attrs)
+      attrs["product_variants_attributes"] = [fallback_variant] if fallback_variant.present?
+      attrs
+    end
+
+    def build_fallback_variant_attributes(attrs)
+      variant_attrs = {}
+      %w[variant_sku price selling_price dealer_price dealer_selling_price discount_percentage].each do |key|
+        value = attrs.delete(key)
+        variant_attrs[key] = value if value.present?
+      end
+
+      variant_attrs["variant_sku"] ||= default_variant_sku(attrs["sku"])
+      return if variant_attrs.except("variant_sku").values.all?(&:blank?)
+
+      variant_attrs["is_active"] = false
+      variant_attrs
+    end
+
+    def default_variant_sku(product_sku)
+      sku = product_sku.to_s.strip
+      return "SKU-#{SecureRandom.hex(4).upcase}" if sku.blank?
+
+      "#{sku}-DEFAULT"
     end
 
     def set_dealer_product

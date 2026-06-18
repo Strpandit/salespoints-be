@@ -14,8 +14,7 @@ class Cart < ApplicationRecord
 
   def tax_amount
     cart_items.includes(dealer_product: :product).sum do |item|
-      rate = item.dealer_product&.product&.tax_rate.to_d
-      item.total_price.to_d * rate / 100
+      item.product_variant&.tax_amount_from_inclusive(item.total_price) || 0.to_d
     end
   end
 
@@ -28,7 +27,7 @@ class Cart < ApplicationRecord
   end
 
   def grand_total
-    subtotal_amount + tax_amount - coupon_discount_amount
+    subtotal_amount - coupon_discount_amount
   end
 
   def total_items

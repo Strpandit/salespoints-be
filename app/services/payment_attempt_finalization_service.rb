@@ -135,9 +135,8 @@ class PaymentAttemptFinalizationService
     grouped_items.each_with_index do |(dealer_id, items), index|
       subtotal = items.sum { |item| BigDecimal(item["total_price"].to_s) }
       tax = items.sum do |item|
-        dealer_product = DealerProduct.find(item["dealer_product_id"])
-        rate = dealer_product.product&.tax_rate.to_d
-        BigDecimal(item["total_price"].to_s) * rate / 100
+        variant = ProductVariant.find(item["product_variant_id"])
+        variant.tax_amount_from_inclusive(BigDecimal(item["total_price"].to_s))
       end
 
       discount =
@@ -154,7 +153,7 @@ class PaymentAttemptFinalizationService
         subtotal: subtotal.round(2),
         tax: tax.round(2),
         discount: discount.round(2),
-        total: (subtotal + tax - discount).round(2)
+        total: (subtotal - discount).round(2)
       }
     end
 
