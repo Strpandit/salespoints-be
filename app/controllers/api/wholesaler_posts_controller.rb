@@ -9,11 +9,11 @@ module Api
       if current_dealer.present?
         dealer_pincode = current_dealer.pincode
         posts = posts.where(
-          "dealer_id = :dealer_id OR (approve_status = :approved AND created_at >= :cutoff AND ? = ANY(pincodes))",
+          "dealer_id = :dealer_id OR (approve_status = :approved AND created_at >= :cutoff AND :dealer_pincode = ANY(pincodes))",
           dealer_id: current_dealer.id,
           approved: "approved",
           cutoff: 7.days.ago,
-          dealer_pincode
+          dealer_pincode: dealer_pincode
         )
       elsif current_admin.present?
         posts = current_admin.accessible_wholesale_posts(posts)
