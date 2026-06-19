@@ -61,6 +61,7 @@ module AttachableMediaValidations
     end
 
     content_type = blob.content_type.to_s
+    content_type = inferred_content_type(blob) if content_type.blank? || content_type == "application/octet-stream"
 
     if IMAGE_TYPES.include?(content_type)
       validate_image_size(name, blob)
@@ -81,6 +82,21 @@ module AttachableMediaValidations
     return unless blob.byte_size > MAX_VIDEO_SIZE
 
     errors.add(name, "videos must be 50 MB or smaller")
+  end
+
+  def inferred_content_type(blob)
+    extension = blob.filename.extension.to_s.downcase
+    case extension
+    when "jpg", "jpeg" then "image/jpeg"
+    when "png" then "image/png"
+    when "webp" then "image/webp"
+    when "gif" then "image/gif"
+    when "mp4" then "video/mp4"
+    when "webm" then "video/webm"
+    when "mov" then "video/quicktime"
+    else
+      blob.content_type.to_s
+    end
   end
 
   def validate_document_attachment(name, required: false)

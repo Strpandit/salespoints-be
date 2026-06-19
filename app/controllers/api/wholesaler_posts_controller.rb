@@ -7,13 +7,14 @@ module Api
                             .order(Arel.sql("COALESCE(rating, 0) DESC"), created_at: :desc)
 
       if current_dealer.present?
+        dealer_pincode = current_dealer.pincode
         posts = posts.where(
-          "(approve_status = :approved AND created_at >= :cutoff) OR dealer_id = :dealer_id",
+          "dealer_id = :dealer_id OR (approve_status = :approved AND created_at >= :cutoff AND ? = ANY(pincodes))",
+          dealer_id: current_dealer.id,
           approved: "approved",
           cutoff: 7.days.ago,
-          dealer_id: current_dealer.id
+          dealer_pincode
         )
-        posts = posts.where("? = ANY(pincodes)", current_dealer.pincode)
       elsif current_admin.present?
         posts = current_admin.accessible_wholesale_posts(posts)
       else
@@ -79,6 +80,7 @@ module Api
     def pending
       scope = WholesalerPost.includes(:media_attachments, dealer: :dealer_profile).order(created_at: :desc)
       scope = scope.where(approve_status: params[:status]) if params[:status].present? && params[:status] != "all"
+      scope = current_admin.accessible_wholesale_posts(scope)
       paginated = scope.page(params[:page]).per(params[:per_page] || 15)
 
       render json: {
@@ -129,7 +131,7 @@ module Api
       return render json: { error: "You can edit only your own post" }, status: :forbidden unless post.dealer_id == current_dealer.id
       return render json: { error: "Invalid dealer product selection" }, status: :unprocessable_entity if invalid_dealer_product?(wholesaler_post_params[:dealer_product_id])
 
-      if params[:wholesaler_post][:pincodes].blank?
+      if params[:wholesaler_post].key?(:pincodes) && params[:wholesaler_post][:pincodes].blank?
         return render json: { error: "At least one pincode required" }, status: :unprocessable_entity
       end
 

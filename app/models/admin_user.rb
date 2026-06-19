@@ -73,7 +73,10 @@ class AdminUser < ApplicationRecord
 
   def accessible_wholesale_posts(posts_scope = WholesalerPost.all)
     return posts_scope if super_admin?
+    return posts_scope if approver_admin?
+
     return posts_scope.none if pincodes.blank?
+
     posts_scope.where("pincodes && ARRAY[?]::varchar[]", pincodes)
   end
 

@@ -16,7 +16,8 @@ class DealerProduct < ApplicationRecord
   scope :live, -> { where(is_active: true, approve_status: 1).where("stock_quantity > 0") }
   
   def ranking_score
-    price_score = 1.0 / (product_variant.inclusive_dealer_selling_price.to_f + 1)
+    variant = product_variant
+    price_score = variant ? 1.0 / (variant.inclusive_dealer_selling_price.to_f + 1) : 0.5
 
     rating_score = reviews.average(:rating).to_f
 

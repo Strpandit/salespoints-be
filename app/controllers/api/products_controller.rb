@@ -20,7 +20,20 @@ module Api
     end
 
     def active_products
-      products = Product.active.order(created_at: :desc).page(params[:page]).per(params[:per_page] || 20)
+      products = Product.active.includes(:category, :brand, :product_variants)
+
+      if params[:category_id].present?
+        products = products.where(category_id: params[:category_id])
+      end
+
+      if params[:search].present?
+        query = params[:search].strip
+        products = products.where("products.name ILIKE ?", "%#{query}%")
+      end
+
+      products = apply_active_product_sort(products, params[:sort])
+      products = products.page(params[:page]).per(params[:per_page] || 20)
+
       render json: serialize_resource(products, ProductSerializer, base_url: request.base_url).merge(
         meta: {
           current_page: products.current_page,
@@ -146,6 +159,21 @@ module Api
       return if sku.blank?
 
       "#{sku}-DEFAULT"
+    end
+
+    def apply_active_product_sort(scope, sort)
+      case sort
+      when "price_asc"
+        scope.left_joins(:product_variants)
+             .group("products.id")
+             .order(Arel.sql("MIN(product_variants.selling_price) ASC NULLS LAST"))
+      when "price_desc"
+        scope.left_joins(:product_variants)
+             .group("products.id")
+             .order(Arel.sql("MIN(product_variants.selling_price) DESC NULLS LAST"))
+      else
+        scope.order(created_at: :desc)
+      end
     end
 
     def find_product

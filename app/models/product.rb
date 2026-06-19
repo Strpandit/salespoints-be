@@ -33,7 +33,26 @@ class Product < ApplicationRecord
   end
 
   def sellable?
-    !deleted? && product_variants.active.any? { |v| v.sellable? }
+    return false if deleted?
+    return true if has_price? && product_variants.active.none?
+    product_variants.active.any? { |v| v.sellable? }
+  end
+
+  def ensure_default_variant!
+    existing = product_variants.first
+    return existing if existing
+
+    return nil unless has_price?
+
+    product_variants.create!(
+      variant_sku: "#{sku}-DEFAULT",
+      price: product_attribute_value(:price),
+      selling_price: product_attribute_value(:selling_price),
+      dealer_price: product_attribute_value(:dealer_price),
+      dealer_selling_price: product_attribute_value(:dealer_selling_price),
+      discount_percentage: product_attribute_value(:discount_percentage) || 0,
+      is_active: true
+    )
   end
 
   def has_price?

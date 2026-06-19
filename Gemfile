@@ -82,5 +82,4 @@ gem 'prawn'
 # gem "sidekiq", "~> 8.1"
 # gem "sidekiq-scheduler", "~> 6.0"
 gem 'caxlsx'
-
 gem "matrix", "~> 0.4.3"

@@ -167,12 +167,13 @@ module Api
     end
 
     def create
-      return unauthorized("Dealers only") unless current_dealer
+      dealer = submission_dealer
+      return unauthorized("Unauthorized") unless dealer
 
-      dealer_product = create_dealer_product_submission!
+      dealer_product = create_dealer_product_submission!(dealer)
 
       render json: serialize_resource(dealer_product, DealerProductSerializer, base_url: request.base_url).merge(
-        message: "Dealer product created and sent for approval"
+        message: dealer_product_creation_message
       ), status: :created
     rescue ActiveRecord::RecordInvalid => e
       render json: { error: e.record.errors.full_messages }, status: :unprocessable_entity
@@ -223,7 +224,7 @@ module Api
 
       if @dealer_product.update(approve_status: :approved, is_active: true)
         @dealer_product.product.update!(is_active: true) unless @dealer_product.product.is_active?
-        @dealer_product.product_variant.update!(is_active: true) unless @dealer_product.product_variant.is_active?
+        @dealer_product.product_variant&.update!(is_active: true) unless @dealer_product.product_variant&.is_active?
         notify_admins_about_product_action(@dealer_product.product.name, @dealer_product.dealer.full_name, "approved")
         render json: serialize_resource(@dealer_product, DealerProductSerializer, base_url: request.base_url).merge(message: "Dealer product approved")
       else
@@ -338,6 +339,7 @@ module Api
 
     def dealer_product_params
       params.require(:dealer_product).permit(
+        :dealer_id,
         :product_id,
         :product_variant_id,
         :stock_quantity,
@@ -357,19 +359,51 @@ module Api
       )
     end
 
-    def create_dealer_product_submission!
+    def submission_dealer
+      return current_dealer if current_dealer
+      return Dealer.find_by(id: dealer_product_params[:dealer_id]) if current_admin && dealer_product_params[:dealer_id].present?
+
+      nil
+    end
+
+    def create_dealer_product_submission!(dealer)
       ActiveRecord::Base.transaction do
         product, variant = resolved_product_and_variant_for_submission
-        dealer_product = current_dealer.dealer_products.new(
+        status = submission_status
+        dealer_product = dealer.dealer_products.new(
           product: product,
           product_variant: variant,
           stock_quantity: dealer_product_params[:stock_quantity],
-          approve_status: :pending,
-          is_active: false
+          approve_status: status[:approve_status],
+          is_active: status[:is_active]
         )
         dealer_product.save!
-        notify_admins_about_product_action(product.name, current_dealer.full_name, "submitted")
+        if status[:approve_status] == :pending
+          notify_admins_about_product_action(product.name, dealer.full_name, "submitted")
+        end
         dealer_product
+      end
+    end
+
+    def catalog_mapping?
+      dealer_product_params[:product_id].present?
+    end
+
+    def submission_status
+      if catalog_mapping? || current_admin
+        { approve_status: :approved, is_active: true }
+      else
+        { approve_status: :pending, is_active: false }
+      end
+    end
+
+    def dealer_product_creation_message
+      if catalog_mapping?
+        "Product mapped successfully and is now live"
+      elsif current_admin
+        "Dealer product mapped successfully"
+      else
+        "Dealer product created and sent for approval"
       end
     end
 
@@ -380,10 +414,14 @@ module Api
           if dealer_product_params[:product_variant_id].present?
             product.product_variants.find(dealer_product_params[:product_variant_id])
           else
-            product.product_variants.first
+            product.product_variants.first || product.ensure_default_variant!
           end
 
-        raise ActiveRecord::RecordInvalid.new(product.tap { |record| record.errors.add(:base, "Product variant is required for this product") }) unless variant
+        unless variant
+          raise ActiveRecord::RecordInvalid.new(
+            product.tap { |record| record.errors.add(:base, "Product pricing is required before mapping a dealer") }
+          )
+        end
 
         return [product, variant]
       end
