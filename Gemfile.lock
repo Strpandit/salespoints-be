@@ -248,7 +248,7 @@ GEM
     pdf-core (0.9.0)
     pg (1.6.3-x64-mingw-ucrt)
     pg (1.6.3-x86_64-linux)
-    phonelib (0.10.16)
+    phonelib (0.10.18)
     plivo (4.63.1)
       faraday (~> 2.7)
       htmlentities
