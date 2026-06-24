@@ -2,7 +2,7 @@ module Pricing
   class PriceCalculator
     attr_reader :variant, :product, :quantity, :user_type, :discount_amount
 
-    def initialize(variant:, quantity: 1, user_type: :dealer, :discount_amount: 0)
+    def initialize(variant:, quantity: 1, user_type: :dealer, discount_amount: 0)
       @variant = variant
       @Product = variant.product
       @quantity = quantity.to_i.positive? ? quantity.to_i : 1
@@ -47,26 +47,26 @@ module Pricing
     end
 
     def subtotal
-      @subtotal =|| (unit_price * quantity).round(2)
+      @subtotal ||= (unit_price * quantity).round(2)
     end
 
     def gst_percentage
-      @gst_percentage =|| product&.tax_rate.to_d
+      @gst_percentage ||= product&.tax_rate.to_d
     end
 
     # Inclusive GST
     def gst_amount
-      @gst_amount =|| begin
+      @gst_amount ||= begin
         return 0.to_d if gst_percentage.zero?
        (subtotal - (subtotal / (1 + gst_percentage / 100.0))).round(2)
     end
 
     def taxable_amount
-      @taxable_amount =|| (subtotal - gst_amount).round(2)
+      @taxable_amount ||= (subtotal - gst_amount).round(2)
     end
 
     def total
-      @total =|| (subtotal - discount_amount).round(2)
+      @total ||= (subtotal - discount_amount).round(2)
     end
   end
 end

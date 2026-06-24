@@ -100,6 +100,7 @@ class PaymentAttemptFinalizationService
             qty = snapshot_item["quantity"].to_i
 
             dealer_product.update!(stock_quantity: dealer_product.stock_quantity - qty)
+          end
         end
 
         orders << order
