@@ -27,11 +27,9 @@ class PaymentAttemptFinalizationService
 
         snapshot_items.each do |snapshot_item|
           dealer_product = DealerProduct.lock.find(snapshot_item["dealer_product_id"])
-          raise StandardError, "Product not available" unless dealer_product.sellable?
 
           qty = snapshot_item["quantity"].to_i
-          raise StandardError, "Insufficient stock for #{dealer_product.product&.name || 'item'}" if dealer_product.stock_quantity.to_i < qty
-          
+
           pricing = Pricing::PriceCalculator.new(
             variant: dealer_product.product_variant,
             quantity: qty,
@@ -46,61 +44,63 @@ class PaymentAttemptFinalizationService
             snapshot_item,
             pricing
           ]
+        end
 
-          discount_remaining ||= BigDecimal(attempt.cart_snapshot["discount_amount"].to_s)
-          cart_subtotal = BigDecimal(attempt.cart_snapshot["subtotal_amount"].to_s)
-          share = cart_subtotal.positive? ? subtotal / cart_subtotal : 0
+        discount_remaining ||= BigDecimal(attempt.cart_snapshot["discount_amount"].to_s)
+        cart_subtotal = BigDecimal(attempt.cart_snapshot["subtotal_amount"].to_s)
 
-          discount =
-            if index == grouped_items.size - 1
-              discount_remaining
-            else
-              allocated = (BigDecimal(attempt.cart_snapshot["discount_amount"].to_s) * share).round(2)
+        share = cart_subtotal.positive? ? subtotal / cart_subtotal : 0
 
-              discount_remaining -= allocated
-              allocated
-            end
-
-          total = subtotal - discount
-          financials = MarketplaceOrderFinancials.build(total_amount: total)
-
-          order = Order.create!(
-            buyer: attempt.buyer,
-            seller_dealer_id: dealer_id,
-            status: "pending",
-            subtotal_amount: subtotal,
-            tax_amount: tax,
-            discount_amount: discount,
-            total_amount: total,
-            coupon_code: attempt.coupon_code,
-            payment_method: "online",
-            payment_status: "paid",
-            payment_gateway: attempt.payment_gateway,
-            billing_address: attempt.billing_address,
-            shipping_address: attempt.shipping_address,
-            payment_reference: attempt.payment_reference,
-            payment_confirmed_at: attempt.paid_at || Time.current,
-            gateway_order_reference: attempt.gateway_order_reference,
-            payment_session_id: attempt.payment_session_id,
-            payment_gateway_payload: attempt.payment_gateway_payload
-          )
-          order.update!(financials)
-
-          pricing_rows.each do |dealer_product, snapshot_item, pricing|
-
-            OrderItem.create!(
-              order: order,
-              dealer_product_id: dealer_product.id,
-              product_variant_id: snapshot_item["product_variant_id"],
-              quantity: snapshot_item["quantity"],
-              unit_price: pricing[:unit_price],
-              total_price: pricing[:subtotal]
-            )
-
-            qty = snapshot_item["quantity"].to_i
-
-            dealer_product.update!(stock_quantity: dealer_product.stock_quantity - qty)
+        discount =
+          if index == grouped_items.size - 1
+            discount_remaining
+          else
+            allocated = (BigDecimal(attempt.cart_snapshot["discount_amount"].to_s) * share).round(2)
+            discount_remaining -= allocated
+            allocated
           end
+
+        total = subtotal - discount
+        financials = MarketplaceOrderFinancials.build(total_amount: total)
+
+        order = Order.create!(
+          buyer: attempt.buyer,
+          seller_dealer_id: dealer_id,
+          status: "pending",
+          subtotal_amount: subtotal,
+          tax_amount: tax,
+          discount_amount: discount,
+          total_amount: total,
+          coupon_code: attempt.coupon_code,
+          payment_method: "online",
+          payment_status: "paid",
+          payment_gateway: attempt.payment_gateway,
+          billing_address: attempt.billing_address,
+          shipping_address: attempt.shipping_address,
+          payment_reference: attempt.payment_reference,
+          payment_confirmed_at: attempt.paid_at || Time.current,
+          gateway_order_reference: attempt.gateway_order_reference,
+          payment_session_id: attempt.payment_session_id,
+          payment_gateway_payload: attempt.payment_gateway_payload
+        )
+
+        order.update!(financials)
+
+        pricing_rows.each do |dealer_product, snapshot_item, pricing|
+          OrderItem.create!(
+            order: order,
+            dealer_product_id: dealer_product.id,
+            product_variant_id: snapshot_item["product_variant_id"],
+            quantity: snapshot_item["quantity"],
+            unit_price: pricing[:unit_price],
+            total_price: pricing[:subtotal]
+          )
+
+          qty = snapshot_item["quantity"].to_i
+
+          dealer_product.update!(
+            stock_quantity: dealer_product.stock_quantity - qty
+          )
         end
 
         orders << order
