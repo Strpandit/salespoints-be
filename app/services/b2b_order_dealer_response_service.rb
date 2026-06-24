@@ -21,7 +21,7 @@ class B2bOrderDealerResponseService
       updated_items = resolve_order_items_for_seller(candidate_items)
       raise StandardError, "You don't have enough stock for the selected items" if updated_items.blank?
 
-      updated_items.map { |item, dealer_product, pricing| item.id }
+      updated_items.each do |item, dealer_product, pricing|
         item.update!(
           dealer_product_id: dealer_product.id,
           status: "accepted",
