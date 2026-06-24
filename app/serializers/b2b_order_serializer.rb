@@ -1,7 +1,7 @@
 class B2bOrderSerializer < ApplicationSerializer
   attributes :status, :coupon_code, :requested_radius_km, :accepted_at, :cancelled_at,
              :expires_at, :created_at, :buyer_dealer_id, :seller_dealer_id,
-             :subtotal_amount, :tax_amount, :discount_amount, :total_amount,
+             :subtotal_amount, :taxable_amount, :tax_amount, :discount_amount, :total_amount,
              :buyer_name, :seller_name, :open_items_count, :accepted_items_count, :latitude, :longitude,
              :payment_method, :payment_status
 
@@ -9,6 +9,10 @@ class B2bOrderSerializer < ApplicationSerializer
 
   def subtotal_amount
     object.subtotal_amount.to_f
+  end
+
+  def taxable_amount
+    object.subtotal_amount.to_d - object.tax_amount.to_d
   end
 
   def tax_amount

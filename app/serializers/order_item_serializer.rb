@@ -1,13 +1,33 @@
 class OrderItemSerializer < ApplicationSerializer
-  attributes :quantity, :unit_price, :total_price, :product_name, :product_name_with_variant, :variant_sku,
+  attributes :quantity, :unit_price, :taxable_amount, :gst_percentage, :gst_amount, :total_price, :product_name, :product_name_with_variant, :variant_sku,
              :media, :product_media, :variant_media
 
+  def pricing
+    @pricing ||= Pricing::PriceCalculator.new(
+      variant: object.product_variant,
+      quantity: object.quantity,
+      user_type: object.order.buyer_type == "Dealer" ? :dealer : :account
+    ).call
+  end
+
   def unit_price
-    object.unit_price.to_f
+    pricing[:unit_price]
+  end
+
+  def taxable_amount
+    pricing[:taxable_amount]
+  end
+
+  def gst_percentage
+    pricing[:gst_percentage]
+  end
+
+  def gst_amount
+    pricing[:gst_amount]
   end
 
   def total_price
-    object.total_price.to_f
+    pricing[:total]
   end
 
   def product_name

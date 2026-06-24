@@ -17,7 +17,8 @@ class DealerProduct < ApplicationRecord
   
   def ranking_score
     variant = product_variant
-    price_score = variant ? 1.0 / (variant.inclusive_dealer_selling_price.to_f + 1) : 0.5
+    price = variant.unit_price_for(:dealer)
+    price_score = 1.0 / (price + 1)
 
     rating_score = reviews.average(:rating).to_f
 

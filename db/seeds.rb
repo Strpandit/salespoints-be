@@ -15,7 +15,8 @@ super_admin = AdminUser.find_or_initialize_by(email: 'salespointecom@gmail.com')
   user.is_super_admin = true
   user.status = 'active'
 end
-super_admin.update_columns(
+super_admin.save!
+super_admin.update!(
   approval_status: 'approved',
   approved_at: Time.current,
   approved_by_id: super_admin.id

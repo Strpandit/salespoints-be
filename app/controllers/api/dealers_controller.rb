@@ -2,9 +2,9 @@ module Api
   class DealersController < ApplicationController
     skip_before_action :authenticate_request!, only: [:verify_otp, :resend_signup_otp]
     # before_action :authenticate_request!, except: [:verify_otp]
-    before_action :require_admin, only: [:create, :index, :active_dealers, :block, :unblock, :destroy, :approve, :reject]
+    before_action :require_admin, only: [:create, :index, :active_dealers, :block, :unblock, :destroy, :approve, :reject, :admin_overview]
     before_action :require_admin_approver!, only: [:approve, :reject]
-    before_action :set_dealer, only: [:show, :update, :destroy, :block, :unblock, :approve, :reject, :verify_otp]
+    before_action :set_dealer, only: [:show, :update, :destroy, :block, :unblock, :approve, :reject, :verify_otp, :admin_overview]
     before_action :authorize_dealer_update, only: [:update, :show]
 
     def index
@@ -124,6 +124,63 @@ module Api
       render json: serialize_resource(@dealer, DealerSerializer, base_url: request.base_url).merge(
         message: "Dealer fetched successfully"
       ), status: :ok
+    end
+
+    def admin_overview
+      unless current_admin.can_access?(:dealers, :read)
+        return render json: { error: "Access denied" }, status: :forbidden
+      end
+
+      unless dealer_accessible?(@dealer)
+        return render json: { error: "Access denied for this dealer" }, status: :forbidden
+      end
+
+      payload = {
+        dealer: serialize_data(@dealer, DealerSerializer, base_url: request.base_url),
+        permissions: {
+          dealers: current_admin.can_access?(:dealers, :read),
+          dealer_products: current_admin.can_access?(:dealer_products, :read),
+          wholesaler_posts: current_admin.can_access?(:wholesaler_posts, :read),
+          orders: current_admin.can_access?(:orders, :read)
+        }
+      }
+
+      if current_admin.can_access?(:dealer_products, :read)
+        products = @dealer.dealer_products.includes(:product, :product_variant).order(created_at: :desc).limit(50)
+        payload[:dealer_products] = products.map { |dp| dealer_product_summary(dp) }
+        payload[:inventory_summary] = {
+          total_products: @dealer.dealer_products.count,
+          approved: @dealer.dealer_products.where(approve_status: "approved").count,
+          pending: @dealer.dealer_products.where(approve_status: "pending").count,
+          total_stock: @dealer.dealer_products.sum(:stock_quantity)
+        }
+      end
+
+      if current_admin.can_access?(:wholesaler_posts, :read)
+        posts = @dealer.wholesaler_posts.order(created_at: :desc).limit(20)
+        payload[:wholesaler_posts] = posts.map { |p| wholesaler_post_summary(p) }
+        payload[:wholesaler_posts_summary] = {
+          total: @dealer.wholesaler_posts.count,
+          pending: @dealer.wholesaler_posts.where(approve_status: "pending").count,
+          approved: @dealer.wholesaler_posts.where(approve_status: "approved").count,
+          rejected: @dealer.wholesaler_posts.where(approve_status: "rejected").count,
+          expired: @dealer.wholesaler_posts.where("created_at < ?", 7.days.ago).count
+        }
+      end
+
+      if current_admin.can_access?(:orders, :read)
+        buyer_orders = @dealer.orders.includes(:seller_dealer, order_items: [:dealer_product]).order(created_at: :desc).limit(20)
+        sales_orders = @dealer.sales_orders.includes(:buyer, order_items: [:dealer_product]).order(created_at: :desc).limit(20)
+        b2b_buyer = @dealer.buyer_b2b_orders.includes(:seller_dealer).order(created_at: :desc).limit(20)
+        b2b_seller = @dealer.seller_b2b_orders.includes(:buyer_dealer).order(created_at: :desc).limit(20)
+
+        payload[:orders_as_buyer] = buyer_orders.map { |o| order_summary(o) }
+        payload[:orders_as_seller] = sales_orders.map { |o| order_summary(o) }
+        payload[:b2b_orders_as_buyer] = b2b_buyer.map { |o| b2b_order_summary(o) }
+        payload[:b2b_orders_as_seller] = b2b_seller.map { |o| b2b_order_summary(o) }
+      end
+
+      render json: { data: payload, message: "Dealer overview fetched" }, status: :ok
     end
 
     def update
@@ -291,6 +348,62 @@ module Api
     def require_admin_approver!
       return if current_admin&.approver_admin?
       render json: { error: "Only Super Admin or Sub Admin can approve dealer onboarding" }, status: :forbidden
+    end
+
+    def dealer_accessible?(dealer)
+      return true if current_admin.super_admin?
+      current_admin.can_access_pincode?(dealer.pincode)
+    end
+
+    def dealer_product_summary(dp)
+      {
+        id: dp.id,
+        product_name: dp.product&.name,
+        sku: dp.product_variant&.variant_sku || dp.product&.sku,
+        stock_quantity: dp.stock_quantity,
+        approve_status: dp.approve_status,
+        is_active: dp.is_active,
+        selling_price: dp.product_variant&.dealer_selling_price,
+        created_at: dp.created_at
+      }
+    end
+
+    def wholesaler_post_summary(post)
+      {
+        id: post.id,
+        title: post.title,
+        approve_status: post.approve_status,
+        is_expired: !post.visible_to_others?,
+        price: post.price,
+        stock_quantity: post.stock_quantity,
+        created_at: post.created_at
+      }
+    end
+
+    def order_summary(order)
+      {
+        id: order.id,
+        order_number: order.order_number,
+        status: order.status,
+        total_amount: order.total_amount.to_f,
+        payment_method: order.payment_method,
+        payment_status: order.payment_status,
+        created_at: order.created_at,
+        items_count: order.order_items.size
+      }
+    end
+
+    def b2b_order_summary(order)
+      {
+        id: order.id,
+        status: order.status,
+        total_amount: order.total_amount.to_f,
+        payment_method: order.payment_method,
+        payment_status: order.payment_status,
+        created_at: order.created_at,
+        buyer_dealer_id: order.buyer_dealer_id,
+        seller_dealer_id: order.seller_dealer_id
+      }
     end
 
     def current_admin

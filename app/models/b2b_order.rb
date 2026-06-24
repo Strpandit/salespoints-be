@@ -20,11 +20,23 @@ class B2bOrder < ApplicationRecord
   def recalculate_totals!
     priced_items = b2b_order_items.accepted_items.includes(product_variant: :product)
 
-    self.subtotal_amount = priced_items.sum(&:total_price).to_d
-    self.tax_amount = priced_items.sum do |item|
-      item.product_variant&.tax_amount_from_inclusive(item.total_price) || 0.to_d
+    subtotal = 0.to_d
+    tax = 0.to_d
+
+    priced_items.each do |item|
+      pricing = Pricing::PriceCalculator.new(
+        variant: item.product_variant,
+        quantity: item.quantity,
+        user_type: :dealer
+      ).call
+
+      subtotal += pricing[:subtotal]
+      tax += pricing[:gst_amount]
     end
-    self.total_amount = subtotal_amount.to_d - discount_amount.to_d
+
+    self.subtotal_amount = subtotal
+    self.tax_amount = tax
+    self.total_amount = subtotal - discount_amount.to_d
     save!
   end
 

@@ -24,8 +24,15 @@ class OrderItem < ApplicationRecord
   private
 
   def assign_total_price
-    qty = quantity.to_i
-    self.total_price = unit_price.to_d * qty
+    return unless product_variant.present?
+    pricing = Pricing::PriceCalculator.new(
+      variant: product_variant,
+      quantity: quantity,
+      user_type: order.buyer.is_a?(Dealer) ? :dealer : :account
+    ).call
+
+    self.unit_price = pricing[:unit_price]
+    self.total_price = pricing[:subtotal]
   end
 end
 

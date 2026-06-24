@@ -16,7 +16,19 @@ module Api
           dealer_pincode: dealer_pincode
         )
       elsif current_admin.present?
-        posts = current_admin.accessible_wholesale_posts(posts)
+        if params[:dealer_id].present?
+          unless current_admin.can_access?(:dealers, :read)
+            return render json: { error: "Access denied" }, status: :forbidden
+          end
+
+          target_dealer = current_admin.accessible_dealers(Dealer.all).find_by(id: params[:dealer_id])
+          return render json: { error: "Dealer not found or access denied" }, status: :forbidden unless target_dealer
+
+          posts = posts.where(dealer_id: target_dealer.id)
+          posts = posts.where(approve_status: params[:status]) if params[:status].present? && params[:status] != "all"
+        else
+          posts = current_admin.accessible_wholesale_posts(posts)
+        end
       else
         posts = posts.where(approve_status: "approved").visible_to_marketplace
       end
@@ -124,6 +136,10 @@ module Api
     end
 
     def update
+      if current_admin.present?
+        return admin_update_post
+      end
+
       return render json: { error: "Only dealers can edit posts" }, status: :forbidden unless current_dealer
 
       post = WholesalerPost.find_by(id: params[:id])
@@ -174,17 +190,38 @@ module Api
         return render json: { error: "Post has no dealer product attached" }, status: :unprocessable_entity
       end
 
-      cart = current_dealer.cart || current_dealer.create_cart
-      item = cart.cart_items.find_or_initialize_by(dealer_product: post.dealer_product)
-      qty = params[:quantity].to_i.positive? ? params[:quantity].to_i : 1
-      item.quantity = (item.quantity || 0) + qty
-      item.total_price = post.dealer_product.product_variant.inclusive_dealer_selling_price.to_f * item.quantity
-
-      if item.save
-        render json: { data: item, message: "Added to cart" }, status: :ok
-      else
-        render json: { error: item.errors.full_messages }, status: :unprocessable_entity
+      buyer_latitude = params[:latitude].presence&.to_f
+      buyer_longitude = params[:longitude].presence&.to_f
+      if buyer_latitude.blank? || buyer_longitude.blank?
+        location = current_dealer.dealer_location
+        if location&.latitude.present? && location.longitude.present?
+          buyer_latitude = location.latitude.to_f
+          buyer_longitude = location.longitude.to_f
+        else
+          return render json: { error: "Location is required for buy now" }, status: :unprocessable_entity
+        end
       end
+
+      qty = params[:quantity].to_i.positive? ? params[:quantity].to_i : 1
+      payment_method = params[:payment_method].to_s.presence || "cod"
+
+      order = B2bDirectOrderService.new(
+        buyer: current_dealer,
+        dealer_product_id: post.dealer_product_id,
+        quantity: qty,
+        latitude: buyer_latitude,
+        longitude: buyer_longitude,
+        radius_km: params[:radius_km].to_i.positive? ? params[:radius_km].to_i : 10,
+        payment_method: payment_method,
+        payment_status: payment_method == "cod" ? "pending" : "paid"
+      ).call
+
+      render json: {
+        data: B2bOrderSerializer.render(order, base_url: request.base_url),
+        message: "Buy now request sent to seller"
+      }, status: :created
+    rescue StandardError => e
+      render json: { error: e.message }, status: :unprocessable_entity
     end
 
     def rate
@@ -216,6 +253,44 @@ module Api
       return if current_user_type == "AdminUser"
 
       render json: { error: "Admin only" }, status: :forbidden
+    end
+
+    def admin_update_post
+      unless current_admin.can_access?(:wholesaler_posts, :write)
+        return render json: { error: "Access denied" }, status: :forbidden
+      end
+
+      post = WholesalerPost.find_by(id: params[:id])
+      return render json: { error: "Post not found" }, status: :not_found unless post
+
+      unless admin_can_access_post?(post)
+        return render json: { error: "Access denied for this post" }, status: :forbidden
+      end
+
+      if params[:wholesaler_post].key?(:pincodes) && params[:wholesaler_post][:pincodes].blank?
+        return render json: { error: "At least one pincode required" }, status: :unprocessable_entity
+      end
+
+      post.assign_attributes(admin_wholesaler_post_params)
+      post.reviewed_by_admin = current_admin
+      post.reviewed_at = Time.current
+
+      if post.save
+        render json: { data: post_payload(post), message: "Post updated successfully" }, status: :ok
+      else
+        render json: { error: post.errors.full_messages }, status: :unprocessable_entity
+      end
+    end
+
+    def admin_can_access_post?(post)
+      return true if current_admin.super_admin?
+
+      scope = current_admin.accessible_wholesale_posts(WholesalerPost.where(id: post.id))
+      scope.exists?
+    end
+
+    def admin_wholesaler_post_params
+      params.require(:wholesaler_post).permit(:title, :body, :price, :stock_quantity, :modal_no, pincodes: [])
     end
 
     def wholesaler_post_params

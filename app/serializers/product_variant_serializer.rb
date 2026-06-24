@@ -1,25 +1,34 @@
 class ProductVariantSerializer < ApplicationSerializer
-  attributes :product_id, :variant_sku, :price, :selling_price, :dealer_price, :dealer_selling_price, 
-             :discount_percentage, :is_active, :formatted_variant_attributes, :deleted_at, :media, :tax_rate, :tax_inclusive
+  include MediaPayloadBuilder
+  attributes :product_id, :variant_sku, :price, :selling_price, :dealer_price, :dealer_selling_price, :consumer_discount_percentage,
+             :dealer_discount_percentage, :is_active, :formatted_variant_attributes, :deleted_at, :media, :tax_rate, :tax_inclusive
+
+  def media
+    build_media_payloads(object.display_media_attachments, primary_blob_id: object.display_primary_blob_id)
+  end
 
   def price
-    object.inclusive_price.to_f
+    object.price.to_f
   end
 
   def selling_price
-    object.inclusive_selling_price.to_f
+    object.selling_price.to_f
   end
 
   def dealer_price
-    object.inclusive_dealer_price.to_f
+    object.dealer_price.to_f
   end
 
   def dealer_selling_price
-    object.inclusive_dealer_selling_price.to_f
+    object.dealer_selling_price.to_f
   end
 
-  def media
-    object.display_media_attachments.map { |file| file_payload(file) }
+  def consumer_discount_percentage
+    object.calculate_discount_percentage(:account)
+  end
+
+  def dealer_discount_percentage
+    object.calculate_discount_percentage(:dealer)
   end
 
   def tax_rate
@@ -60,16 +69,5 @@ class ProductVariantSerializer < ApplicationSerializer
     else
       []
     end
-  end
-  private
-
-  def file_payload(file)
-    host = options[:base_url] || Rails.application.config.active_storage.default_url_options&.dig(:host)
-    {
-      id: file.id,
-      url: Rails.application.routes.url_helpers.rails_blob_url(file, host: host),
-      filename: file.filename.to_s,
-      content_type: file.content_type.to_s
-    }
   end
 end

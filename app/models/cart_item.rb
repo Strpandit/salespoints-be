@@ -17,16 +17,24 @@ class CartItem < ApplicationRecord
   end
 
   def set_unit_price
-    self.unit_price =
-      if cart.dealer?
-        product_variant.inclusive_dealer_selling_price || product.dealer_selling_price || 0
-      else
-        product_variant.inclusive_selling_price || product.selling_price || 0
-      end
+    pricing = Pricing::PriceCalculator.new(
+      variant: product_variant,
+      quantity: 1,
+      user_type: cart.dealer? ? :dealer : :account
+    ).call
+
+    self.unit_price = pricing[:unit_price]
   end
 
   def set_total_price
-    self.total_price = unit_price * quantity
+    pricing = Pricing::PriceCalculator.new(
+      variant: product_variant,
+      quantity: quantity,
+      user_type: cart.dealer? ? :dealer : :account
+    ).call
+
+    self.unit_price = pricing[:unit_price]
+    self.total_price = pricing[:subtotal]
   end
 
   def stock_available

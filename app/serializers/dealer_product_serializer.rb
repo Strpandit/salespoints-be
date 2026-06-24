@@ -1,6 +1,7 @@
 class DealerProductSerializer < ApplicationSerializer
   attributes :stock_quantity, :is_active, :approve_status, :created_at, :updated_at, :distance_km,
-             :media, :product_media, :variant_media
+             :media, :product_media, :variant_media, :consumer_discount_percentage,
+             :dealer_discount_percentage,
 
   belongs_to :dealer
   belongs_to :product
@@ -10,6 +11,14 @@ class DealerProductSerializer < ApplicationSerializer
     object.respond_to?(:distance_km) ? object.distance_km : nil
   end
 
+  def consumer_discount_percentage
+    object.product_variant.calculate_discount_percentage(:account)
+  end
+
+  def dealer_discount_percentage
+    object.product_variant.calculate_discount_percentage(:dealer)
+  end
+  
   def media
     object.display_media_attachments.map { |file| file_payload(file) }
   end

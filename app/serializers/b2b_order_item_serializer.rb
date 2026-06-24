@@ -1,14 +1,34 @@
 class B2bOrderItemSerializer < ApplicationSerializer
   attributes :dealer_product_id, :product_variant_id, :quantity, :status, :responded_at,
-             :unit_price, :total_price, :product_name, :variant_sku, :assigned_dealer_name,
+             :unit_price, :taxable_amount, :gst_percentage, :gst_amount, :total_price, :product_name, :variant_sku, :assigned_dealer_name,
              :media, :product_media, :variant_media
 
+  def pricing
+    @pricing ||= Pricing::PriceCalculator.new(
+      variant: object.product_variant,
+      quantity: object.quantity,
+      user_type: :dealer
+    ).call
+  end
+
   def unit_price
-    object.unit_price.to_f
+    pricing[:unit_price]
+  end
+
+  def taxable_amount
+    pricing[:taxable_amount]
+  end
+
+  def gst_percentage
+    pricing[:gst_percentage]
+  end
+
+  def gst_amount
+    pricing[:gst_amount]
   end
 
   def total_price
-    object.total_price.to_f
+    pricing[:total]
   end
 
   def product_name

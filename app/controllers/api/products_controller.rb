@@ -79,9 +79,14 @@ module Api
       end
     end
 
-    def update
-      if @product.update(normalized_product_params)
-        notify_admins_entity_updated(@product)
+  def update
+    purge_blob_ids = extract_purge_blob_ids
+    variant_purge_map = extract_variant_purge_blob_ids
+
+    if @product.update(normalized_product_params)
+      purge_media_blobs!(@product, purge_blob_ids)
+      apply_variant_media_purges!(variant_purge_map)
+      notify_admins_entity_updated(@product)
         render json: serialize_resource(@product, ProductSerializer, base_url: request.base_url).merge(
           message: "Product updated successfully"
         ), status: :ok
@@ -116,12 +121,16 @@ module Api
         :name, :slug, :sku, :desc, :material, :brand_id, :category_id,
         :is_featured, :is_new, :is_active, :tax_rate,
         :price, :selling_price, :dealer_price, :dealer_selling_price, :discount_percentage,
+        :primary_media_blob_id, :primary_new_media_index,
+        { purge_media_blob_ids: [] },
         media: [],
         features: [], care_instructions: [],
         product_specifications_attributes: [:id, :key, :value, :_destroy],
         product_variants_attributes: [
           :id, :variant_sku, :price, :selling_price, :dealer_price,
           :dealer_selling_price, :discount_percentage, :is_active, :_destroy,
+          :primary_media_blob_id, :primary_new_media_index,
+          { purge_media_blob_ids: [] },
           { media: [], variant_attributes: [:key, :value] }
         ]
       )
@@ -193,6 +202,53 @@ module Api
 
     def current_admin
       current_user
+    end
+
+    def extract_purge_blob_ids
+      Array(params.dig(:product, :purge_media_blob_ids)).map(&:to_i).reject(&:zero?)
+    end
+
+    def extract_variant_purge_blob_ids
+      variants = params.dig(:product, :product_variants_attributes)
+      return {} if variants.blank?
+
+      # Convert ActionController::Parameters to Hash
+      variants = variants.to_unsafe_h if variants.is_a?(ActionController::Parameters)
+
+      map = {}
+
+      variants.each do |_index, attrs|
+        attrs = attrs.to_unsafe_h if attrs.is_a?(ActionController::Parameters)
+
+        variant_id = attrs["id"] || attrs[:id]
+        next if variant_id.blank?
+
+        blob_ids = Array(attrs["purge_media_blob_ids"] || attrs[:purge_media_blob_ids])
+                    .map(&:to_i)
+                    .reject(&:zero?)
+
+        map[variant_id.to_i] = blob_ids if blob_ids.any?
+      end
+
+      map
+    end
+
+    def purge_media_blobs!(record, blob_ids)
+      return if blob_ids.blank?
+
+      record.media_attachments.each do |attachment|
+        attachment.purge if blob_ids.include?(attachment.blob_id)
+      end
+      if blob_ids.include?(record.primary_media_blob_id)
+        record.update_column(:primary_media_blob_id, nil)
+      end
+    end
+
+    def apply_variant_media_purges!(variant_purge_map)
+      variant_purge_map.each do |variant_id, blob_ids|
+        variant = @product.product_variants.find_by(id: variant_id)
+        purge_media_blobs!(variant, blob_ids) if variant
+      end
     end
 
     ### notification helpers

@@ -1,5 +1,6 @@
 class Product < ApplicationRecord
   include AttachableMediaValidations
+  include PrimaryMediaAttachable
 
   belongs_to :category
   belongs_to :brand
@@ -66,50 +67,6 @@ class Product < ApplicationRecord
     product_variants.active.exists?(
       "price IS NOT NULL OR selling_price IS NOT NULL OR dealer_price IS NOT NULL OR dealer_selling_price IS NOT NULL"
     )
-  end
-
-  def best_price
-    direct_price = product_attribute_value(:price)
-    return direct_price.to_d if direct_price.present? && !has_variant_prices?
-    product_variants.active.first&.price.to_d || direct_price.to_d || 0.to_d
-  end
-
-  def best_selling_price
-    direct_price = product_attribute_value(:selling_price)
-    return direct_price.to_d if direct_price.present? && !has_variant_prices?
-    product_variants.active.first&.selling_price.to_d || direct_price.to_d || 0.to_d
-  end
-
-  def best_dealer_price
-    direct_price = product_attribute_value(:dealer_price)
-    return direct_price.to_d if direct_price.present? && !has_variant_prices?
-    product_variants.active.first&.dealer_price.to_d || direct_price.to_d || 0.to_d
-  end
-
-  def best_dealer_selling_price
-    direct_price = product_attribute_value(:dealer_selling_price)
-    return direct_price.to_d if direct_price.present? && !has_variant_prices?
-    product_variants.active.first&.dealer_selling_price.to_d || direct_price.to_d || 0.to_d
-  end
-
-  def best_discount_percentage
-    direct_discount = product_attribute_value(:discount_percentage)
-    return direct_discount.to_d if direct_discount.present? && !has_variant_prices?
-    product_variants.active.first&.discount_percentage.to_d || direct_discount.to_d || 0.to_d
-  end
-
-  def inclusive_amount(amount)
-    return 0.to_d if amount.blank?
-    base_amount = amount.to_d
-    (base_amount + (base_amount * tax_rate.to_d / 100)).round(2)
-  end
-
-  def tax_amount_from_inclusive(amount)
-    return 0.to_d if amount.blank?
-    gross_amount = amount.to_d
-    rate = tax_rate.to_d
-    return 0.to_d if rate <= 0
-    (gross_amount - (gross_amount / (1 + (rate / 100)))).round(2)
   end
 
   def price_source

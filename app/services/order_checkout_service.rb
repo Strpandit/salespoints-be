@@ -27,19 +27,60 @@ class OrderCheckoutService
         raise StandardError, "Online payment currently supports single-dealer checkout only. Please place separate orders or choose COD."
       end
 
-      totals = build_group_totals(grouped_items)
+      discount_remaining = @cart.coupon_discount_amount.to_d
 
       grouped_items.each do |dealer_id, items|
-        financials = MarketplaceOrderFinancials.build(total_amount: totals.fetch(dealer_id)[:total])
+        subtotal = 0.to_d
+        tax = 0.to_d
+
+        pricing_rows = []
+
+        items.each do |ci|
+          dp = ci.dealer_product
+
+          raise StandardError, "Product not available" if dp.blank? || !dp.sellable?
+
+          raise StandardError, "Insufficient stock for #{dp.product&.name || 'item'}" if dp.stock_quantity.to_i < ci.quantity.to_i
+
+          pricing = Pricing::PriceCalculator.new(
+            variant: ci.product_variant,
+            quantity: ci.quantity,
+            user_type: @buyer.is_a?(Dealer) ? :dealer : :account
+          ).call
+
+          subtotal += pricing[:subtotal]
+          tax += pricing[:gst_amount]
+
+          pricing_rows << [ci, pricing]
+        end
+
+        share =
+          if @cart.subtotal_amount.to_d.positive?
+            subtotal / @cart.subtotal_amount.to_d
+          else
+            0
+          end
+
+        discount =
+          if index == grouped_items.size - 1
+            discount_remaining
+          else
+            allocated = (@cart.coupon_discount_amount.to_d * share).round(2)
+            discount_remaining -= allocated
+            allocated
+          end
+
+        total = subtotal - discount
+        financials = MarketplaceOrderFinancials.build(order_total: total)
 
         order = Order.create!(
           buyer: @buyer,
           seller_dealer_id: dealer_id,
           status: "pending",
-          subtotal_amount: totals.fetch(dealer_id)[:subtotal],
-          tax_amount: totals.fetch(dealer_id)[:tax],
-          discount_amount: totals.fetch(dealer_id)[:discount],
-          total_amount: totals.fetch(dealer_id)[:total],
+          subtotal_amount: subtotal,
+          tax_amount: tax,
+          discount_amount: discount,
+          total_amount: total,
           coupon_code: @cart.coupon_code,
           payment_method: @payment_method,
           payment_status: "pending",
@@ -55,21 +96,19 @@ class OrderCheckoutService
           refund_amount: financials[:refund_amount]
         )
 
-        items.each do |ci|
-          dp = ci.dealer_product
-          raise StandardError, "Product not available" if dp.blank? || !dp.sellable?
-          raise StandardError, "Insufficient stock for #{dp.product&.name || 'item'}" if dp.stock_quantity.to_i < ci.quantity.to_i
-
+        pricing_rows.each do |ci, pricing|          
           OrderItem.create!(
             order: order,
             dealer_product_id: ci.dealer_product_id,
             product_variant_id: ci.product_variant_id,
             quantity: ci.quantity,
-            unit_price: ci.unit_price,
-            total_price: ci.total_price
+            unit_price: pricing[:unit_price],
+            total_price: pricing[:subtotal]
           )
 
-          dp.update!(stock_quantity: dp.stock_quantity.to_i - ci.quantity.to_i)
+          ci.dealer_product.update!(
+              stock_quantity: ci.dealer_product.stock_quantity.to_i - ci.quantity.to_i
+            )
         end
 
         orders << order
@@ -117,36 +156,5 @@ class OrderCheckoutService
       order_id: order.id,
       provider: "cashfree"
     }
-  end
-
-  def build_group_totals(grouped_items)
-    discount_remaining = @cart.coupon_discount_amount.to_d
-    totals = {}
-
-    grouped_items.each_with_index do |(dealer_id, items), index|
-      subtotal = items.sum { |item| item.total_price.to_d }
-      tax = items.sum do |item|
-        item.product_variant&.tax_amount_from_inclusive(item.total_price) || 0.to_d
-      end
-
-      discount =
-        if index == grouped_items.size - 1
-          discount_remaining
-        else
-          share = @cart.subtotal_amount.to_d.positive? ? (subtotal / @cart.subtotal_amount.to_d) : 0
-          allocated = (@cart.coupon_discount_amount.to_d * share).round(2)
-          discount_remaining -= allocated
-          allocated
-        end
-
-      totals[dealer_id] = {
-        subtotal: subtotal.round(2),
-        tax: tax.round(2),
-        discount: discount.round(2),
-        total: (subtotal - discount).round(2)
-      }
-    end
-
-    totals
   end
 end

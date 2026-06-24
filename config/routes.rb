@@ -25,15 +25,18 @@ Rails.application.routes.draw do
     post 'password', to: 'passwords#create'
     post 'set_password', to: 'passwords#update'
 
-    # Cart routes
-    get '/cart', to: 'carts#current_cart'
-    post '/cart/add_item', to: 'carts#add_item'
-    patch '/cart/update_item', to: 'carts#update_item'
-    delete '/cart/remove_item', to: 'carts#remove_item'
-    post '/cart/apply_coupon', to: 'carts#apply_coupon'
-    delete '/cart/remove_coupon', to: 'carts#remove_coupon'
-    post '/cart/checkout', to: 'carts#checkout'
+    # Cart routes — disabled (direct buy now only)
+    # get '/cart', to: 'carts#current_cart'
+    # post '/cart/add_item', to: 'carts#add_item'
+    # patch '/cart/update_item', to: 'carts#update_item'
+    # delete '/cart/remove_item', to: 'carts#remove_item'
+    # post '/cart/apply_coupon', to: 'carts#apply_coupon'
+    # delete '/cart/remove_coupon', to: 'carts#remove_coupon'
+    # post '/cart/checkout', to: 'carts#checkout'
     resources :orders, only: [:index, :show, :update] do
+      collection do
+        post :buy_now
+      end
       member do
         post :refund
         post :release_settlement
@@ -120,6 +123,7 @@ Rails.application.routes.draw do
     # Dealers routes
     resources :dealers do
       get :active_dealers, on: :collection
+      get :admin_overview, on: :member
       patch :block, on: :member
       patch :unblock, on: :member
       patch :approve, on: :member
@@ -150,7 +154,8 @@ Rails.application.routes.draw do
     end
     resources :b2b_orders, only: [:index] do
       collection do
-        post :place_from_cart
+        # post :place_from_cart  # disabled — use place_direct
+        post :place_direct
       end
       member do
         post :accept

@@ -19,32 +19,11 @@ class PaymentAttemptFinalizationService
       raise StandardError, "Payment snapshot is empty" if items.empty?
 
       grouped_items = items.group_by { |item| item["dealer_id"] || dealer_id_for(item["dealer_product_id"]) }
-      totals = build_group_totals(grouped_items, attempt)
 
-      grouped_items.each do |dealer_id, snapshot_items|
-        financials = MarketplaceOrderFinancials.build(total_amount: totals.fetch(dealer_id)[:total])
-
-        order = Order.create!(
-          buyer: attempt.buyer,
-          seller_dealer_id: dealer_id,
-          status: "pending",
-          subtotal_amount: totals.fetch(dealer_id)[:subtotal],
-          tax_amount: totals.fetch(dealer_id)[:tax],
-          discount_amount: totals.fetch(dealer_id)[:discount],
-          total_amount: totals.fetch(dealer_id)[:total],
-          coupon_code: attempt.coupon_code,
-          payment_method: "online",
-          payment_status: "paid",
-          payment_gateway: attempt.payment_gateway,
-          billing_address: attempt.billing_address,
-          shipping_address: attempt.shipping_address,
-          payment_reference: attempt.payment_reference,
-          payment_confirmed_at: attempt.paid_at || Time.current,
-          gateway_order_reference: attempt.gateway_order_reference,
-          payment_session_id: attempt.payment_session_id,
-          payment_gateway_payload: attempt.payment_gateway_payload
-        )
-        order.update!(financials)
+      grouped_items.each_with_index do |(dealer_id, snapshot_items), index|
+        subtotal = 0.to_d
+        tax = 0.to_d
+        pricing_rows = []
 
         snapshot_items.each do |snapshot_item|
           dealer_product = DealerProduct.lock.find(snapshot_item["dealer_product_id"])
@@ -52,17 +31,75 @@ class PaymentAttemptFinalizationService
 
           qty = snapshot_item["quantity"].to_i
           raise StandardError, "Insufficient stock for #{dealer_product.product&.name || 'item'}" if dealer_product.stock_quantity.to_i < qty
-
-          OrderItem.create!(
-            order: order,
-            dealer_product_id: dealer_product.id,
-            product_variant_id: snapshot_item["product_variant_id"],
+          
+          pricing = Pricing::PriceCalculator.new(
+            variant: dealer_product.product_variant,
             quantity: qty,
-            unit_price: BigDecimal(snapshot_item["unit_price"].to_s),
-            total_price: BigDecimal(snapshot_item["total_price"].to_s)
-          )
+            user_type: attempt.buyer.is_a?(Dealer) ? :dealer : :account
+          ).call
 
-          dealer_product.update!(stock_quantity: dealer_product.stock_quantity.to_i - qty)
+          subtotal += pricing[:subtotal]
+          tax += pricing[:gst_amount]
+
+          pricing_rows << [
+            dealer_product,
+            snapshot_item,
+            pricing
+          ]
+
+          discount_remaining ||= BigDecimal(attempt.cart_snapshot["discount_amount"].to_s)
+          cart_subtotal = BigDecimal(attempt.cart_snapshot["subtotal_amount"].to_s)
+          share = cart_subtotal.positive? ? subtotal / cart_subtotal : 0
+
+          discount =
+            if index == grouped_items.size - 1
+              discount_remaining
+            else
+              allocated = (BigDecimal(attempt.cart_snapshot["discount_amount"].to_s) * share).round(2)
+
+              discount_remaining -= allocated
+              allocated
+            end
+
+          total = subtotal - discount
+          financials = MarketplaceOrderFinancials.build(total_amount: total)
+
+          order = Order.create!(
+            buyer: attempt.buyer,
+            seller_dealer_id: dealer_id,
+            status: "pending",
+            subtotal_amount: subtotal,
+            tax_amount: tax,
+            discount_amount: discount,
+            total_amount: total,
+            coupon_code: attempt.coupon_code,
+            payment_method: "online",
+            payment_status: "paid",
+            payment_gateway: attempt.payment_gateway,
+            billing_address: attempt.billing_address,
+            shipping_address: attempt.shipping_address,
+            payment_reference: attempt.payment_reference,
+            payment_confirmed_at: attempt.paid_at || Time.current,
+            gateway_order_reference: attempt.gateway_order_reference,
+            payment_session_id: attempt.payment_session_id,
+            payment_gateway_payload: attempt.payment_gateway_payload
+          )
+          order.update!(financials)
+
+          pricing_rows.each do |dealer_product, snapshot_item, pricing|
+
+            OrderItem.create!(
+              order: order,
+              dealer_product_id: dealer_product.id,
+              product_variant_id: snapshot_item["product_variant_id"],
+              quantity: snapshot_item["quantity"],
+              unit_price: pricing[:unit_price],
+              total_price: pricing[:subtotal]
+            )
+
+            qty = snapshot_item["quantity"].to_i
+
+            dealer_product.update!(stock_quantity: dealer_product.stock_quantity - qty)
         end
 
         orders << order
@@ -125,39 +162,6 @@ class PaymentAttemptFinalizationService
   def load_orders(attempt)
     ids = Array(attempt.result_payload["order_ids"])
     Order.where(id: ids).order(:id)
-  end
-
-  def build_group_totals(grouped_items, attempt)
-    discount_remaining = BigDecimal(attempt.cart_snapshot["discount_amount"].to_s)
-    cart_subtotal = BigDecimal(attempt.cart_snapshot["subtotal_amount"].to_s)
-    totals = {}
-
-    grouped_items.each_with_index do |(dealer_id, items), index|
-      subtotal = items.sum { |item| BigDecimal(item["total_price"].to_s) }
-      tax = items.sum do |item|
-        variant = ProductVariant.find(item["product_variant_id"])
-        variant.tax_amount_from_inclusive(BigDecimal(item["total_price"].to_s))
-      end
-
-      discount =
-        if index == grouped_items.size - 1
-          discount_remaining
-        else
-          share = cart_subtotal.positive? ? (subtotal / cart_subtotal) : 0
-          allocated = (BigDecimal(attempt.cart_snapshot["discount_amount"].to_s) * share).round(2)
-          discount_remaining -= allocated
-          allocated
-        end
-
-      totals[dealer_id] = {
-        subtotal: subtotal.round(2),
-        tax: tax.round(2),
-        discount: discount.round(2),
-        total: (subtotal - discount).round(2)
-      }
-    end
-
-    totals
   end
 
   def consume_coupon!(attempt)

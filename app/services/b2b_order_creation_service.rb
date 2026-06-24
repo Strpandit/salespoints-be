@@ -78,23 +78,39 @@ class B2bOrderCreationService
       if @cart_snapshot.present?
         Array(@cart_snapshot["items"]).map(&:stringify_keys)
       else
-        @cart.cart_items.includes(:product_variant).map do |ci|
+        @cart.cart_items.includes(
+          dealer_product: [:product_variant]
+        ).map do |ci|
+
+          pricing = Pricing::PriceCalculator.new(
+            variant: ci.dealer_product.product_variant,
+            quantity: ci.quantity,
+            user_type: :dealer
+          ).call
+
           {
+            "dealer_product_id" => ci.dealer_product_id,
             "product_variant_id" => ci.product_variant_id,
             "quantity" => ci.quantity,
-            "unit_price" => ci.unit_price.to_d,
-            "total_price" => ci.total_price.to_d
+            "unit_price" => pricing[:unit_price],
+            "total_price" => pricing[:subtotal],
+            "taxable_amount" => pricing[:taxable_amount],
+            "gst_amount" => pricing[:gst_amount]
           }
         end
       end
   end
 
   def snapshot_subtotal
-    @cart_snapshot.present? ? @cart_snapshot.fetch("subtotal_amount", 0).to_d : @cart.subtotal_amount.to_d
+    snapshot_items.sum do |item|
+      BigDecimal(item["total_price"].to_s)
+    end
   end
 
   def snapshot_tax
-    @cart_snapshot.present? ? @cart_snapshot.fetch("tax_amount", 0).to_d : @cart.tax_amount.to_d
+    snapshot_items.sum do |item|
+      BigDecimal(item["gst_amount"].to_s)
+    end
   end
 
   def snapshot_discount
@@ -102,7 +118,7 @@ class B2bOrderCreationService
   end
 
   def snapshot_total
-    @cart_snapshot.present? ? @cart_snapshot.fetch("total_amount", 0).to_d : @cart.grand_total.to_d
+    snapshot_subtotal - snapshot_discount
   end
 
   def snapshot_coupon_code

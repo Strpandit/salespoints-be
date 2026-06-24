@@ -9,13 +9,15 @@ class Cart < ApplicationRecord
   end
 
   def subtotal_amount
-    total_amount.to_d
+    pricing_summary[:subtotal]
   end
 
   def tax_amount
-    cart_items.includes(dealer_product: :product).sum do |item|
-      item.product_variant&.tax_amount_from_inclusive(item.total_price) || 0.to_d
-    end
+    pricing_summary[:gst_amount]
+  end
+
+  def taxable_amount
+    pricing_summary[:taxable_amount]
   end
 
   def coupon_discount_amount
@@ -68,5 +70,33 @@ class Cart < ApplicationRecord
 
   def dealer?
     buyer_type == "Dealer"
+  end
+
+  private
+
+  def pricing_summary
+    @pricing_summary ||= begin
+      subtotal = 0.to_d
+      taxable = 0.to_d
+      gst = 0.to_d
+
+      cart_items.includes(product_variant: :product).each do |item|
+        pricing = Pricing::PriceCalculator.new(
+          variant: item.product_variant,
+          quantity: item.quantity,
+          user_type: dealer? ? :dealer : :account
+        ).call
+
+        subtotal += pricing[:subtotal]
+        taxable += pricing[:taxable_amount]
+        gst += pricing[:gst_amount]
+      end
+
+      {
+        subtotal: subtotal.round(2),
+        taxable_amount: taxable.round(2),
+        gst_amount: gst.round(2)
+      }
+    end
   end
 end

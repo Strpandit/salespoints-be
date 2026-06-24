@@ -34,6 +34,8 @@ module Api
     end
 
     def place_from_cart
+      return render json: { error: "Cart checkout is disabled. Use direct buy now (place_direct)." }, status: :gone
+
       cart = current_dealer.cart
       return render json: { error: "Cart is empty" }, status: :unprocessable_entity if cart.blank? || cart.cart_items.empty?
 
@@ -86,6 +88,39 @@ module Api
       ).call
 
       render json: serialize_resource(order, B2bOrderSerializer, base_url: request.base_url).merge(message: "B2B request broadcasted to matching nearby dealers"), status: :created
+    rescue StandardError => e
+      render json: { error: e.message }, status: :unprocessable_entity
+    end
+
+    def place_direct
+      buyer_latitude = params[:latitude].presence&.to_f
+      buyer_longitude = params[:longitude].presence&.to_f
+      if buyer_latitude.blank? || buyer_longitude.blank?
+        return render json: { error: "Current location is required to place B2B request" }, status: :unprocessable_entity
+      end
+
+      radius = params[:radius_km].to_i
+      radius = 10 if radius <= 0
+      payment_method = params[:payment_method].to_s.presence || "cod"
+
+      if payment_method == "online"
+        return render json: { error: "Online payment for direct buy is not yet supported. Use COD." }, status: :unprocessable_entity
+      end
+
+      order = B2bDirectOrderService.new(
+        buyer: current_dealer,
+        dealer_product_id: params[:dealer_product_id],
+        quantity: params[:quantity],
+        latitude: buyer_latitude,
+        longitude: buyer_longitude,
+        radius_km: radius,
+        payment_method: payment_method,
+        payment_status: payment_method == "cod" ? "pending" : "paid"
+      ).call
+
+      render json: serialize_resource(order, B2bOrderSerializer, base_url: request.base_url).merge(
+        message: "B2B order request sent to seller"
+      ), status: :created
     rescue StandardError => e
       render json: { error: e.message }, status: :unprocessable_entity
     end

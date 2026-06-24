@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_06_11_093651) do
+ActiveRecord::Schema[8.0].define(version: 2026_06_23_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -133,12 +133,15 @@ ActiveRecord::Schema[8.0].define(version: 2026_06_11_093651) do
     t.bigint "approved_by_id"
     t.decimal "salary", precision: 15, scale: 2
     t.bigint "deleted_by_id"
+    t.date "joining_date"
+    t.string "pincodes", default: [], array: true
     t.index ["approval_status"], name: "index_admin_users_on_approval_status"
     t.index ["approved_by_id"], name: "index_admin_users_on_approved_by_id"
     t.index ["deleted_by_id"], name: "index_admin_users_on_deleted_by_id"
     t.index ["email"], name: "index_admin_users_on_email", unique: true
     t.index ["is_super_admin"], name: "index_admin_users_on_is_super_admin"
     t.index ["phone"], name: "index_admin_users_on_phone", unique: true
+    t.index ["pincodes"], name: "index_admin_users_on_pincodes", using: :gin
   end
 
   create_table "b2b_order_items", force: :cascade do |t|
@@ -218,6 +221,16 @@ ActiveRecord::Schema[8.0].define(version: 2026_06_11_093651) do
     t.index ["payment_status"], name: "index_b2b_orders_on_payment_status"
     t.index ["seller_dealer_id"], name: "index_b2b_orders_on_seller_dealer_id"
     t.index ["status"], name: "index_b2b_orders_on_status"
+  end
+
+  create_table "brand_categories", force: :cascade do |t|
+    t.bigint "brand_id", null: false
+    t.bigint "category_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["brand_id", "category_id"], name: "index_brand_categories_on_brand_id_and_category_id", unique: true
+    t.index ["brand_id"], name: "index_brand_categories_on_brand_id"
+    t.index ["category_id"], name: "index_brand_categories_on_category_id"
   end
 
   create_table "brands", force: :cascade do |t|
@@ -449,10 +462,12 @@ ActiveRecord::Schema[8.0].define(version: 2026_06_11_093651) do
     t.string "dealer_code", null: false
     t.decimal "settlement_balance", precision: 14, scale: 2, default: "0.0", null: false
     t.bigint "deleted_by_id"
+    t.string "pincode"
     t.index ["dealer_code"], name: "index_dealers_on_dealer_code", unique: true
     t.index ["deleted_by_id"], name: "index_dealers_on_deleted_by_id"
     t.index ["email"], name: "index_dealers_on_email", unique: true
     t.index ["phone"], name: "index_dealers_on_phone", unique: true
+    t.index ["pincode"], name: "index_dealers_on_pincode"
   end
 
   create_table "deletion_requests", force: :cascade do |t|
@@ -631,6 +646,8 @@ ActiveRecord::Schema[8.0].define(version: 2026_06_11_093651) do
     t.datetime "deleted_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.bigint "primary_media_blob_id"
+    t.index ["primary_media_blob_id"], name: "index_product_variants_on_primary_media_blob_id"
     t.index ["product_id"], name: "index_product_variants_on_product_id"
     t.index ["variant_sku"], name: "index_product_variants_on_variant_sku", unique: true
   end
@@ -652,9 +669,17 @@ ActiveRecord::Schema[8.0].define(version: 2026_06_11_093651) do
     t.datetime "deleted_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.decimal "price", precision: 15, scale: 2
+    t.decimal "selling_price", precision: 15, scale: 2
+    t.decimal "dealer_price", precision: 15, scale: 2
+    t.decimal "dealer_selling_price", precision: 15, scale: 2
+    t.integer "discount_percentage", default: 0
+    t.bigint "primary_media_blob_id"
+    t.integer "stock_quantity", default: 1
     t.index ["brand_id"], name: "index_products_on_brand_id"
     t.index ["category_id"], name: "index_products_on_category_id"
     t.index ["is_featured"], name: "index_products_on_is_featured"
+    t.index ["primary_media_blob_id"], name: "index_products_on_primary_media_blob_id"
     t.index ["sku"], name: "index_products_on_sku", unique: true
     t.index ["slug"], name: "index_products_on_slug", unique: true
   end
@@ -816,9 +841,11 @@ ActiveRecord::Schema[8.0].define(version: 2026_06_11_093651) do
     t.datetime "reviewed_at"
     t.text "rejection_reason"
     t.bigint "reviewed_by_admin_id"
+    t.string "pincodes", default: [], array: true
     t.index ["approve_status"], name: "index_wholesaler_posts_on_approve_status"
     t.index ["dealer_id"], name: "index_wholesaler_posts_on_dealer_id"
     t.index ["dealer_product_id"], name: "index_wholesaler_posts_on_dealer_product_id"
+    t.index ["pincodes"], name: "index_wholesaler_posts_on_pincodes", using: :gin
     t.index ["reviewed_by_admin_id"], name: "index_wholesaler_posts_on_reviewed_by_admin_id"
   end
 
@@ -838,6 +865,8 @@ ActiveRecord::Schema[8.0].define(version: 2026_06_11_093651) do
   add_foreign_key "b2b_orders", "dealers", column: "buyer_dealer_id"
   add_foreign_key "b2b_orders", "dealers", column: "seller_dealer_id"
   add_foreign_key "b2b_orders", "payment_attempts", column: "buyer_payment_attempt_id"
+  add_foreign_key "brand_categories", "brands"
+  add_foreign_key "brand_categories", "categories"
   add_foreign_key "cart_items", "carts"
   add_foreign_key "cart_items", "dealer_products"
   add_foreign_key "cart_items", "product_variants"

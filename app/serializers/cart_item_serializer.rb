@@ -1,16 +1,36 @@
 class CartItemSerializer < ApplicationSerializer
-  attributes :quantity, :cart_id, :dealer_product_id, :product_variant_id, :unit_price, :total_price,
-             :media, :product_media, :variant_media
+  attributes :quantity, :cart_id, :dealer_product_id, :product_variant_id, :unit_price, :taxable_amount, 
+             :gst_percentage, :gst_amount, :total_price, :media, :product_media, :variant_media
 
   belongs_to :dealer_product
   belongs_to :product_variant
 
+  def pricing
+    @pricing ||= Pricing::PriceCalculator.new(
+      variant: object.product_variant,
+      quantity: object.quantity,
+      user_type: object.cart.dealer? ? :dealer : :account
+    ).call
+  end
+
   def unit_price
-    object.unit_price.to_f
+    pricing[:unit_price]
+  end
+
+  def taxable_amount
+    pricing[:taxable_amount]
+  end
+
+  def gst_percentage
+    pricing[:gst_percentage]
+  end
+
+  def gst_amount
+    pricing[:gst_amount]
   end
 
   def total_price
-    object.total_price.to_f
+    pricing[:total]
   end
 
   def media

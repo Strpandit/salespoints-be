@@ -21,13 +21,13 @@ class B2bOrderDealerResponseService
       updated_items = resolve_order_items_for_seller(candidate_items)
       raise StandardError, "You don't have enough stock for the selected items" if updated_items.blank?
 
-      updated_items.each do |item, dealer_product, unit_price|
+      updated_items.map { |item, dealer_product, pricing| item.id }
         item.update!(
           dealer_product_id: dealer_product.id,
           status: "accepted",
           responded_at: Time.current,
-          unit_price: unit_price,
-          total_price: unit_price * item.quantity.to_i
+          unit_price: pricing[:unit_price],
+          total_price: pricing[:subtotal]
         )
       end
 
@@ -35,7 +35,7 @@ class B2bOrderDealerResponseService
       lock_order.recalculate_totals!
       lock_order.refresh_status!
 
-      updated_items.each do |item, dealer_product, _unit_price|
+      updated_items.each do |item, dealer_product, pricing|
         dealer_product.reload
         dealer_product.update!(stock_quantity: dealer_product.stock_quantity.to_i - item.quantity.to_i)
       end
@@ -96,11 +96,16 @@ class B2bOrderDealerResponseService
 
     items_scope.each do |item|
       dealer_product = @dealer.dealer_products.live.find_by(product_variant_id: item.product_variant_id)
-      return nil if dealer_product.blank? || dealer_product.stock_quantity.to_i < item.quantity.to_i
+      return nil if dealer_product.blank?
+      return nil if dealer_product.stock_quantity.to_i < item.quantity.to_i
 
-      unit_price = dealer_product.product_variant.inclusive_dealer_selling_price.to_d
-      unit_price = dealer_product.product_variant.dealer_selling_price.to_d if unit_price.zero?
-      resolved << [item, dealer_product, unit_price]
+      pricing = Pricing::PriceCalculator.new(
+        variant: dealer_product.product_variant,
+        quantity: item.quantity,
+        user_type: :dealer
+      ).call
+
+      resolved << [item, dealer_product, pricing]
     end
 
     resolved

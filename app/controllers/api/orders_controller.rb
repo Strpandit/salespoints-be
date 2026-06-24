@@ -1,5 +1,36 @@
 module Api
   class OrdersController < ApplicationController
+    before_action :require_buyer!, only: [:buy_now]
+
+    def buy_now
+      billing_address = params[:billing_address].presence || checkout_address_payload
+      shipping_address = params[:shipping_address].presence || checkout_address_payload
+      payment_method = params[:payment_method].to_s.presence || "cod"
+
+      if payment_method == "online"
+        return render json: { error: "Online payment for direct buy is not yet supported. Use COD." }, status: :unprocessable_entity
+      end
+
+      result = DirectBuyNowService.new(
+        buyer: current_buyer,
+        dealer_product_id: params[:dealer_product_id],
+        quantity: params[:quantity],
+        payment_method: payment_method,
+        billing_address: billing_address,
+        shipping_address: shipping_address
+      ).call
+
+      primary_order = result.orders.first
+      render json: {
+        data: result.orders.one? ? serialize_data(primary_order, OrderSerializer) : OrderSerializer.render(result.orders),
+        orders: OrderSerializer.render(result.orders),
+        payment: result.payment_data,
+        message: "Order placed successfully"
+      }, status: :created
+    rescue StandardError => e
+      render json: { error: e.message }, status: :unprocessable_entity
+    end
+
     def index
       orders = scoped_orders
       orders = apply_filters(orders)
@@ -146,6 +177,34 @@ module Api
       return Order.where(seller_dealer_id: current_dealer.id) if current_dealer
 
       Order.none
+    end
+
+    def require_buyer!
+      return if current_account.present? || current_dealer.present?
+
+      render json: { error: "Authentication required" }, status: :unauthorized
+    end
+
+    def current_buyer
+      current_account || current_dealer
+    end
+
+    def checkout_address_payload
+      return {} unless current_account
+
+      address = current_account.addresses.find_by(is_default: true) || current_account.addresses.order(created_at: :desc).first
+      return {} if address.blank?
+
+      {
+        name: address.name,
+        phone: address.phone,
+        address_line1: address.address_line1,
+        address_line2: address.address_line2,
+        city: address.city,
+        state: address.state,
+        postal_code: address.postal_code,
+        country: address.country
+      }
     end
   end
 end

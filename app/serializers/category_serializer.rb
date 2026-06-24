@@ -1,7 +1,7 @@
 class CategorySerializer < ApplicationSerializer
   attributes :id, :name, :slug, :is_active, :cat_icon
 
-  attribute :brands do |category|
+  attributes :brands do |category|
     category.brands.map do |brand|
       {
         id: brand.id,

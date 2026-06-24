@@ -1,7 +1,7 @@
 class MarketplaceOrderFinancials
   class << self
-    def build(total_amount:)
-      total = BigDecimal(total_amount.to_s)
+    def build(order_total:)
+      total = BigDecimal(order_total.to_s)
       commission_rate = commission_rate_percent
       extra_rate = extra_charge_rate_percent
       commission_amount = percentage_of(total, commission_rate)

@@ -1,5 +1,5 @@
 class CartSerializer < ApplicationSerializer
-  attributes :total_items, :total_amount, :subtotal_amount, :tax_amount, :coupon_discount_amount,
+  attributes :total_items, :total_amount, :taxable_amount, :subtotal_amount, :tax_amount, :coupon_discount_amount,
              :grand_total, :applied_coupon
   has_many :cart_items
 
@@ -11,6 +11,10 @@ class CartSerializer < ApplicationSerializer
     object.subtotal_amount.to_f
   end
 
+  def taxable_amount
+    object.taxable_amount.to_f
+  end
+  
   def tax_amount
     object.tax_amount.to_f
   end

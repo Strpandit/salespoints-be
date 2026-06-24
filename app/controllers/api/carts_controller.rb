@@ -1,5 +1,8 @@
 module Api
   class CartsController < ApplicationController
+    # Cart disabled — direct buy now only. Routes commented in config/routes.rb
+    before_action :cart_disabled!
+
     # before_action :authenticate_request
     before_action :set_cart
     before_action :set_cart_item, only: [:update_item, :remove_item]
@@ -109,6 +112,10 @@ module Api
     end
 
     private
+
+    def cart_disabled!
+      render json: { error: "Cart is disabled. Use direct buy now." }, status: :gone
+    end
 
     def set_cart
       @cart = current_buyer.cart&.tap do |cart|
