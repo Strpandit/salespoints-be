@@ -1,7 +1,7 @@
 class DealerProductSerializer < ApplicationSerializer
   attributes :stock_quantity, :is_active, :approve_status, :created_at, :updated_at, :distance_km,
              :media, :product_media, :variant_media, :consumer_discount_percentage,
-             :dealer_discount_percentage,
+             :dealer_discount_percentage
 
   belongs_to :dealer
   belongs_to :product

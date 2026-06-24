@@ -101,6 +101,13 @@ class PaymentAttemptFinalizationService
           dealer_product.update!(
             stock_quantity: dealer_product.stock_quantity - qty
           )
+
+            dealer_product.update!(stock_quantity: dealer_product.stock_quantity - qty)
+
+          end
+
+ 	 end
+
         end
 
         orders << order

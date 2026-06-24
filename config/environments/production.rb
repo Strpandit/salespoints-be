@@ -95,12 +95,14 @@ Rails.application.configure do
 
   config.action_mailer.delivery_method = :smtp
   config.action_mailer.smtp_settings = {
-    :address              => ENV['SMTP_ADDRESS'],
-    :port                 => ENV['SMTP_PORT'].to_i,
-    :domain               => "gmail.com",
-    :user_name            => ENV['SMTP_USERNAME'],
-    :password             => ENV['SMTP_PASSWORD'],
-    :authentication       => "plain",
+    :address              => 'smtp-relay.brevo.com',
+    :port                 => 587,
+    :domain               => 'api.salespoints.in',
+    :user_name            => 'aacb1a001@smtp-brevo.com',
+    :password             => ENV['BREVO_PASS'],
+    :authentication       => 'login',
     :enable_starttls_auto => true,
+    :open_timeout         => 30,
+    :read_timeout        => 30
   }
 end
