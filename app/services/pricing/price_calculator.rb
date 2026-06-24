@@ -4,7 +4,7 @@ module Pricing
 
     def initialize(variant:, quantity: 1, user_type: :dealer, discount_amount: 0)
       @variant = variant
-      @Product = variant.product
+      @product = variant.product
       @quantity = quantity.to_i.positive? ? quantity.to_i : 1
       @user_type = user_type.to_sym
       @discount_amount = discount_amount.to_d
@@ -58,7 +58,8 @@ module Pricing
     def gst_amount
       @gst_amount ||= begin
         return 0.to_d if gst_percentage.zero?
-       (subtotal - (subtotal / (1 + gst_percentage / 100.0))).round(2)
+        (subtotal - (subtotal / (1 + gst_percentage / 100.0))).round(2)
+      end
     end
 
     def taxable_amount
