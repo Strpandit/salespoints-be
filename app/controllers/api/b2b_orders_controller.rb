@@ -12,7 +12,7 @@ module Api
         when "accepted"
           B2bOrder.joins(b2b_order_items: :dealer_product)
                   .where(dealer_products: { dealer_id: current_dealer.id })
-                  .where.not(status: "pending")
+                  .where(request_status: "accepted_request")
                   .includes(:buyer_dealer, :seller_dealer, b2b_order_items: { dealer_product: :dealer })
                   .distinct
                   .order(created_at: :desc)
@@ -33,65 +33,6 @@ module Api
       ), status: :ok
     end
 
-    def place_from_cart
-      return render json: { error: "Cart checkout is disabled. Use direct buy now (place_direct)." }, status: :gone
-
-      cart = current_dealer.cart
-      return render json: { error: "Cart is empty" }, status: :unprocessable_entity if cart.blank? || cart.cart_items.empty?
-
-      buyer_latitude = params[:latitude].presence&.to_f
-      buyer_longitude = params[:longitude].presence&.to_f
-      if buyer_latitude.blank? || buyer_longitude.blank?
-        return render json: { error: "Current location is required to place nearby B2B request" }, status: :unprocessable_entity
-      end
-
-      radius = params[:radius_km].to_i
-      radius = 10 if radius <= 0
-
-      payment_method = params[:payment_method].to_s.presence || "cod"
-
-      if payment_method == "online"
-        result = OnlinePaymentAttemptService.new(
-          cart: cart,
-          buyer: current_dealer,
-          billing_address: {},
-          shipping_address: {},
-          context: "b2b_request",
-          metadata: {
-            latitude: buyer_latitude,
-            longitude: buyer_longitude,
-            radius_km: radius
-          }
-        ).call
-
-        return render json: {
-          data: {
-            payment_attempt_id: result.attempt.id,
-            attempt_number: result.attempt.attempt_number,
-            amount: result.attempt.amount.to_f,
-            status: result.attempt.status
-          },
-          payment: result.payment_data,
-          clears_cart: false,
-          message: "Online payment initiated. Your B2B request will be broadcast only after successful payment."
-        }, status: :ok
-      end
-
-      order = B2bOrderCreationService.new(
-        buyer: current_dealer,
-        cart: cart,
-        latitude: buyer_latitude,
-        longitude: buyer_longitude,
-        radius_km: radius,
-        payment_method: payment_method,
-        payment_status: payment_method == "cod" ? "pending" : "paid"
-      ).call
-
-      render json: serialize_resource(order, B2bOrderSerializer, base_url: request.base_url).merge(message: "B2B request broadcasted to matching nearby dealers"), status: :created
-    rescue StandardError => e
-      render json: { error: e.message }, status: :unprocessable_entity
-    end
-
     def place_direct
       buyer_latitude = params[:latitude].presence&.to_f
       buyer_longitude = params[:longitude].presence&.to_f
@@ -102,10 +43,6 @@ module Api
       radius = params[:radius_km].to_i
       radius = 10 if radius <= 0
       payment_method = params[:payment_method].to_s.presence || "cod"
-
-      if payment_method == "online"
-        return render json: { error: "Online payment for direct buy is not yet supported. Use COD." }, status: :unprocessable_entity
-      end
 
       order = B2bDirectOrderService.new(
         buyer: current_dealer,
@@ -119,34 +56,76 @@ module Api
       ).call
 
       render json: serialize_resource(order, B2bOrderSerializer, base_url: request.base_url).merge(
-        message: "B2B order request sent to seller"
+        message: "Request sent to nearby dealers"
       ), status: :created
     rescue StandardError => e
       render json: { error: e.message }, status: :unprocessable_entity
     end
 
     def accept
-      order = B2bOrder.where(status: ["pending", "partially_accepted"]).find_by(id: params[:id])
-      return render json: { error: "Order request not found or already processed" }, status: :not_found unless order
+      order = B2bOrder.pending_requests.find_by(id: params[:id])
+      return render json: { error: "Request not found or already processed" }, status: :not_found unless order
 
-      requested_ids = Array(params[:item_ids]).map(&:to_i).uniq
-      offer = matching_open_offer(order: order, requested_ids: requested_ids)
-      B2bOrderDealerResponseService.new(order: order, dealer: current_dealer, requested_ids: requested_ids, offer: offer).accept!
+      offer = matching_open_offer(order: order)
 
-      render json: { message: "B2B items accepted successfully" }, status: :ok
+      B2bOrderDealerResponseService.new(
+        order: order,
+        dealer: current_dealer,
+        offer: offer
+      ).accept!
+
+      render json: { message: "Order accepted successfully. Payment link sent to buyer." }, status: :ok
     rescue StandardError => e
       render json: { error: e.message }, status: :unprocessable_entity
     end
 
     def reject
-      order = B2bOrder.where(status: ["pending", "partially_accepted"]).find_by(id: params[:id])
-      return render json: { error: "Order request not found or already processed" }, status: :not_found unless order
+      order = B2bOrder.pending_requests.find_by(id: params[:id])
+      return render json: { error: "Request not found or already processed" }, status: :not_found unless order
 
-      requested_ids = Array(params[:item_ids]).map(&:to_i).uniq
-      offer = matching_open_offer(order: order, requested_ids: requested_ids)
-      rejected_count = B2bOrderDealerResponseService.new(order: order, dealer: current_dealer, requested_ids: requested_ids, offer: offer).reject!
+      offer = matching_open_offer(order: order)
 
-      render json: { message: "#{rejected_count} B2B item(s) rejected for this dealer" }, status: :ok
+      B2bOrderDealerResponseService.new(
+        order: order,
+        dealer: current_dealer,
+        offer: offer
+      ).reject!
+
+      render json: { message: "Order rejected successfully" }, status: :ok
+    rescue StandardError => e
+      render json: { error: e.message }, status: :unprocessable_entity
+    end
+
+    def payment
+      order = current_dealer.buyer_b2b_orders.find_by(id: params[:id])
+      return render json: { error: "Order not found" }, status: :not_found unless order
+      return render json: { error: "Order is not ready for payment" }, status: :unprocessable_entity unless order.pending_payment?
+
+      payment_method = params[:payment_method].to_s.presence || "cod"
+
+      unless B2bOrder::PAYMENT_METHODS.include?(payment_method)
+        return render json: { error: "Invalid payment method" }, status: :unprocessable_entity
+      end
+
+      result = B2bOrderPaymentService.new(
+        order_id: order.id,
+        payment_method: payment_method
+      ).call
+
+      if payment_method == "cod"
+        render json: {
+          message: "Order confirmed with COD",
+          order: B2bOrderSerializer.render(result[:order], base_url: request.base_url),
+          payment_status: "confirmed"
+        }, status: :ok
+      else
+        render json: {
+          message: "Payment initiated",
+          order: B2bOrderSerializer.render(result[:order], base_url: request.base_url),
+          payment_data: result[:payment_data],
+          payment_status: "pending"
+        }, status: :ok
+      end
     rescue StandardError => e
       render json: { error: e.message }, status: :unprocessable_entity
     end
@@ -160,7 +139,10 @@ module Api
     end
 
     def incoming_order_scope
-      offers = current_dealer.b2b_order_offers.open_state.includes(b2b_order: [:buyer_dealer, :seller_dealer, { b2b_order_items: { dealer_product: :dealer } }]).order(created_at: :desc)
+      offers = current_dealer.b2b_order_offers.open_state
+                             .includes(b2b_order: [:buyer_dealer, :seller_dealer, { b2b_order_items: { dealer_product: :dealer } }])
+                             .order(created_at: :desc)
+
       deduped = {}
 
       offers.each do |offer|
@@ -174,11 +156,8 @@ module Api
       deduped.values
     end
 
-    def matching_open_offer(order:, requested_ids:)
-      offers = order.b2b_order_offers.where(dealer: current_dealer, status: "open").order(created_at: :desc)
-      return offers.first if requested_ids.blank?
-
-      offers.find { |offer| (offer.item_id_values & requested_ids).any? }
+    def matching_open_offer(order:)
+      order.b2b_order_offers.where(dealer: current_dealer, status: "open").order(created_at: :desc).first
     end
   end
 end

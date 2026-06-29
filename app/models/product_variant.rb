@@ -5,7 +5,6 @@ class ProductVariant < ApplicationRecord
 
   has_many_attached :media
   has_many :dealer_products
-  has_many :cart_items
   has_many :order_items
 
   validates :variant_sku, presence: true, uniqueness: true

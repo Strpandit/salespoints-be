@@ -1,8 +1,8 @@
 module Api
   class ProductsController < ApplicationController
-    skip_before_action :authenticate_request!, only: [:index, :active_products, :show]
-    before_action :require_admin, except: [:index, :active_products, :show]
-    before_action :check_permission, except: [:index, :active_products, :show]
+    skip_before_action :authenticate_request!, only: [:index, :active_products, :show, :similar_product]
+    before_action :require_admin, except: [:index, :active_products, :show, :similar_product]
+    before_action :check_permission, except: [:index, :active_products, :show, :similar_product]
     before_action :find_product, only: [:show, :update, :destroy]
 
     def index
@@ -186,7 +186,7 @@ module Api
     end
 
     def find_product
-      @product = Product.find_by(slug: params[:id])
+      @product = Product.find_by(id: params[:id]) || Product.find_by(slug: params[:id])
       render json: { error: "Product not found" }, status: :not_found unless @product
     end
 

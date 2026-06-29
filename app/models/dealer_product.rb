@@ -3,10 +3,8 @@ class DealerProduct < ApplicationRecord
   belongs_to :product
   belongs_to :product_variant
 
-  has_many :cart_items
-  has_many :reviews
+  has_many :reviews, dependent: :destroy
   has_many :wholesaler_posts, dependent: :destroy
-  has_many :order_items
 
   enum :approve_status, { pending: 0, approved: 1, rejected: 2 }
 

@@ -9,6 +9,7 @@ class Product < ApplicationRecord
   has_many :product_variants, dependent: :destroy, inverse_of: :product
   has_many :product_specifications, dependent: :destroy, inverse_of: :product
   has_many :dealer_products
+  has_many :reviews, dependent: :destroy
 
   accepts_nested_attributes_for :product_specifications, allow_destroy: true, reject_if: :all_blank
   accepts_nested_attributes_for :product_variants, allow_destroy: true, reject_if: :reject_blank_product_variant?

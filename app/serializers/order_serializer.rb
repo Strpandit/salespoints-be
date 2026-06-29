@@ -3,7 +3,7 @@ class OrderSerializer < ApplicationSerializer
              :payment_method, :payment_status, :billing_address, :shipping_address,
              :status_display, :total_items, :items_count, :subtotal, :subtotal_amount,
              :tax_amount, :shipping_amount, :discount_amount, :total_amount,
-             :customer_name, :customer_email, :buyer_name, :seller_name,
+             :customer_name, :customer_email, :buyer_name,
              :commission_rate, :commission_amount, :marketplace_fee_amount,
              :seller_settlement_amount, :settlement_status, :settlement_due_at,
              :settled_at, :hold_released_at, :refund_status, :refund_amount,
@@ -82,9 +82,7 @@ class OrderSerializer < ApplicationSerializer
   def buyer_name
     buyer = object.buyer
 
-    if buyer.respond_to?(:dealer_code)
-      buyer.dealer_code
-    elsif buyer.respond_to?(:full_name)
+    if buyer.respond_to?(:full_name)
       buyer.full_name
     else
       buyer&.first_name
@@ -93,10 +91,6 @@ class OrderSerializer < ApplicationSerializer
 
   def customer_email
     object.buyer&.email
-  end
-
-  def seller_name
-    object.seller_dealer&.dealer_code || object.seller_dealer&.full_name
   end
 
   def status_display

@@ -186,12 +186,12 @@ module Api
         return render json: { error: "Cannot buy your own products" }, status: :unprocessable_entity
       end
 
-      unless post.dealer_product
-        return render json: { error: "Post has no dealer product attached" }, status: :unprocessable_entity
-      end
+      seller = post.dealer
+      return render json: { error: "Seller dealer is unavailable" }, status: :unprocessable_entity unless seller&.status == "active"
 
       buyer_latitude = params[:latitude].presence&.to_f
       buyer_longitude = params[:longitude].presence&.to_f
+      
       if buyer_latitude.blank? || buyer_longitude.blank?
         location = current_dealer.dealer_location
         if location&.latitude.present? && location.longitude.present?
@@ -202,26 +202,45 @@ module Api
         end
       end
 
+      buyer_pincode = params[:pincode].presence
+      if buyer_pincode.blank?
+        buyer_pincode = current_dealer.pincode # Using dealer's pincode
+        if buyer_pincode.blank?
+          return render json: { error: "Pincode is required for buy now" }, status: :unprocessable_entity
+        end
+      end
+      
+      unless post.pincodes.include?(buyer_pincode.to_s)
+        return render json: { error: "This product is not available for your pincode" }, status: :unprocessable_entity
+      end
+
       qty = params[:quantity].to_i.positive? ? params[:quantity].to_i : 1
       payment_method = params[:payment_method].to_s.presence || "cod"
+      
+      if post.stock_quantity < qty
+        return render json: { error: "Insufficient stock available" }, status: :unprocessable_entity
+      end
 
-      order = B2bDirectOrderService.new(
-        buyer: current_dealer,
-        dealer_product_id: post.dealer_product_id,
-        quantity: qty,
-        latitude: buyer_latitude,
-        longitude: buyer_longitude,
-        radius_km: params[:radius_km].to_i.positive? ? params[:radius_km].to_i : 10,
-        payment_method: payment_method,
-        payment_status: payment_method == "cod" ? "pending" : "paid"
-      ).call
+      begin
+        order = B2bWholesalerDirectOrderService.new(
+          buyer: current_dealer,
+          seller: seller,
+          wholesaler_post: post,
+          quantity: qty,
+          latitude: buyer_latitude,
+          longitude: buyer_longitude,
+          payment_method: payment_method,
+          payment_status: payment_method == "cod" ? "pending" : "paid"
+        ).call
 
-      render json: {
-        data: B2bOrderSerializer.render(order, base_url: request.base_url),
-        message: "Buy now request sent to seller"
-      }, status: :created
-    rescue StandardError => e
-      render json: { error: e.message }, status: :unprocessable_entity
+        render json: {
+          data: B2bOrderSerializer.render(order, base_url: request.base_url),
+          message: "Buy now request sent to seller"
+        }, status: :created
+        
+      rescue StandardError => e
+        render json: { error: e.message }, status: :unprocessable_entity
+      end
     end
 
     def rate

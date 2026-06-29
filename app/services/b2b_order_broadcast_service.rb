@@ -16,7 +16,7 @@ class B2bOrderBroadcastService
 
   def broadcast!(rebroadcast:)
     open_items = @order.b2b_order_items.open_items.includes(product_variant: :product).to_a
-    raise StandardError, "No open B2B items are available for broadcast" if open_items.empty?
+    raise StandardError, "No open items are available for broadcast" if open_items.empty?
 
     dealer_matches = eligible_nearby_dealers(items: open_items)
     dealer_matches = dealer_matches.reject { |_dealer, items| items.empty? }
@@ -41,35 +41,157 @@ class B2bOrderBroadcastService
           rebroadcast_count: rebroadcast ? offer_rebroadcast_count(dealer: dealer) + 1 : 0
         )
 
-        notification = NotificationService.deliver(
-          recipient: dealer,
-          actor: @actor,
-          notifiable: @order,
-          kind: "b2b_order_request",
-          title: "New B2B bulk request nearby",
-          message: "A nearby dealer is requesting #{matched_items.size} item(s). Respond fast to secure what you can fulfill.",
-          visible_in_app: false,
-          delivery_channels: { push: true, whatsapp: true, sms: false, email: false, in_app: false },
-          payload: {
-            offer_id: offer.id,
-            order_id: @order.id,
-            buyer_dealer_id: @order.buyer_dealer_id,
-            dealer_id: dealer.id,
-            buyer_name: @actor.dealer_code,
-            total_amount: @order.total_amount.to_f,
-            requested_radius_km: @order.requested_radius_km,
-            latitude: @order.latitude,
-            longitude: @order.longitude,
-            item_ids: item_ids,
-            items: serialized_offer_items(matched_items),
-            rebroadcast: rebroadcast
-          }
-        )
-        offer.update!(notification: notification) if notification.present?
+        send_dealer_order_request_template(offer, dealer, matched_items)
+        create_in_app_notification_for_seller(dealer, offer, matched_items)
+        notify_admin_new_b2b_request(dealer, matched_items)
       end
 
       @order.update!(last_rebroadcast_at: Time.current)
     end
+  end
+
+  def send_dealer_order_request_template(offer, dealer, matched_items)
+    first_item = matched_items.first
+    variant = first_item&.product_variant
+    product = variant&.product
+    
+    product_name = product&.name || "Product"
+    variant_name = variant&.variant_sku || variant&.variant_attributes&.to_s || "Standard"
+    sku = variant&.variant_sku || product&.sku || "N/A"
+    unit_price = first_item&.unit_price || 0
+    quantity = matched_items.sum(&:quantity)
+    total_amount = matched_items.sum(&:total_price)
+
+    buyer_location = @order.buyer_dealer&.dealer_location
+    seller_location = dealer&.dealer_location
+    
+    delivery_location = get_location(dealer)
+    approx_distance = if buyer_location.present? && seller_location.present?
+      DealerLocation.distance_km(
+        buyer_location.latitude.to_f,
+        buyer_location.longitude.to_f,
+        seller_location.latitude.to_f,
+        seller_location.longitude.to_f
+      ).round(2).to_s
+    else
+      "0"
+    end
+
+    base_url = ENV["FRONTEND_URL"] || "https://yourapp.com"
+    accept_url = "#{base_url}/b2b/accept/#{offer.accept_token}"
+    reject_url = "#{base_url}/b2b/reject/#{offer.reject_token}"
+
+    image_url = get_product_image(product, variant)
+
+    accept_token = offer.accept_token
+    reject_token = offer.reject_token
+
+    MetaWhatsappCloudService.new.send_dealer_order_request(
+      to: formatted_phone_for(dealer),
+      product: product_name,
+      variant: variant_name,
+      sku: sku,
+      price: unit_price.to_f.round(2).to_s,
+      quantity: quantity.to_s,
+      total_amount: total_amount.to_f.round(2).to_s,
+      delivery_location: delivery_location,
+      approx_distance: approx_distance,
+      accept_token: offer.accept_token,
+      reject_token: offer.reject_token,
+      image_url: image_url
+    )
+
+    offer.update!(whatsapp_status: "sent", sent_at: Time.current)
+  rescue StandardError => e
+    Rails.logger.error("Failed to send dealer_order_request template: #{e.message}")
+    offer.update!(whatsapp_status: "failed", failed_at: Time.current, failure_reason: e.message)
+  end
+
+  def create_in_app_notification_for_seller(dealer, offer, matched_items)
+    total_items = matched_items.sum(&:quantity)
+    total_amount = matched_items.sum(&:total_price)
+    first_item = matched_items.first
+    product_name = first_item&.product_variant&.product&.name || "Product"
+
+    NotificationService.deliver(
+      recipient: dealer,
+      actor: @actor,
+      notifiable: @order,
+      kind: "b2b_order_request",
+      title: "📦 New B2B Request",
+      message: "#{@actor.dealer_code} wants to buy #{total_items} unit(s) of #{product_name}. Total: ₹#{total_amount}",
+      visible_in_app: true,
+      delivery_channels: { push: true, whatsapp: false, sms: false, email: false, in_app: true },
+      payload: {
+        offer_id: offer.id,
+        order_id: @order.id,
+        buyer_dealer_id: @order.buyer_dealer_id,
+        dealer_id: dealer.id,
+        buyer_name: @actor.dealer_code,
+        total_amount: total_amount.to_f,
+        item_ids: matched_items.map(&:id),
+        items: serialized_offer_items(matched_items),
+        rebroadcast: false
+      }
+    )
+  end
+
+  def notify_admin_new_b2b_request(dealer, matched_items)
+    total_items = matched_items.sum(&:quantity)
+    total_amount = matched_items.sum(&:total_price)
+    first_item = matched_items.first
+    product_name = first_item&.product_variant&.product&.name || "Product"
+
+    AdminUser.where(is_super_admin: true).find_each do |admin|
+      NotificationService.deliver(
+        recipient: admin,
+        actor: @actor,
+        notifiable: @order,
+        kind: "admin_b2b_new_request",
+        title: "📢 New B2B Request Created",
+        message: "#{@actor.dealer_code} created B2B request for #{product_name} (Qty: #{total_items}). Amount: ₹#{total_amount}",
+        visible_in_app: true,
+        delivery_channels: { push: true, whatsapp: false, sms: false, email: false, in_app: true },
+        payload: {
+          order_id: @order.id,
+          buyer_dealer_id: @order.buyer_dealer_id,
+          total_amount: total_amount.to_f,
+          total_items: total_items,
+          product_name: product_name
+        }
+      )
+    end
+  end
+
+  def get_product_image(product, variant)
+    if variant.present? && variant.media.attached?
+      attachment = variant.media.first
+      return rails_blob_url(attachment, only_path: false) if attachment.present?
+    end
+
+    if product.present? && product.media.attached?
+      attachment = product.media.first
+      return rails_blob_url(attachment, only_path: false) if attachment.present?
+    end
+
+    if @order.source.present? && @order.source.respond_to?(:media) && @order.source.media.attached?
+      attachment = @order.source.media.first
+      return rails_blob_url(attachment, only_path: false) if attachment.present?
+    end
+
+    return "#{ENV['FRONTEND_URL']}/images/default-product.png"
+  rescue StandardError => e
+    Rails.logger.error("Failed to get product image: #{e.message}")
+    nil
+  end
+
+  def get_location(dealer)
+    return "Location not available" if dealer.blank?
+    
+    location = dealer.dealer_location
+    return "Location not available" if location.blank?
+    
+    [location.city, location.state].compact.join(", ").presence || "Location not available"
   end
 
   def open_offer_for(dealer:, item_ids:)

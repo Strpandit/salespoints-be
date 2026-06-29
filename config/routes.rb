@@ -25,14 +25,6 @@ Rails.application.routes.draw do
     post 'password', to: 'passwords#create'
     post 'set_password', to: 'passwords#update'
 
-    # Cart routes — disabled (direct buy now only)
-    # get '/cart', to: 'carts#current_cart'
-    # post '/cart/add_item', to: 'carts#add_item'
-    # patch '/cart/update_item', to: 'carts#update_item'
-    # delete '/cart/remove_item', to: 'carts#remove_item'
-    # post '/cart/apply_coupon', to: 'carts#apply_coupon'
-    # delete '/cart/remove_coupon', to: 'carts#remove_coupon'
-    # post '/cart/checkout', to: 'carts#checkout'
     resources :orders, only: [:index, :show, :update] do
       collection do
         post :buy_now
@@ -151,15 +143,16 @@ Rails.application.routes.draw do
         get :b2b_shop_index
         get :b2b_similar
       end
+      resources :reviews, only: [:index, :create]
     end
-    resources :b2b_orders, only: [:index] do
+    resources :b2b_orders, only: [:index, :show] do
       collection do
-        # post :place_from_cart  # disabled — use place_direct
         post :place_direct
       end
       member do
         post :accept
         post :reject
+        post :payment
       end
     end
     resources :dealer_notifications, only: [:index] do
@@ -181,9 +174,9 @@ Rails.application.routes.draw do
         patch :approve
         patch :reject
         patch :toggle_status
+        post :buy
+        post :rate
       end
-      post :buy, on: :member
-      post :rate, on: :member
     end
 
     # Generic bulk uploads for admins (brands, categories, cat_filters, roles, products)

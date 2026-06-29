@@ -7,14 +7,10 @@ module Api
       shipping_address = params[:shipping_address].presence || checkout_address_payload
       payment_method = params[:payment_method].to_s.presence || "cod"
 
-      if payment_method == "online"
-        return render json: { error: "Online payment for direct buy is not yet supported. Use COD." }, status: :unprocessable_entity
-      end
-
       result = DirectBuyNowService.new(
         buyer: current_buyer,
-        dealer_product_id: params[:dealer_product_id],
-        quantity: params[:quantity],
+        product_variant_id: params[:product_variant_id],
+        quantity: params[:quantity] || 1,
         payment_method: payment_method,
         billing_address: billing_address,
         shipping_address: shipping_address
@@ -22,8 +18,8 @@ module Api
 
       primary_order = result.orders.first
       render json: {
-        data: result.orders.one? ? serialize_data(primary_order, OrderSerializer) : OrderSerializer.render(result.orders),
-        orders: OrderSerializer.render(result.orders),
+        data: serialize_data(primary_order, OrderSerializer),
+        order: serialize_data(primary_order, OrderSerializer),
         payment: result.payment_data,
         message: "Order placed successfully"
       }, status: :created
@@ -45,7 +41,7 @@ module Api
     end
 
     def show
-      order = scoped_orders.includes(order_items: [:dealer_product, :product_variant]).find_by(id: params[:id])
+      order = scoped_orders.includes(order_items: :product_variant).find_by(id: params[:id])
       return render json: { error: "Order not found" }, status: :not_found unless order
       OrderSettlementService.process_if_due!(order)
 
@@ -117,20 +113,11 @@ module Api
 
     def scoped_orders
       if current_admin
-        Order.includes(:buyer, :seller_dealer, order_items: [:dealer_product, :product_variant])
+        Order.includes(:buyer, order_items: :product_variant)
       elsif current_dealer
-        view = params[:view].to_s
-        if view == "sales"
-          current_dealer.sales_orders
-                        .joins(:order_items)
-                        .merge(OrderItem.joins(:dealer_product).where(dealer_products: { dealer_id: current_dealer.id }))
-                        .includes(:buyer, :seller_dealer, order_items: [:dealer_product, :product_variant])
-                        .distinct
-        else
-          current_dealer.orders.includes(:buyer, :seller_dealer, order_items: [:dealer_product, :product_variant])
-        end
+        current_dealer.orders.includes(:buyer, order_items: :product_variant)
       elsif current_account
-        current_account.orders.includes(:buyer, :seller_dealer, order_items: [:dealer_product, :product_variant])
+        current_account.orders.includes(:buyer, order_items: :product_variant)
       else
         Order.none
       end

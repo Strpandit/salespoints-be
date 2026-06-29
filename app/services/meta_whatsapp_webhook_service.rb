@@ -18,22 +18,81 @@ class MetaWhatsappWebhookService
         process_statuses(Array(value["statuses"]))
       end
     end
+  rescue JSON::ParserError => e
+    Rails.logger.error "MetaWhatsappWebhookService: Invalid JSON payload: #{e.message}"
+    raise
+  rescue StandardError => e
+    Rails.logger.error "MetaWhatsappWebhookService: Error: #{e.message}"
+    raise
   end
 
   private
 
   def process_messages(messages)
     messages.each do |message|
-      next unless message["type"] == "interactive"
+      case message["type"]
+      when "interactive"
+        button_reply = message.dig("interactive", "button_reply")
+        next unless button_reply.present?
 
-      button_reply = message.dig("interactive", "button_reply")
-      next unless button_reply.present?
+        process_button_reply(
+          button_id: button_reply["id"].to_s,
+          from: message["from"].to_s
+        )
 
-      process_button_reply(
-        button_id: button_reply["id"].to_s,
-        from: message["from"].to_s
-      )
+      when "text"
+        text_body = message.dig("text", "body").to_s.downcase.strip
+        if text_body == "accept" || text_body == "accepts"
+          process_text_accept(message["from"].to_s)
+        elsif text_body == "reject" || text_body == "rejects"
+          process_text_reject(message["from"].to_s)
+        else
+          Rails.logger.info "Unknown text message: #{text_body}"
+        end
+      end
     end
+  end
+
+  def process_text_accept(from)
+    offer = find_latest_open_offer_for_phone(from)
+    
+    if offer.nil?
+      send_text_acknowledgement(to: from, message: "No pending request found to accept.")
+      return
+    end
+
+    handle_accept(offer, offer.b2b_order, offer.dealer, from)
+  end
+
+  def process_text_reject(from)
+    offer = find_latest_open_offer_for_phone(from)
+    
+    if offer.nil?
+      send_text_acknowledgement(to: from, message: "No pending request found to reject.")
+      return
+    end
+
+    handle_reject(offer, offer.b2b_order, offer.dealer, from)
+  end
+
+  def find_latest_open_offer_for_phone(from)
+    dealer = find_dealer_by_phone(from)
+    return nil if dealer.nil?
+
+    B2bOrderOffer
+      .includes(:b2b_order)
+      .where(dealer_id: dealer.id, status: "open")
+      .where("b2b_orders.expires_at > ?", Time.current)
+      .references(:b2b_order)
+      .order(created_at: :desc)
+      .first
+  end
+
+  def find_dealer_by_phone(from)
+    normalized_from = from.to_s.gsub(/\D/, "")
+    
+    Dealer.find_by("REPLACE(phone, ' ', '') LIKE ?", "%#{normalized_from}") ||
+    Dealer.find_by("REPLACE(phone, ' ', '') = ?", normalized_from)
   end
 
   def process_button_reply(button_id:, from:)
@@ -41,55 +100,65 @@ class MetaWhatsappWebhookService
             B2bOrderOffer.order(created_at: :desc).find_by(reject_token: button_id)
 
     unless offer
-      send_text_acknowledgement(to: from, message: "This action is invalid or expired.")
+      send_text_acknowledgement(to: from, message: "This request is invalid or expired.")
       return
     end
 
     dealer = offer.dealer
     order = offer.b2b_order
-    item_ids = offer.item_id_values
-    action = offer.accept_token.to_s == button_id ? "accept" : "reject"
-
-    WhatsappWebhookEvent.create!(
-      provider: "meta",
-      event_type: "button_reply",
-      event_key: "reply:#{button_id}:#{from}:#{Time.current.to_f}",
-      direction: "inbound",
-      b2b_order_offer: offer,
-      notification: offer.notification,
-      from_number: from,
-      status: action,
-      processed_at: Time.current,
-      payload: {
-        button_id: button_id,
-        from: from,
-        action: action,
-        order_id: order&.id,
-        dealer_id: dealer&.id
-      }
-    )
-
-    unless dealer && order
-      send_text_acknowledgement(to: from, message: "This B2B request is no longer available.")
-      return
-    end
 
     unless sender_matches_dealer?(from: from, dealer: dealer)
-      send_text_acknowledgement(to: from, message: "This WhatsApp number is not allowed for that dealer request.")
+      send_text_acknowledgement(to: from, message: "Your WhatsApp number is not authorized.")
       return
     end
 
+    action = offer.accept_token == button_id ? "accept" : "reject"
+
+    create_webhook_event(offer, from, action)
+
     if action == "accept"
-      B2bOrderDealerResponseService.new(order: order, dealer: dealer, requested_ids: item_ids, offer: offer).accept!
-      send_text_acknowledgement(to: from, message: "Selected B2B items have been accepted successfully.")
+      handle_accept(offer, order, dealer, from)
     elsif action == "reject"
-      B2bOrderDealerResponseService.new(order: order, dealer: dealer, requested_ids: item_ids, offer: offer).reject!
-      send_text_acknowledgement(to: from, message: "Selected B2B items have been rejected.")
+      handle_reject(offer, order, dealer, from)
     else
-      send_text_acknowledgement(to: from, message: "Unsupported WhatsApp action.")
+      send_text_acknowledgement(to: from, message: "Unknown action.")
     end
   rescue StandardError => e
-    send_text_acknowledgement(to: from, message: e.message)
+    Rails.logger.error "WhatsApp webhook error: #{e.message}"
+    Rails.logger.error e.backtrace.join("\n")
+    send_text_acknowledgement(to: from, message: "Error: #{e.message}")
+  end
+
+  def handle_accept(offer, order, dealer, from)
+    service = B2bOrderDealerResponseService.new(
+      order: order,
+      dealer: dealer,
+      offer: offer
+    )
+
+    service.accept!
+
+    send_text_acknowledgement(to: from, message: "✅ Request accepted! Payment link sent to buyer.")
+    offer.update!(whatsapp_status: "replied")
+  rescue StandardError => e
+    Rails.logger.error "Failed to handle accept: #{e.message}"
+    send_text_acknowledgement(to: from, message: "❌ Failed to accept request: #{e.message}")
+  end
+
+  def handle_reject(offer, order, dealer, from)
+    service = B2bOrderDealerResponseService.new(
+      order: order,
+      dealer: dealer,
+      offer: offer
+    )
+
+    service.reject!
+
+    send_text_acknowledgement(to: from, message: "❌ Request rejected.")
+    offer.update!(whatsapp_status: "replied")
+  rescue StandardError => e
+    Rails.logger.error "Failed to handle reject: #{e.message}"
+    send_text_acknowledgement(to: from, message: "❌ Failed to reject request: #{e.message}")
   end
 
   def process_statuses(statuses)
@@ -97,40 +166,79 @@ class MetaWhatsappWebhookService
       message_id = status_entry["id"].to_s
       next if message_id.blank?
 
-      event = WhatsappWebhookEvent.create!(
-        provider: "meta",
-        event_type: "message_status",
-        event_key: "status:#{message_id}:#{status_entry['status']}:#{status_entry['timestamp']}",
-        direction: "inbound",
-        message_id: message_id,
-        conversation_id: status_entry.dig("conversation", "id"),
-        from_number: status_entry["recipient_id"],
-        status: status_entry["status"],
-        processed_at: Time.current,
-        payload: status_entry
-      )
+      begin
+        event = WhatsappWebhookEvent.create!(
+          provider: "meta",
+          event_type: "message_status",
+          event_key: "status:#{message_id}:#{status_entry['status']}:#{status_entry['timestamp']}",
+          direction: "inbound",
+          message_id: message_id,
+          conversation_id: status_entry.dig("conversation", "id"),
+          from_number: status_entry["recipient_id"],
+          status: status_entry["status"],
+          processed_at: Time.current,
+          payload: status_entry
+        )
 
-      offer = B2bOrderOffer.find_by(whatsapp_message_id: message_id)
-      next unless offer
+        offer = B2bOrderOffer.find_by(whatsapp_message_id: message_id)
+        next unless offer
 
-      event.update!(b2b_order_offer: offer)
-      attrs = { whatsapp_status: mapped_whatsapp_status(status_entry["status"]) }
-      attrs[:delivered_at] = Time.current if status_entry["status"] == "delivered"
-      attrs[:read_at] = Time.current if status_entry["status"] == "read"
-      if status_entry["status"] == "failed"
-        attrs[:failed_at] = Time.current
-        attrs[:failure_reason] = status_entry.dig("errors", 0, "title") || "WhatsApp delivery failed"
+        event.update!(b2b_order_offer: offer)
+        update_offer_status(offer, status_entry["status"])
+      rescue ActiveRecord::RecordNotUnique
+        # Skip duplicate events
+        Rails.logger.debug "Duplicate status event for message_id: #{message_id}"
+      rescue StandardError => e
+        Rails.logger.error "Failed to process status: #{e.message}"
+        # Continue processing other statuses
+        next
       end
-      offer.update!(attrs)
-    rescue ActiveRecord::RecordNotUnique
-      next
     end
   end
 
-  def send_text_acknowledgement(to:, message:)
-    MetaWhatsappCloudService.new.send_text_message(to: normalized_e164_from_wa_id(to), body: message)
+  def update_offer_status(offer, status)
+    attrs = { whatsapp_status: mapped_whatsapp_status(status) }
+    attrs[:delivered_at] = Time.current if status == "delivered"
+    attrs[:read_at] = Time.current if status == "read"
+
+    if status == "failed"
+      attrs[:failed_at] = Time.current
+      attrs[:failure_reason] = "WhatsApp delivery failed"
+    end
+
+    offer.update!(attrs)
+  end
+
+  def create_webhook_event(offer, from, action)
+    WhatsappWebhookEvent.create!(
+      provider: "meta",
+      event_type: "button_reply",
+      event_key: "reply:#{SecureRandom.uuid}",
+      direction: "inbound",
+      b2b_order_offer: offer,
+      notification: offer.notification,
+      from_number: from,
+      status: action,
+      processed_at: Time.current,
+      payload: {
+        button_id: offer.accept_token,
+        from: from,
+        action: action,
+        order_id: offer.b2b_order&.id,
+        dealer_id: offer.dealer&.id
+      }
+    )
   rescue StandardError => e
-    Rails.logger.error("Meta WhatsApp acknowledgement failed: #{e.message}")
+    Rails.logger.error "Failed to create webhook event: #{e.message}"
+  end
+
+  def send_text_acknowledgement(to:, message:)
+    MetaWhatsappCloudService.new.send_text_message(
+      to: normalized_e164_from_wa_id(to),
+      body: message
+    )
+  rescue StandardError => e
+    Rails.logger.error "WhatsApp acknowledgement failed: #{e.message}"
   end
 
   def normalized_e164_from_wa_id(wa_id)
@@ -172,6 +280,7 @@ class MetaWhatsappWebhookService
 
     digest = OpenSSL::HMAC.hexdigest("SHA256", app_secret, @raw_body)
     expected = "sha256=#{digest}"
+    
     unless ActiveSupport::SecurityUtils.secure_compare(expected, signature)
       raise StandardError, "Invalid Meta WhatsApp signature"
     end

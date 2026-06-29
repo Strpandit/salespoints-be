@@ -4,8 +4,6 @@ class Account < ApplicationRecord
 
   has_many :addresses, dependent: :destroy
   has_many :reviews, dependent: :destroy
-  has_one  :cart, as: :buyer, dependent: :destroy
-  has_many :cart_items, through: :cart
   has_many :orders, as: :buyer, dependent: :destroy
   has_many :payment_attempts, as: :buyer, dependent: :destroy
   has_many :notifications, as: :receiver, dependent: :destroy
@@ -15,7 +13,7 @@ class Account < ApplicationRecord
   has_many :ticket_messages, foreign_key: "account_id", dependent: :destroy
 
   enum :status, { pending: 'pending', active: 'active', inactive: 'inactive', banned: 'banned' }
-  enum :gender, { male: 'male', female: 'female', other: 'other' }
+  enum :gender, { male: 'male', female: 'female', prefer_not_to_say: 'prefer_not_to_say' }
 
   before_validation :normalize_phone
   before_validation :normalize_email
@@ -29,8 +27,6 @@ class Account < ApplicationRecord
             [a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)*\.[a-zA-Z]{2,}\z/x
     }
   validates :phone, uniqueness: true, allow_blank: true
-
-  after_create :create_default_cart
 
   def full_name
     [first_name, last_name].compact.join(" ")
@@ -56,10 +52,6 @@ class Account < ApplicationRecord
 
   def normalize_email
     self.email = email.to_s.strip.downcase.presence
-  end
-
-  def create_default_cart
-    create_cart unless cart.present?
   end
 
 end

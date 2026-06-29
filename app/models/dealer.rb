@@ -15,7 +15,6 @@ class Dealer < ApplicationRecord
   has_many :products, through: :dealer_products
   has_many :wholesaler_posts, dependent: :destroy
   has_many :wholesaler_post_ratings, dependent: :destroy
-  has_one :cart, as: :buyer, dependent: :destroy
   has_many :orders, as: :buyer, dependent: :destroy
   has_many :payment_attempts, as: :buyer, dependent: :destroy
   has_many :sales_orders, class_name: "Order", foreign_key: :seller_dealer_id, dependent: :nullify
@@ -40,22 +39,20 @@ class Dealer < ApplicationRecord
 
   validates :email,
     allow_blank: true,
-    uniqueness: { case_sensitive: false },
+    uniqueness: { case_sensitive: false, conditions: -> { where(deleted_at: nil) } },
     format: {
       with: /\A[a-zA-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@
             [a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)*\.[a-zA-Z]{2,}\z/x
     }
-  validates :phone, uniqueness: true, allow_blank: true
+  validates :phone, uniqueness: { conditions: -> { where(deleted_at: nil) } }, allow_blank: true
   validates :dealer_code,
-    uniqueness: true,
+    uniqueness: { conditions: -> { where(deleted_at: nil) } },
     allow_nil: true,
     format: { with: /\ASPIN\d{4,}\z/, message: "must follow SPIN0001 format" }
 
   validates :pincode, presence: true,
                       format: { with: /\A[1-9][0-9]{5}\z/, message: "must be valid 6-digit pincode" },
                       allow_blank: true
-
-  after_create :create_default_cart
 
   def full_name
     [first_name, last_name].compact.join(" ")
@@ -71,17 +68,6 @@ class Dealer < ApplicationRecord
 
   private
 
-  # def generate_password
-  #   return if password.present?
-
-  #   year = Time.current.year.to_s
-  #   email_part = email.to_s.split('@').first.to_s[0, 3]
-  #   email_part = email_part.ljust(3, "x")
-  #   generated_password = "#{email_part}@#{year}"
-  #   self.password = generated_password
-  #   self.password_confirmation = generated_password
-  # end
-
   def normalize_phone
     mobile = phone.to_s.gsub(/\D/, '').sub(/^0+/, '')
     self.phone = mobile.presence
@@ -94,14 +80,11 @@ class Dealer < ApplicationRecord
     self.email = email.to_s.strip.downcase.presence
   end
 
-  def create_default_cart
-    create_cart unless cart
-  end
-
   def generate_dealer_code
     return if dealer_code.present?
 
     last_code = Dealer.where("dealer_code LIKE ?", "SPIN%")
+                      .where(deleted_at: nil)
                       .order(Arel.sql("LENGTH(dealer_code) DESC"), dealer_code: :desc)
                       .pick(:dealer_code)
 

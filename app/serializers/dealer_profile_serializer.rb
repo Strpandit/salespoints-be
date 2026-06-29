@@ -3,16 +3,14 @@ class DealerProfileSerializer < ApplicationSerializer
              :aadhar_number, :bank_name, :bank_account_number, :ifsc_code,
              :business_address, :business_contact_number, :business_email,
              :work_category, :associated_brands, :store_image, :aadhar_card, :pan_card, 
-             :gst_certificate, :is_verified, :created_at, :updated_at
+             :gst_certificate, :cancel_cheque, :is_verified, :created_at, :updated_at
 
   def store_image
     object.store_image.map { |file| file_payload(file) }
   end
 
   def aadhar_card
-    return nil unless object.aadhar_card.attached?
-
-    file_payload(object.aadhar_card)
+    object.aadhar_card.map { |file| file_payload(file) }
   end
 
   def pan_card
@@ -25,6 +23,12 @@ class DealerProfileSerializer < ApplicationSerializer
     return nil unless object.gst_certificate.attached?
 
     file_payload(object.gst_certificate)
+  end
+
+  def cancel_cheque
+    return nil unless object.cancel_cheque.attached?
+
+    file_payload(object.cancel_cheque)
   end
 
   private

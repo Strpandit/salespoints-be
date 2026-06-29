@@ -1,7 +1,6 @@
 class Coupon < ApplicationRecord
   belongs_to :created_by_dealer, class_name: "Dealer", optional: true
   has_many :coupon_usages, dependent: :destroy
-  has_many :carts, dependent: :nullify
 
   AUDIENCES = %w[customer dealer].freeze
   DISCOUNT_TYPES = %w[percentage fixed].freeze
@@ -74,12 +73,11 @@ class Coupon < ApplicationRecord
     [discount, amount].min
   end
 
-  def validate_for_cart!(cart:, user:)
+  def validate_for_cart!(user:)
     return [false, "Coupon is inactive"] unless active_now?
     return [false, "Coupon not valid for this user"] unless applicable_for_user?(user)
     return [false, "Coupon usage limit reached"] unless global_uses_available?
     return [false, "You have already used this coupon"] unless user_can_use?(user)
-    return [false, "Cart amount is below minimum required"] unless eligible_for_amount?(cart.subtotal_amount)
 
     [true, nil]
   end

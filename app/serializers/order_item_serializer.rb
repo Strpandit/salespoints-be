@@ -1,6 +1,7 @@
 class OrderItemSerializer < ApplicationSerializer
-  attributes :quantity, :unit_price, :taxable_amount, :gst_percentage, :gst_amount, :total_price, :product_name, :product_name_with_variant, :variant_sku,
-             :media, :product_media, :variant_media
+  attributes :quantity, :unit_price, :taxable_amount, :gst_percentage, 
+            :gst_amount, :total_price, :product_name, :product_name_with_variant,
+            :variant_sku, :product_id, :variant_id, :product_media, :variant_media
 
   def pricing
     @pricing ||= Pricing::PriceCalculator.new(
@@ -42,12 +43,16 @@ class OrderItemSerializer < ApplicationSerializer
     object.product_variant&.variant_sku
   end
 
-  def media
-    object.dealer_product.display_media_attachments.map { |file| file_payload(file) }
+  def product_id
+    object.product_variant&.product_id
+  end
+
+  def variant_id
+    object.product_variant_id
   end
 
   def product_media
-    object.dealer_product.product.media.map { |file| file_payload(file) }
+    object.product_variant&.product.media.map { |file| file_payload(file) }
   end
 
   def variant_media

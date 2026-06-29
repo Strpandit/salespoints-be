@@ -16,7 +16,6 @@ module Api
       MetaWhatsappWebhookService.new(headers: request.headers, raw_body: request.raw_post).call
       head :ok
     rescue StandardError => e
-      Rails.logger.error("Meta WhatsApp webhook error: #{e.message}")
       render json: { error: e.message }, status: :unprocessable_entity
     end
   end

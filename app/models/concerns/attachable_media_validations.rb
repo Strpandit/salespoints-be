@@ -115,7 +115,7 @@ module AttachableMediaValidations
     end
 
     unless DOCUMENT_TYPES.include?(blob.content_type.to_s)
-      errors.add(name, "must be JPG, PNG, WEBP or PDF")
+      errors.add(name, "must be PDF file")
       return
     end
 
@@ -141,7 +141,7 @@ module AttachableMediaValidations
       end
 
       unless DOCUMENT_TYPES.include?(blob.content_type.to_s)
-        errors.add(name, "must be JPG, PNG, WEBP or PDF")
+        errors.add(name, "must be PDF file")
         next
       end
 

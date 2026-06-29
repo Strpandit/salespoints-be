@@ -1,6 +1,5 @@
 class OrderItem < ApplicationRecord
   belongs_to :order
-  belongs_to :dealer_product
   belongs_to :product_variant
 
   validates :quantity, numericality: { greater_than: 0 }
@@ -9,7 +8,7 @@ class OrderItem < ApplicationRecord
   before_validation :assign_total_price
 
   def product_name
-    dealer_product&.product&.name
+    product_variant&.product&.name
   end
 
   def product_name_with_variant

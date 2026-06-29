@@ -2,20 +2,95 @@ class B2bOrder < ApplicationRecord
   belongs_to :buyer_dealer, class_name: "Dealer"
   belongs_to :seller_dealer, class_name: "Dealer", optional: true
   belongs_to :buyer_payment_attempt, class_name: "PaymentAttempt", optional: true
+  belongs_to :source, polymorphic: true, optional: true
   has_many :b2b_order_items, dependent: :destroy
   has_many :notifications, as: :notifiable, dependent: :destroy
   has_many :b2b_order_offers, dependent: :destroy
 
-  STATUSES = %w[pending partially_accepted accepted cancelled].freeze
+  REQUEST_STATUSES = %w[pending_request accepted_request rejected_request expired_request].freeze
+  ORDER_STATUSES = %w[pending_request pending_payment paid confirmed cancelled].freeze
   PAYMENT_METHODS = %w[cod online].freeze
   PAYMENT_STATUSES = %w[pending paid failed].freeze
 
-  validates :status, inclusion: { in: STATUSES }
-  validates :requested_radius_km, numericality: { greater_than: 0 }
+  validates :request_status, inclusion: { in: REQUEST_STATUSES }, allow_nil: true
+  validates :status, inclusion: { in: ORDER_STATUSES }
   validates :payment_method, inclusion: { in: PAYMENT_METHODS }
   validates :payment_status, inclusion: { in: PAYMENT_STATUSES }
+  validates :requested_radius_km, numericality: { greater_than: 0 }
 
-  scope :pending, -> { where(status: "pending") }
+  scope :pending_requests, -> { where(request_status: "pending_request", status: "pending_request") }
+  scope :accepted_requests, -> { where(request_status: "accepted_request") }
+  scope :pending_payments, -> { where(status: "pending_payment") }
+  scope :from_wholesaler_post, -> { where(source_type: 'WholesalerPost') }
+  scope :direct_buy, -> { where(is_direct_buy: true) }
+
+  def pending_request?
+    request_status == "pending_request" && status == "pending_request"
+  end
+
+  def accepted_request?
+    request_status == "accepted_request"
+  end
+
+  def rejected_request?
+    request_status == "rejected_request"
+  end
+
+  def pending_payment?
+    status == "pending_payment"
+  end
+
+  def paid?
+    status == "paid"
+  end
+
+  def confirmed?
+    status == "confirmed"
+  end
+
+  def can_accept?
+    pending_request? && expires_at.present? && Time.current < expires_at
+  end
+
+  def mark_accepted!(dealer)
+    update!(
+      seller_dealer_id: dealer.id,
+      request_status: "accepted_request",
+      status: "pending_payment",
+      accepted_at: Time.current
+    )
+  end
+
+  def mark_rejected!
+    update!(
+      request_status: "rejected_request",
+      status: "cancelled",
+      rejected_at: Time.current
+    )
+  end
+
+  def mark_payment_paid!
+    update!(
+      status: "paid",
+      payment_status: "paid",
+      payment_confirmed_at: Time.current
+    )
+  end
+
+  def mark_order_confirmed!
+    update!(
+      status: "confirmed",
+      confirmed_at: Time.current
+    )
+  end
+
+  def expire!
+    update!(
+      request_status: "expired_request",
+      status: "cancelled",
+      expired_at: Time.current
+    ) if pending_request?
+  end
 
   def recalculate_totals!
     priced_items = b2b_order_items.accepted_items.includes(product_variant: :product)
@@ -39,28 +114,5 @@ class B2bOrder < ApplicationRecord
     self.total_amount = subtotal - discount_amount.to_d
     save!
   end
-
-  def refresh_status!
-    accepted_count = b2b_order_items.accepted_items.count
-    open_count = b2b_order_items.open_items.count
-
-    next_status =
-      if accepted_count.zero?
-        "pending"
-      elsif open_count.zero?
-        "accepted"
-      else
-        "partially_accepted"
-      end
-
-    attrs = { status: next_status }
-    attrs[:accepted_at] = Time.current if next_status == "accepted" && accepted_at.blank?
-    update!(attrs)
-  end
-
-  def expire_open_offers!
-    b2b_order_offers.open_state.where.not(expires_at: nil).where("expires_at <= ?", Time.current).find_each do |offer|
-      offer.update!(status: "expired", responded_at: Time.current)
-    end
-  end
+  
 end

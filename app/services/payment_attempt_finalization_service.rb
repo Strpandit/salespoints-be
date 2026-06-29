@@ -15,106 +15,32 @@ class PaymentAttemptFinalizationService
       return Result.new(orders: load_orders(attempt), b2b_order: nil) if attempt.processed?
       raise StandardError, "Payment is not marked as paid" unless attempt.paid?
 
-      items = Array(attempt.cart_snapshot["items"]).map(&:stringify_keys)
-      raise StandardError, "Payment snapshot is empty" if items.empty?
+      order_ids = Array(attempt.result_payload["order_ids"])
 
-      grouped_items = items.group_by { |item| item["dealer_id"] || dealer_id_for(item["dealer_product_id"]) }
-
-      grouped_items.each_with_index do |(dealer_id, snapshot_items), index|
-        subtotal = 0.to_d
-        tax = 0.to_d
-        pricing_rows = []
-
-        snapshot_items.each do |snapshot_item|
-          dealer_product = DealerProduct.lock.find(snapshot_item["dealer_product_id"])
-
-          qty = snapshot_item["quantity"].to_i
-
-          pricing = Pricing::PriceCalculator.new(
-            variant: dealer_product.product_variant,
-            quantity: qty,
-            user_type: attempt.buyer.is_a?(Dealer) ? :dealer : :account
-          ).call
-
-          subtotal += pricing[:subtotal]
-          tax += pricing[:gst_amount]
-
-          pricing_rows << [
-            dealer_product,
-            snapshot_item,
-            pricing
-          ]
-        end
-
-        discount_remaining ||= BigDecimal(attempt.cart_snapshot["discount_amount"].to_s)
-        cart_subtotal = BigDecimal(attempt.cart_snapshot["subtotal_amount"].to_s)
-
-        share = cart_subtotal.positive? ? subtotal / cart_subtotal : 0
-
-        discount =
-          if index == grouped_items.size - 1
-            discount_remaining
-          else
-            allocated = (BigDecimal(attempt.cart_snapshot["discount_amount"].to_s) * share).round(2)
-            discount_remaining -= allocated
-            allocated
-          end
-
-        total = subtotal - discount
-        financials = MarketplaceOrderFinancials.build(total_amount: total)
-
-        order = Order.create!(
-          buyer: attempt.buyer,
-          seller_dealer_id: dealer_id,
-          status: "pending",
-          subtotal_amount: subtotal,
-          tax_amount: tax,
-          discount_amount: discount,
-          total_amount: total,
-          coupon_code: attempt.coupon_code,
-          payment_method: "online",
+      Order.where(id: order_ids).find_each do |order|
+        order.update!(
           payment_status: "paid",
-          payment_gateway: attempt.payment_gateway,
-          billing_address: attempt.billing_address,
-          shipping_address: attempt.shipping_address,
+          status: "processing",
           payment_reference: attempt.payment_reference,
-          payment_confirmed_at: attempt.paid_at || Time.current,
-          gateway_order_reference: attempt.gateway_order_reference,
-          payment_session_id: attempt.payment_session_id,
-          payment_gateway_payload: attempt.payment_gateway_payload
+          payment_confirmed_at: Time.current,
+          paid_at: Time.current
         )
 
-        order.update!(financials)
-
-        pricing_rows.each do |dealer_product, snapshot_item, pricing|
-          OrderItem.create!(
-            order: order,
-            dealer_product_id: dealer_product.id,
-            product_variant_id: snapshot_item["product_variant_id"],
-            quantity: snapshot_item["quantity"],
-            unit_price: pricing[:unit_price],
-            total_price: pricing[:subtotal]
-          )
-
-          qty = snapshot_item["quantity"].to_i
-          dealer_product.update!(
-            stock_quantity: dealer_product.stock_quantity - qty
-          )
-        end
-
+        OrderNotificationJob.perform_later(order.id, "placed", attempt.buyer_type, attempt.buyer_id)
+        OrderNotificationJob.perform_later(order.id, "payment_paid", attempt.buyer_type, attempt.buyer_id)
+        
         orders << order
       end
 
       consume_coupon!(attempt)
-      clear_cart_items!(attempt)
 
       attempt.update!(
         status: "processed",
         processed_at: Time.current,
-        result_payload: {
+        result_payload: attempt.result_payload.merge(
           order_ids: orders.map(&:id),
           order_numbers: orders.map(&:order_number)
-        }
+        )
       )
     end
 
@@ -135,17 +61,19 @@ class PaymentAttemptFinalizationService
       metadata = attempt.result_payload.fetch("request_metadata", {}).stringify_keys
       order = B2bOrderCreationService.new(
         buyer: attempt.buyer,
-        cart: attempt.buyer.cart,
         latitude: metadata["latitude"],
         longitude: metadata["longitude"],
         radius_km: metadata["radius_km"],
         payment_method: "online",
         payment_status: "paid",
         buyer_payment_attempt: attempt,
-        cart_snapshot: attempt.cart_snapshot
-      ).call(clear_cart: false)
+      ).call
 
-      clear_cart_items!(attempt)
+      send_order_accept_to_seller(order)
+      create_buyer_online_payment_notification(order)
+      create_seller_online_payment_notification(order)
+      notify_admin_online_payment(order)
+
       attempt.update!(
         status: "processed",
         processed_at: Time.current,
@@ -159,6 +87,97 @@ class PaymentAttemptFinalizationService
     Result.new(orders: [], b2b_order: order)
   end
 
+  def send_order_accept_to_seller(order)
+    seller = order.seller_dealer
+    return if seller.blank?
+
+    buyer = order.buyer_dealer
+    
+    MetaWhatsappCloudService.new.send_order_accept(
+      to: formatted_phone_for(seller),
+      dealer_code: buyer.dealer_code.to_s,       
+      phone: formatted_phone_for(buyer) || "N/A",
+      address: get_address(buyer),               
+      order_id: order.id.to_s                    
+    )
+    rescue StandardError => e
+    Rails.logger.error("Failed to send order_accept template to seller: #{e.message}")
+  end
+
+  def create_buyer_online_payment_notification(order)
+    NotificationService.deliver(
+      recipient: order.buyer_dealer,
+      actor: order.buyer_dealer,
+      notifiable: order,
+      kind: "b2b_order_payment_success",
+      title: "✅ Payment Successful!",
+      message: "Your order ##{order.id} has been confirmed with Online Payment.",
+      visible_in_app: true,
+      delivery_channels: { push: true, whatsapp: false, sms: false, email: false, in_app: true },
+      payload: {
+        order_id: order.id,
+        total_amount: order.total_amount.to_f,
+        payment_method: "Online"
+      }
+    )
+  end
+
+  def create_seller_online_payment_notification(order)
+    NotificationService.deliver(
+      recipient: order.seller_dealer,
+      actor: order.buyer_dealer,
+      notifiable: order,
+      kind: "b2b_order_payment_confirmed_seller",
+      title: "💰 Payment Confirmed!",
+      message: "Buyer #{order.buyer_dealer.dealer_code} has completed payment for order ##{order.id}.",
+      visible_in_app: true,
+      delivery_channels: { push: true, whatsapp: false, sms: false, email: false, in_app: true },
+      payload: {
+        order_id: order.id,
+        buyer_dealer_id: order.buyer_dealer_id,
+        total_amount: order.total_amount.to_f,
+        payment_method: "Online"
+      }
+    )
+  end
+
+  def notify_admin_online_payment(order)
+    AdminUser.where(is_super_admin: true).find_each do |admin|
+      NotificationService.deliver(
+        recipient: admin,
+        actor: order.buyer_dealer,
+        notifiable: order,
+        kind: "admin_b2b_order_confirmed",
+        title: "📦 New B2B Order Confirmed (Online)",
+        message: "B2B Order ##{order.id} confirmed by #{order.buyer_dealer.dealer_code}. Amount: ₹#{order.total_amount} (Online Payment)",
+        visible_in_app: true,
+        delivery_channels: { push: true, whatsapp: false, sms: false, email: false, in_app: true },
+        payload: {
+          order_id: order.id,
+          buyer_dealer_id: order.buyer_dealer_id,
+          seller_dealer_id: order.seller_dealer_id,
+          total_amount: order.total_amount.to_f,
+          payment_method: "Online"
+        }
+      )
+    end
+  end
+
+  def get_address(dealer)
+    return "Address not available" if dealer.blank?
+    
+    profile = dealer.dealer_profile
+    return "Address not available" if profile.blank?
+    
+    profile.business_address.presence || "Address not available"
+  end
+
+  def formatted_phone_for(dealer)
+    return nil if dealer.phone.blank?
+    cc = dealer.country_code.presence || "+91"
+    "#{cc}#{dealer.phone}".gsub(/\s+/, "")
+  end
+  
   def load_orders(attempt)
     ids = Array(attempt.result_payload["order_ids"])
     Order.where(id: ids).order(:id)
@@ -169,26 +188,6 @@ class PaymentAttemptFinalizationService
 
     coupon = Coupon.find_by(code: attempt.coupon_code)
     coupon&.consume_for!(attempt.buyer)
-  end
-
-  def clear_cart_items!(attempt)
-    cart = attempt.buyer.cart
-    return if cart.blank?
-
-    Array(attempt.cart_snapshot["items"]).each do |item|
-      cart_item = cart.cart_items.find_by(id: item["cart_item_id"]) ||
-                  cart.cart_items.find_by(dealer_product_id: item["dealer_product_id"], product_variant_id: item["product_variant_id"])
-      next if cart_item.blank?
-
-      remaining = cart_item.quantity.to_i - item["quantity"].to_i
-      remaining > 0 ? cart_item.update!(quantity: remaining) : cart_item.destroy!
-    end
-
-    cart.revalidate_coupon!(user: attempt.buyer)
-  end
-
-  def dealer_id_for(dealer_product_id)
-    DealerProduct.find(dealer_product_id).dealer_id
   end
 
   def checkout_context

@@ -5,23 +5,155 @@ require "json"
 class MetaWhatsappCloudService
   GRAPH_BASE = "https://graph.facebook.com".freeze
 
-  def deliver(notification)
+  TEMPLATE_DEALER_ORDER_REQUEST = "dealer_order_request"
+  TEMPLATE_PAYMENT_REQUEST = "payment_request"
+  TEMPLATE_ORDER_ACCEPT = "order_accept"
+  TEMPLATE_PAYMENT_SUCCESS = "payment_success_order_details"
+
+  def send_dealer_order_request(to:, product:, variant:, sku:, price:, quantity:, total_amount:, delivery_location:, approx_distance:, accept_token:, reject_token:, image_url: nil)
+    components = []
+    image_to_use = image_url.presence || "#{ENV['FRONTEND_URL']}/images/ac.png"
+
+    components << {
+      type: "header",
+      parameters: [
+        {
+          type: "image",
+          image: {
+            link: image_to_use
+          }
+        }
+      ]
+    }
+
+    components << {
+      type: "body",
+      parameters: [
+        { type: "text", text: product.to_s },          
+        { type: "text", text: variant.to_s },          
+        { type: "text", text: sku.to_s },              
+        { type: "text", text: price.to_s },            
+        { type: "text", text: quantity.to_s },         
+        { type: "text", text: total_amount.to_s },     
+        { type: "text", text: delivery_location.to_s },
+        { type: "text", text: approx_distance.to_s }   
+      ]
+    }
+
+    components << {
+      type: "button",
+      sub_type: "quick_reply",
+      index: 0,
+      parameters: [
+        { type: "payload", payload: accept_token.to_s }
+      ]
+    }
+
+    components << {
+      type: "button",
+      sub_type: "quick_reply",
+      index: 1,
+      parameters: [
+        { type: "payload", payload: reject_token.to_s }
+      ]
+    }
+
+    send_template_message(
+      to: to,
+      template_name: TEMPLATE_DEALER_ORDER_REQUEST,
+      components: components
+    )
+  end
+
+  def send_order_accept(to:, dealer_code:, phone:, address:, order_id:)
+    components = [
+      {
+        type: "body",
+        parameters: [
+          { type: "text", text: dealer_code.to_s },
+          { type: "text", text: phone.to_s },      
+          { type: "text", text: address.to_s },    
+          { type: "text", text: order_id.to_s }    
+        ]
+      }
+    ]
+
+    send_template_message(
+      to: to,
+      template_name: TEMPLATE_ORDER_ACCEPT,
+      components: components
+    )
+  end
+
+  def send_payment_request(to:, product:, variant:, unit_price:, quantity:, total_amount:, payment_url:)
+  components = [
+      {
+        type: "body",
+        parameters: [
+          { type: "text", text: product.to_s },    
+          { type: "text", text: variant.to_s },    
+          { type: "text", text: unit_price.to_s }, 
+          { type: "text", text: quantity.to_s },   
+          { type: "text", text: total_amount.to_s }
+        ]
+      },
+      {
+        type: "button",
+        sub_type: "url",
+        index: 0,
+        parameters: [
+          { type: "text", text: payment_url.to_s }
+        ]
+      }
+    ]
+
+    send_template_message(
+      to: to,
+      template_name: TEMPLATE_PAYMENT_REQUEST,
+      components: components
+    )
+  end
+
+  def send_payment_success(to:, product:, variant:, quantity:, unit_price:, total_paid:, payment_id:, order_id:, dealer_code:, dealer_phone:)
+    components = [
+      {
+        type: "body",
+        parameters: [
+          { type: "text", text: product.to_s },    
+          { type: "text", text: variant.to_s },    
+          { type: "text", text: quantity.to_s },   
+          { type: "text", text: unit_price.to_s }, 
+          { type: "text", text: total_paid.to_s }, 
+          { type: "text", text: payment_id.to_s }, 
+          { type: "text", text: order_id.to_s },   
+          { type: "text", text: dealer_code.to_s },
+          { type: "text", text: dealer_phone.to_s }
+        ]
+      }
+    ]
+    send_template_message(
+      to: to,
+      template_name: TEMPLATE_PAYMENT_SUCCESS,
+      components: components
+    )
+  end
+
+  def send_template_message(to:, template_name:, components: [], language: "en")
     return unless configured?
-
-    channels = notification.delivery_channels
-    return if channels.key?("whatsapp") && channels["whatsapp"] == false
-
-    to = e164_for(notification.receiver)
     return if to.blank?
 
-    if notification.notification_type == "b2b_order_request"
-      send_b2b_request_message(to: to, notification: notification)
-    else
-      send_text_message(to: to, body: composed_text(notification))
-    end
-  rescue StandardError => e
-    Rails.logger.error("Meta WhatsApp delivery failed for notification #{notification&.id}: #{e.message}")
-    track_failure(notification, e.message)
+    payload = {
+      messaging_product: "whatsapp",
+      to: normalized_destination(to),
+      type: "template",
+      template: {
+        name: template_name,
+        language: { code: language },
+        components: components
+      }
+    }
+    response = post_message!(payload)
+    response
   end
 
   def send_text_message(to:, body:)
@@ -37,79 +169,8 @@ class MetaWhatsappCloudService
     )
   end
 
-  def send_b2b_request_message(to:, notification:)
-    offer = resolve_offer(notification)
-    payload = notification.payload.stringify_keys
-    items = offer&.delivery_payload.presence || Array(payload["items"])
-    button_accept_id = offer&.accept_token.to_s
-    button_reject_id = offer&.reject_token.to_s
-    return if items.empty? || button_accept_id.blank? || button_reject_id.blank?
-
-    body_lines = items.map do |item|
-      name = item["product_name"].presence || item["variant_sku"].presence || "Item"
-      quantity = item["quantity"].to_i
-      price = item["unit_price"].to_f.round(2)
-      "#{name} | Qty: #{quantity} | Price: Rs #{price}"
-    end
-
-    body_text = <<~TEXT.strip
-      Nearby B2B request ##{payload["order_id"]}
-      Buyer: #{payload["buyer_name"].presence || "Dealer"}
-      Radius: #{payload["requested_radius_km"].to_i} km
-
-      #{body_lines.join("\n")}
-    TEXT
-
-    response = post_message!(
-      messaging_product: "whatsapp",
-      recipient_type: "individual",
-      to: normalized_destination(to),
-      type: "interactive",
-      interactive: {
-        type: "button",
-        body: { text: body_text.truncate(1_024) },
-        footer: { text: "First valid acceptance wins." },
-        action: {
-          buttons: [
-            {
-              type: "reply",
-              reply: { id: button_accept_id, title: "Accept" }
-            },
-            {
-              type: "reply",
-              reply: { id: button_reject_id, title: "Reject" }
-            }
-          ]
-        }
-      }
-    )
-    track_success(notification: notification, offer: offer, to: to, response: response)
-  end
-
   def configured?
     access_token.present? && phone_number_id.present?
-  end
-
-  private
-
-  def composed_text(notification)
-    [notification.title, notification.body].compact.join("\n").truncate(4_000)
-  end
-
-  def access_token
-    ENV["META_WHATSAPP_ACCESS_TOKEN"].to_s.presence
-  end
-
-  def phone_number_id
-    ENV["META_WHATSAPP_PHONE_NUMBER_ID"].to_s.presence
-  end
-
-  def api_version
-    ENV["META_WHATSAPP_API_VERSION"].to_s.presence || "v23.0"
-  end
-
-  def endpoint
-    "#{GRAPH_BASE}/#{api_version}/#{phone_number_id}/messages"
   end
 
   def post_message!(payload)
@@ -125,47 +186,22 @@ class MetaWhatsappCloudService
     raise StandardError, "Meta WhatsApp API error #{response.code}: #{response.body}"
   end
 
-  def resolve_offer(notification)
-    offer_id = notification.payload["offer_id"]
-    return nil if offer_id.blank?
+  private
 
-    B2bOrderOffer.find_by(id: offer_id)
+  def access_token
+    ENV["META_WHATSAPP_ACCESS_TOKEN"].to_s.presence
   end
 
-  def track_success(notification:, offer:, to:, response:)
-    message_id = Array(response["messages"]).first&.dig("id")
-    conversation_id = Array(response["contacts"]).first&.dig("wa_id")
-
-    if offer.present?
-      offer.update!(
-        whatsapp_message_id: message_id,
-        whatsapp_status: "sent",
-        recipient_phone: to,
-        sent_at: Time.current
-      )
-    end
-
-    WhatsappWebhookEvent.create!(
-      provider: "meta",
-      event_type: "outbound_message",
-      event_key: "outbound:#{message_id.presence || SecureRandom.uuid}",
-      direction: "outbound",
-      b2b_order_offer: offer,
-      notification: notification,
-      message_id: message_id,
-      conversation_id: conversation_id,
-      to_number: normalized_destination(to),
-      status: "sent",
-      processed_at: Time.current,
-      payload: response
-    )
+  def phone_number_id
+    ENV["META_WHATSAPP_PHONE_NUMBER_ID"].to_s.presence
   end
 
-  def track_failure(notification, message)
-    offer = resolve_offer(notification)
-    offer&.update!(whatsapp_status: "failed", failed_at: Time.current, failure_reason: message)
-  rescue StandardError
-    nil
+  def api_version
+    ENV["META_WHATSAPP_API_VERSION"].to_s.presence || "v23.0"
+  end
+
+  def endpoint
+    "#{GRAPH_BASE}/#{api_version}/#{phone_number_id}/messages"
   end
 
   def normalized_destination(to)

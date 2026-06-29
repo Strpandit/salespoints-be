@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_06_23_120000) do
+ActiveRecord::Schema[8.0].define(version: 2026_06_25_062552) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -155,10 +155,12 @@ ActiveRecord::Schema[8.0].define(version: 2026_06_23_120000) do
     t.datetime "updated_at", null: false
     t.string "status", default: "open", null: false
     t.datetime "responded_at"
+    t.integer "wholesaler_post_id"
     t.index ["b2b_order_id"], name: "index_b2b_order_items_on_b2b_order_id"
     t.index ["dealer_product_id"], name: "index_b2b_order_items_on_dealer_product_id"
     t.index ["product_variant_id"], name: "index_b2b_order_items_on_product_variant_id"
     t.index ["status"], name: "index_b2b_order_items_on_status"
+    t.index ["wholesaler_post_id"], name: "index_b2b_order_items_on_wholesaler_post_id"
   end
 
   create_table "b2b_order_offers", force: :cascade do |t|
@@ -215,11 +217,25 @@ ActiveRecord::Schema[8.0].define(version: 2026_06_23_120000) do
     t.string "payment_status", default: "pending", null: false
     t.bigint "buyer_payment_attempt_id"
     t.datetime "last_rebroadcast_at"
+    t.string "source_type"
+    t.integer "source_id"
+    t.boolean "is_direct_buy", default: false
+    t.string "request_status", default: "pending_request"
+    t.datetime "requested_at"
+    t.datetime "payment_link_sent_at"
+    t.datetime "rejected_at"
+    t.datetime "expired_at"
+    t.datetime "payment_confirmed_at"
+    t.datetime "confirmed_at"
     t.index ["buyer_dealer_id"], name: "index_b2b_orders_on_buyer_dealer_id"
     t.index ["buyer_payment_attempt_id"], name: "index_b2b_orders_on_buyer_payment_attempt_id"
+    t.index ["is_direct_buy"], name: "index_b2b_orders_on_is_direct_buy"
     t.index ["payment_method"], name: "index_b2b_orders_on_payment_method"
     t.index ["payment_status"], name: "index_b2b_orders_on_payment_status"
+    t.index ["request_status", "expires_at"], name: "index_b2b_orders_on_request_status_and_expires_at"
+    t.index ["request_status"], name: "index_b2b_orders_on_request_status"
     t.index ["seller_dealer_id"], name: "index_b2b_orders_on_seller_dealer_id"
+    t.index ["source_type", "source_id"], name: "index_b2b_orders_on_source_type_and_source_id"
     t.index ["status"], name: "index_b2b_orders_on_status"
   end
 
@@ -239,33 +255,6 @@ ActiveRecord::Schema[8.0].define(version: 2026_06_23_120000) do
     t.boolean "is_active"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-  end
-
-  create_table "cart_items", force: :cascade do |t|
-    t.integer "cart_id", null: false
-    t.integer "dealer_product_id", null: false
-    t.integer "quantity"
-    t.decimal "total_price", precision: 10, scale: 2, null: false
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.bigint "product_variant_id", null: false
-    t.decimal "unit_price", precision: 10, scale: 2, default: "0.0", null: false
-    t.index ["cart_id", "dealer_product_id", "product_variant_id"], name: "index_cart_items_unique", unique: true
-    t.index ["cart_id"], name: "index_cart_items_on_cart_id"
-    t.index ["dealer_product_id"], name: "index_cart_items_on_dealer_product_id"
-    t.index ["product_variant_id"], name: "index_cart_items_on_product_variant_id"
-  end
-
-  create_table "carts", force: :cascade do |t|
-    t.string "buyer_type", null: false
-    t.integer "buyer_id", null: false
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.bigint "coupon_id"
-    t.string "coupon_code"
-    t.index ["buyer_type", "buyer_id"], name: "index_carts_on_buyer"
-    t.index ["buyer_type", "buyer_id"], name: "index_carts_on_buyer_type_and_buyer_id", unique: true
-    t.index ["coupon_id"], name: "index_carts_on_coupon_id"
   end
 
   create_table "cat_filters", force: :cascade do |t|
@@ -509,14 +498,12 @@ ActiveRecord::Schema[8.0].define(version: 2026_06_23_120000) do
 
   create_table "order_items", force: :cascade do |t|
     t.bigint "order_id", null: false
-    t.bigint "dealer_product_id", null: false
     t.bigint "product_variant_id", null: false
     t.integer "quantity", default: 1, null: false
     t.decimal "unit_price", precision: 12, scale: 2, default: "0.0", null: false
     t.decimal "total_price", precision: 12, scale: 2, default: "0.0", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.index ["dealer_product_id"], name: "index_order_items_on_dealer_product_id"
     t.index ["order_id"], name: "index_order_items_on_order_id"
     t.index ["product_variant_id"], name: "index_order_items_on_product_variant_id"
   end
@@ -721,15 +708,17 @@ ActiveRecord::Schema[8.0].define(version: 2026_06_23_120000) do
 
   create_table "reviews", force: :cascade do |t|
     t.integer "account_id", null: false
-    t.integer "dealer_product_id", null: false
+    t.integer "dealer_product_id"
     t.string "title"
     t.text "comment"
     t.integer "rating"
     t.boolean "verified"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.bigint "product_id"
     t.index ["account_id"], name: "index_reviews_on_account_id"
     t.index ["dealer_product_id"], name: "index_reviews_on_dealer_product_id"
+    t.index ["product_id"], name: "index_reviews_on_product_id"
   end
 
   create_table "roles", force: :cascade do |t|
@@ -859,6 +848,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_06_23_120000) do
   add_foreign_key "b2b_order_items", "b2b_orders"
   add_foreign_key "b2b_order_items", "dealer_products"
   add_foreign_key "b2b_order_items", "product_variants"
+  add_foreign_key "b2b_order_items", "wholesaler_posts"
   add_foreign_key "b2b_order_offers", "b2b_orders"
   add_foreign_key "b2b_order_offers", "dealers"
   add_foreign_key "b2b_order_offers", "notifications"
@@ -867,10 +857,6 @@ ActiveRecord::Schema[8.0].define(version: 2026_06_23_120000) do
   add_foreign_key "b2b_orders", "payment_attempts", column: "buyer_payment_attempt_id"
   add_foreign_key "brand_categories", "brands"
   add_foreign_key "brand_categories", "categories"
-  add_foreign_key "cart_items", "carts"
-  add_foreign_key "cart_items", "dealer_products"
-  add_foreign_key "cart_items", "product_variants"
-  add_foreign_key "carts", "coupons"
   add_foreign_key "cat_filters", "categories"
   add_foreign_key "contact_form_submissions", "admin_users"
   add_foreign_key "coupon_usages", "coupons"
@@ -888,7 +874,6 @@ ActiveRecord::Schema[8.0].define(version: 2026_06_23_120000) do
   add_foreign_key "dealer_profiles", "dealers"
   add_foreign_key "dealers", "admin_users", column: "deleted_by_id"
   add_foreign_key "deletion_requests", "admin_users", column: "reviewed_by_admin_id"
-  add_foreign_key "order_items", "dealer_products"
   add_foreign_key "order_items", "orders"
   add_foreign_key "order_items", "product_variants"
   add_foreign_key "orders", "dealers", column: "seller_dealer_id"
@@ -899,6 +884,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_06_23_120000) do
   add_foreign_key "return_requests", "orders"
   add_foreign_key "reviews", "accounts"
   add_foreign_key "reviews", "dealer_products"
+  add_foreign_key "reviews", "products"
   add_foreign_key "roles", "admin_users", column: "created_by_id"
   add_foreign_key "support_tickets", "accounts"
   add_foreign_key "support_tickets", "admin_users"

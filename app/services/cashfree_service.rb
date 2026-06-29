@@ -12,6 +12,7 @@ class CashfreeService
     @webhook_secret = ENV["CASHFREE_WEBHOOK_SECRET"].presence || @client_secret
     @pg_base_url = ENV["CASHFREE_BASE_URL"].presence || "https://sandbox.cashfree.com/pg"
     @payout_base_url = ENV["CASHFREE_PAYOUT_BASE_URL"].presence || "https://payout-sandbox.cashfree.com/payout"
+    @backend_url = ENV["BACKEND_BASE_URL"].presence || "http://localhost:3000"
     @frontend_url = ENV["FRONTEND_URL"].presence || "http://localhost:5173"
   end
 
@@ -43,26 +44,34 @@ class CashfreeService
 
   def create_cashfree_order(reference:, amount:, customer:, return_params:)
     raise StandardError, "Cashfree is not configured" unless configured?
+    raise StandardError, "Reference is required" if reference.blank?
+    raise StandardError, "Amount must be greater than 0" if amount.to_f <= 0
+
+    payload = {
+      order_id: reference.to_s,
+      order_amount: amount.to_f.round(2),
+      order_currency: "INR",
+      customer_details: customer_details_for(customer),
+      order_meta: {
+        return_url: "#{@frontend_url}/payment-status?cashfree_return=1&#{return_params.to_query}",
+        notify_url: "#{@backend_url}/api/payments/cashfree_webhook"
+      }
+    }
 
     response = self.class.post(
-      "#{@base_url}/orders",
-      headers: default_headers,
-      body: {
-        order_id: reference,
-        order_amount: amount.to_f.round(2),
-        order_currency: "INR",
-        customer_details: customer_details_for(customer),
-        order_meta: {
-          return_url: "#{@frontend_url}/cart?cashfree_return=1&#{return_params.to_query}"
-        }
-      }.to_json
+      "#{@pg_base_url}/orders",
+      headers: pg_headers,
+      body: payload.to_json,
+      timeout: REQUEST_TIMEOUT
     )
 
     parsed = parse_response(response)
+
     if response.success? && parsed["payment_session_id"].present?
       parsed
     else
-      raise StandardError, parsed["message"].presence || parsed["error"] || "Unable to create Cashfree payment session"
+      error_msg = parsed["message"] || parsed["error"] || "Unable to create Cashfree payment session"
+      raise StandardError, error_msg
     end
   end
 
@@ -71,8 +80,9 @@ class CashfreeService
     raise StandardError, "Cashfree order reference is missing" if order_reference.blank?
 
     response = self.class.get(
-      "#{@base_url}/orders/#{order_reference}",
-      headers: default_headers
+      "#{@pg_base_url}/orders/#{order_reference}",
+      headers: pg_headers,
+      timeout: REQUEST_TIMEOUT
     )
 
     parse_response(response)
@@ -96,6 +106,7 @@ class CashfreeService
 
     parsed = parse_response(response)
     payload = parsed.is_a?(Array) ? parsed.first : parsed
+
     if response.success? && payload.present?
       payload
     else
@@ -143,6 +154,7 @@ class CashfreeService
     )
 
     parsed = parse_response(response)
+
     if response.success? && parsed["subCode"] == "200"
       parsed
     else
@@ -185,6 +197,7 @@ class CashfreeService
     )
 
     parsed = parse_response(response)
+
     if response.success? && parsed["subCode"] == "200"
       parsed
     else
@@ -232,6 +245,10 @@ class CashfreeService
 
   private
 
+  # def default_headers
+  #   pg_headers
+  # end
+
   def pg_headers
     {
       "Content-Type" => "application/json",
@@ -251,7 +268,7 @@ class CashfreeService
   end
 
   def beneficiary_id_for(dealer)
-    "DEAL-#{dealer.id}-#{dealer.account_id}" 
+    "DEAL-#{dealer.id}-#{dealer.account_id}"
   end
 
   def format_phone(phone)
@@ -260,7 +277,7 @@ class CashfreeService
 
   def dealer_onboarding_valid?(dealer)
     profile = dealer.dealer_profile
-    dealer.present? && 
+    dealer.present? &&
     dealer.email.present? &&
     dealer.phone.present? &&
     profile&.bank_account_number.present? &&
@@ -288,7 +305,12 @@ class CashfreeService
   end
 
   def parse_response(response)
-    body = response.respond_to?(:parsed_response) ? response.parsed_response : response
-    body.is_a?(Hash) ? body : {}
+    if response.respond_to?(:parsed_response)
+      response.parsed_response.is_a?(Hash) ? response.parsed_response : {}
+    elsif response.is_a?(Hash)
+      response
+    else
+      {}
+    end
   end
 end

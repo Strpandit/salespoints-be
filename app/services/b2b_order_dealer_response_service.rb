@@ -8,18 +8,15 @@ class B2bOrderDealerResponseService
 
   def accept!
     ActiveRecord::Base.transaction do
-      lock_order = B2bOrder.lock.includes(:buyer_dealer, b2b_order_items: [:product_variant, { dealer_product: :dealer }]).find(@order.id)
+      lock_order = B2bOrder.lock.find(@order.id)
       offer = lock_b2b_request_offer!(order: lock_order)
+      ensure_order_can_be_accepted!(order: lock_order)
 
-      ensure_order_can_be_processed!(order: lock_order)
+      open_items = lock_order.b2b_order_items.open_items
+      raise StandardError, "No open items available" if open_items.empty?
 
-      visible_item_ids = offer.item_id_values
-      candidate_ids = @requested_ids.present? ? (visible_item_ids & @requested_ids) : visible_item_ids
-      raise StandardError, "No matching open items are available for this request" if candidate_ids.empty?
-
-      candidate_items = lock_order.b2b_order_items.open_items.where(id: candidate_ids)
-      updated_items = resolve_order_items_for_seller(candidate_items)
-      raise StandardError, "You don't have enough stock for the selected items" if updated_items.blank?
+      updated_items = resolve_all_items_for_seller(open_items)
+      raise StandardError, "You don't have enough stock to fulfill this order" if updated_items.blank?
 
       updated_items.each do |item, dealer_product, pricing|
         item.update!(
@@ -29,75 +26,89 @@ class B2bOrderDealerResponseService
           unit_price: pricing[:unit_price],
           total_price: pricing[:subtotal]
         )
+
+        if item.wholesaler_post_id.present?
+          wholesaler_post = WholesalerPost.find_by(id: item.wholesaler_post_id)
+          if wholesaler_post && wholesaler_post.dealer_id == @dealer.id
+            wholesaler_post.update!(stock_quantity: wholesaler_post.stock_quantity - item.quantity)
+          end
+        end
+
+        dealer_product.update!(stock_quantity: dealer_product.stock_quantity - item.quantity)
       end
 
-      lock_order.update!(seller_dealer_id: @dealer.id) if lock_order.seller_dealer_id.blank?
+      lock_order.mark_accepted!(@dealer)
       lock_order.recalculate_totals!
-      lock_order.refresh_status!
-
-      updated_items.each do |item, dealer_product, pricing|
-        dealer_product.reload
-        dealer_product.update!(stock_quantity: dealer_product.stock_quantity.to_i - item.quantity.to_i)
-      end
-
       offer.update!(status: "accepted", responded_at: Time.current, whatsapp_status: "replied")
-      mark_offers_after_acceptance!(order: lock_order, accepted_items: updated_items.map(&:first))
-      notify_buyer_of_acceptance!(order: lock_order, updated_items: updated_items)
-      notify_seller_of_buyer_details!(order: lock_order, updated_items: updated_items)
+      close_other_offers!(lock_order)
+
+      send_payment_request_template(lock_order)
+      create_buyer_notification(lock_order, "accepted")
+      create_seller_acceptance_notification(lock_order)
 
       updated_items.map(&:first)
     end
+  rescue StandardError => e
+    Rails.logger.error "B2bOrderDealerResponseService.accept! error: #{e.message}"
+    raise
   end
 
   def reject!
     ActiveRecord::Base.transaction do
-      lock_order = B2bOrder.lock.includes(:buyer_dealer, b2b_order_items: :product_variant).find(@order.id)
+      lock_order = B2bOrder.lock.find(@order.id)
       offer = lock_b2b_request_offer!(order: lock_order)
 
-      ensure_order_can_be_processed!(order: lock_order)
+      ensure_order_can_be_accepted!(order: lock_order)
 
-      visible_item_ids = offer.item_id_values
-      rejected_ids = @requested_ids.present? ? (visible_item_ids & @requested_ids) : visible_item_ids
-      raise StandardError, "No matching open items are available for this request" if rejected_ids.empty?
+      lock_order.mark_rejected!
 
-      remaining_ids = visible_item_ids - rejected_ids
       offer.update!(
-        status: remaining_ids.empty? ? "rejected" : "open",
-        item_ids: remaining_ids,
-        delivery_payload: serialize_b2b_items(lock_order.b2b_order_items.where(id: remaining_ids)),
+        status: "rejected",
         responded_at: Time.current,
         whatsapp_status: "replied"
       )
 
-      rejected_ids.length
+      close_other_offers!(lock_order)
+
+      notify_buyer_of_rejection(lock_order)
+      create_buyer_notification(lock_order, "rejected")
     end
+  rescue StandardError => e
+    Rails.logger.error "B2bOrderDealerResponseService.reject! error: #{e.message}"
+    raise
   end
 
   private
 
   def lock_b2b_request_offer!(order:)
-    offer = @offer.present? ? B2bOrderOffer.lock.find(@offer.id) : B2bOrderOffer.lock.find_by(b2b_order: order, dealer: @dealer, status: "open")
-    raise StandardError, "You are not allowed to respond to this order" unless offer
-    raise StandardError, "This request has already been closed for you" unless offer.status == "open"
+    offer = @offer.present? ? B2bOrderOffer.lock.find(@offer.id) :
+            B2bOrderOffer.lock.find_by(b2b_order: order, dealer: @dealer, status: "open")
+
+    raise StandardError, "You are not authorized to respond" unless offer
+    raise StandardError, "This request has already been closed" unless offer.status == "open"
     raise StandardError, "This request has expired" if offer.expired?
-    raise StandardError, "No items are pending for your response" if offer.item_id_values.empty?
 
     offer
   end
 
-  def ensure_order_can_be_processed!(order:)
+  def ensure_order_can_be_accepted!(order:)
     raise StandardError, "Order request expired" if order.expires_at.present? && Time.current > order.expires_at
     raise StandardError, "Cannot respond to your own request" if order.buyer_dealer_id == @dealer.id
-    raise StandardError, "Order request not found or already processed" unless %w[pending partially_accepted].include?(order.status)
+    raise StandardError, "Order already processed" unless order.pending_request?
   end
 
-  def resolve_order_items_for_seller(items_scope)
+  def resolve_all_items_for_seller(items_scope)
     resolved = []
 
     items_scope.each do |item|
-      dealer_product = @dealer.dealer_products.live.find_by(product_variant_id: item.product_variant_id)
-      return nil if dealer_product.blank?
-      return nil if dealer_product.stock_quantity.to_i < item.quantity.to_i
+      dealer_product = @dealer.dealer_products.live.find_by(
+        product_variant_id: item.product_variant_id
+      )
+
+      unless dealer_product && dealer_product.stock_quantity.to_i >= item.quantity.to_i
+        Rails.logger.warn "Dealer #{@dealer.id} doesn't have enough stock for variant #{item.product_variant_id}"
+        return nil
+      end
 
       pricing = Pricing::PriceCalculator.new(
         variant: dealer_product.product_variant,
@@ -111,116 +122,109 @@ class B2bOrderDealerResponseService
     resolved
   end
 
-  def mark_offers_after_acceptance!(order:, accepted_items:)
-    pending_item_ids = order.b2b_order_items.open_items.pluck(:id)
-
-    order.b2b_order_offers.find_each do |entry|
-      remaining_for_recipient = entry.item_id_values & pending_item_ids
-
-      next_state =
-        if entry.dealer_id == @dealer.id
-          "accepted"
-        elsif entry.status == "rejected"
-          "rejected"
-        elsif remaining_for_recipient.empty?
-          "cancelled"
-        else
-          "open"
-        end
-
-      entry.update!(
-        status: next_state,
-        item_ids: remaining_for_recipient,
-        delivery_payload: serialize_b2b_items(order.b2b_order_items.where(id: remaining_for_recipient)),
-        responded_at: (entry.dealer_id == @dealer.id ? Time.current : entry.responded_at)
-      )
-    end
+  def close_other_offers!(order)
+    order.b2b_order_offers
+         .where.not(id: @offer&.id || 0)
+         .where(status: "open")
+         .update_all(
+           status: "cancelled",
+           responded_at: Time.current
+         )
   end
 
-  def notify_buyer_of_acceptance!(order:, updated_items:)
+  def send_payment_request_template(order)
     buyer = order.buyer_dealer
+    items = order.b2b_order_items.accepted_items
+    first_item = items.first
+    variant = first_item&.product_variant
+    product = variant&.product
+    
+    payment_url = "#{ENV['FRONTEND_URL']}/payment/#{order.id}"
+
+    MetaWhatsappCloudService.new.send_payment_request(
+      to: formatted_phone_for(buyer),
+      product: product&.name || "Product",
+      variant: variant&.variant_sku || "Standard",
+      unit_price: first_item&.unit_price.to_f.round(2).to_s,
+      quantity: items.sum(&:quantity).to_s,
+      total_amount: order.total_amount.to_f.round(2).to_s,
+      payment_url: payment_url
+    )
+
+    order.update!(payment_link_sent_at: Time.current)
+  rescue StandardError => e
+    Rails.logger.error("Failed to send payment_request template: #{e.message}")
+  end
+
+  def create_buyer_notification(order, status)
+    buyer = order.buyer_dealer
+    
+    if status == "accepted"
+      title = "✅ Request Accepted!"
+      message = "#{@dealer.dealer_code} has accepted your request. Please complete payment."
+      kind = "b2b_order_accepted"
+    else
+      title = "❌ Request Rejected"
+      message = "#{@dealer.dealer_code} has rejected your request."
+      kind = "b2b_order_rejected"
+    end
 
     NotificationService.deliver(
       recipient: buyer,
       actor: @dealer,
       notifiable: order,
-      kind: "b2b_order_accepted",
-      title: "Dealer accepted your B2B request",
-      message: "#{@dealer.dealer_code} accepted #{updated_items.size} item(s) from your request.",
+      kind: kind,
+      title: title,
+      message: message,
       visible_in_app: true,
-      delivery_channels: { push: true, whatsapp: false, sms: false, email: true, in_app: true },
+      delivery_channels: { push: true, whatsapp: false, sms: false, email: false, in_app: true },
       payload: {
         order_id: order.id,
-        seller_dealer_id: @dealer.id,
-        seller_name: @dealer.dealer_code,
-        accepted_item_ids: updated_items.map { |item, _dealer_product, _price| item.id },
-        accepted_items: serialize_b2b_items(updated_items.map(&:first)),
-        b2b_state: order.status
+        dealer_id: @dealer.id,
+        status: status,
+        total_amount: order.total_amount.to_f
       }
     )
-
-    B2bOrderMailer.acceptance_update(order.id, @dealer.id, updated_items.map { |item, _dealer_product, _price| item.id }).deliver_later if buyer.email.present?
   end
 
-  def notify_seller_of_buyer_details!(order:, updated_items:)
-    buyer = order.buyer_dealer
-    accepted_items = updated_items.map(&:first)
-    item_lines = accepted_items.map do |item|
-      item_name = item.product_variant&.product&.name || item.product_variant&.variant_sku || "Item"
-      unit_price = item.unit_price.to_f.round(2)
-      "#{item_name} x #{item.quantity} @ Rs #{unit_price}"
-    end.join("\n")
-
-    buyer_message = <<~TEXT.strip
-      Buyer details for B2B request ##{order.id}
-
-      Accepted items:
-      #{item_lines}
-
-      Buyer dealer code: #{buyer&.dealer_code || "N/A"}
-      Mobile: #{formatted_phone_for(buyer)}
-      Address: #{buyer&.dealer_profile&.business_address.presence || "N/A"}
-    TEXT
-
+  def create_seller_acceptance_notification(order)
     NotificationService.deliver(
       recipient: @dealer,
-      actor: buyer,
+      actor: @dealer,
       notifiable: order,
-      kind: "b2b_order_buyer_details",
-      title: "Buyer details shared",
-      message: buyer_message,
+      kind: "b2b_order_acceptance_confirmation",
+      title: "✅ You Accepted This Request",
+      message: "You have accepted the request from #{order.buyer_dealer.dealer_code}. Waiting for buyer to complete payment.",
       visible_in_app: true,
-      delivery_channels: { push: true, whatsapp: true, sms: false, email: false, in_app: true },
+      delivery_channels: { push: true, whatsapp: false, sms: false, email: false, in_app: true },
       payload: {
         order_id: order.id,
-        buyer_dealer_id: buyer&.id,
-        buyer_code: buyer&.dealer_code,
-        buyer_phone: formatted_phone_for(buyer),
-        buyer_address: buyer&.dealer_profile&.business_address,
-        accepted_item_ids: accepted_items.map(&:id)
+        buyer_dealer_id: order.buyer_dealer_id,
+        total_amount: order.total_amount.to_f
       }
     )
   end
 
-  def serialize_b2b_items(items)
-    Array(items).map do |item|
-      {
-        id: item.id,
-        product_variant_id: item.product_variant_id,
-        product_name: item.product_variant&.product&.name,
-        variant_sku: item.product_variant&.variant_sku,
-        quantity: item.quantity,
-        unit_price: item.unit_price.to_f,
-        total_price: item.total_price.to_f,
-        status: item.status
-      }
-    end
+  def notify_buyer_of_rejection(order)
+    buyer = order.buyer_dealer
+
+    message = <<~TEXT
+      ❌ *Request Rejected*
+
+      #{@dealer.dealer_code} has rejected your request.
+
+      You can try with other sellers.
+    TEXT
+
+    MetaWhatsappCloudService.new.send_text_message(
+      to: formatted_phone_for(buyer),
+      body: message
+    )
   end
 
   def formatted_phone_for(dealer)
-    return "N/A" if dealer.blank? || dealer.phone.blank?
-
-    country_code = dealer.country_code.presence || "+91"
-    "#{country_code} #{dealer.phone}"
+    return nil if dealer.phone.blank?
+    cc = dealer.country_code.presence || "+91"
+    "#{cc}#{dealer.phone}".gsub(/\s+/, "")
   end
 end

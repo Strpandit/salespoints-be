@@ -107,7 +107,7 @@ module Api
           data: serialize_payment_attempt(attempt.reload),
           payment_attempt: serialize_payment_attempt(attempt.reload),
           payment_gateway_status: status,
-          message: "Payment was not completed. Cart remains unchanged."
+          message: "Payment failed."
         }, status: :ok
       end
     end
