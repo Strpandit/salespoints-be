@@ -7,8 +7,12 @@ module Api
       if current_dealer
         items = current_dealer.dealer_products.includes(:product, :product_variant).order(created_at: :desc).page(params[:page]).per(params[:per_page] || 20)
       elsif current_admin
-        items = DealerProduct.includes(:dealer, :product, :product_variant).where(dealers: { deleted_at: nil }).order(created_at: :desc)
-        items = items.where(approve_status: params[:approve_status]) if params[:approve_status].present?
+        items = DealerProduct.includes(:dealer, :product, :product_variant).order(created_at: :desc)
+        if params[:approve_status].blank? || params[:approve_status] == "all"
+          items = items
+        else
+          items = items.joins(:dealer).where(dealers: { deleted_at: nil }).where(approve_status: params[:approve_status])
+        end
         items = items.page(params[:page]).per(params[:per_page] || 20)
       else
         return unauthorized("Unauthorized")
