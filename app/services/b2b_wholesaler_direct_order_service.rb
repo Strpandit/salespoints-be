@@ -124,12 +124,25 @@ class B2bWholesalerDirectOrderService
   end
 
   def send_wholesaler_request_template(order, item, offer)
-    variant = item.product_variant
-    product = variant&.product
-    product_name = product&.name || "Product"
-    variant_name = variant&.variant_sku || variant&.variant_attributes&.to_s || "Standard"
-    sku = variant&.variant_sku || "N/A"
-    unit_price = item.unit_price || 0
+    product = nil
+    variant = nil
+
+    if @wholesaler_post.present?
+      product_name = @wholesaler_post.title || "Product"
+      variant_name = @wholesaler_post.modal_no || "Standard"
+      sku = @wholesaler_post.modal_no || "N/A"
+      unit_price = @wholesaler_post.price || 0
+      product = nil
+      variant = nil
+    else
+      variant = item.product_variant
+      product = variant&.product
+      product_name = product&.name || "Product"
+      variant_name = variant&.variant_sku || variant&.variant_attributes&.to_s || "Standard"
+      sku = variant&.variant_sku || "N/A"
+      unit_price = item.unit_price || 0
+    end
+
     quantity = item.quantity
     total_amount = item.total_price || 0
 
@@ -137,18 +150,20 @@ class B2bWholesalerDirectOrderService
     seller_location = @seller&.dealer_location
 
     delivery_location = get_location(@seller)
-    approx_distance = if buyer_location.present? && seller_location.present?
-      DealerLocation.distance_km(
-        buyer_location.latitude.to_f,
-        buyer_location.longitude.to_f,
-        seller_location.latitude.to_f,
-        seller_location.longitude.to_f
-      ).round(2).to_s
+    approx_distance = if buyer_location.present? && seller_location.present? &&
+                      buyer_location.latitude.present? && buyer_location.longitude.present? &&
+                      seller_location.latitude.present? && seller_location.longitude.present?
+    DealerLocation.distance_km(
+      buyer_location.latitude.to_f,
+      buyer_location.longitude.to_f,
+      seller_location.latitude.to_f,
+      seller_location.longitude.to_f
+    ).round(2).to_s
     else
       "0"
     end
 
-    base_url = ENV["FRONTEND_URL"] || "https://yourapp.com"
+    base_url = ENV["FRONTEND_URL"] || "https://salespoints.in"
     accept_url = "#{base_url}/b2b/accept/#{offer.accept_token}"
     reject_url = "#{base_url}/b2b/reject/#{offer.reject_token}"
     image_url = get_product_image(product, variant)
@@ -180,7 +195,13 @@ class B2bWholesalerDirectOrderService
   def create_wholesaler_in_app_notification(order, item, offer)
     variant = item.product_variant
     product = variant&.product
-    product_name = product&.name || "Product"
+
+    if @wholesaler_post.present?
+      product_name = @wholesaler_post.title || "Product"
+    else
+      product_name = product&.name || "Product"
+    end
+
     quantity = item.quantity
     total_amount = item.total_price || 0
 
@@ -215,6 +236,12 @@ class B2bWholesalerDirectOrderService
   end
 
   def get_product_image(product, variant)
+
+    if @wholesaler_post.present? && @wholesaler_post.media.attached?
+      attachment = @wholesaler_post.media.first
+      return rails_blob_url(attachment, only_path: false) if attachment.present?
+    end
+
     if variant.present? && variant.media.attached?
       attachment = variant.media.first
       return rails_blob_url(attachment, only_path: false) if attachment.present?
@@ -225,12 +252,7 @@ class B2bWholesalerDirectOrderService
       return rails_blob_url(attachment, only_path: false) if attachment.present?
     end
 
-    if @wholesaler_post.present? && @wholesaler_post.media.attached?
-      attachment = @wholesaler_post.media.first
-      return rails_blob_url(attachment, only_path: false) if attachment.present?
-    end
-
-    return "#{ENV['FRONTEND_URL']}/images/default-product.png"
+    return "#{ENV['FRONTEND_URL']}/images/ac.png"
   rescue StandardError => e
     Rails.logger.error("Failed to get product image: #{e.message}")
     nil
@@ -239,10 +261,12 @@ class B2bWholesalerDirectOrderService
   def get_location(dealer)
     return "Location not available" if dealer.blank?
     
-    location = dealer.dealer_location
-    return "Location not available" if location.blank?
+    address = dealer.dealer_profile&.business_address
+    return "Location not available" if address.blank?
     
-    [location.city, location.state].compact.join(", ").presence || "Location not available"
+    trimmed = address.to_s.strip.truncate(60, separator: ' ')
+    
+    trimmed
   end
 
   def formatted_phone_for(dealer)
