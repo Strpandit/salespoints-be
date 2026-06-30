@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_06_25_062552) do
+ActiveRecord::Schema[8.0].define(version: 2026_06_30_091732) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -33,8 +33,8 @@ ActiveRecord::Schema[8.0].define(version: 2026_06_25_062552) do
     t.string "country_code", default: "+91"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.index ["email"], name: "index_accounts_on_email", unique: true
-    t.index ["phone"], name: "index_accounts_on_phone", unique: true
+    t.index ["email"], name: "index_accounts_on_email", unique: true, where: "(deleted_at IS NULL)"
+    t.index ["phone"], name: "index_accounts_on_phone", unique: true, where: "(deleted_at IS NULL)"
   end
 
   create_table "active_storage_attachments", force: :cascade do |t|
@@ -138,9 +138,9 @@ ActiveRecord::Schema[8.0].define(version: 2026_06_25_062552) do
     t.index ["approval_status"], name: "index_admin_users_on_approval_status"
     t.index ["approved_by_id"], name: "index_admin_users_on_approved_by_id"
     t.index ["deleted_by_id"], name: "index_admin_users_on_deleted_by_id"
-    t.index ["email"], name: "index_admin_users_on_email", unique: true
+    t.index ["email"], name: "index_admin_users_on_email", unique: true, where: "(deleted_at IS NULL)"
     t.index ["is_super_admin"], name: "index_admin_users_on_is_super_admin"
-    t.index ["phone"], name: "index_admin_users_on_phone", unique: true
+    t.index ["phone"], name: "index_admin_users_on_phone", unique: true, where: "(deleted_at IS NULL)"
     t.index ["pincodes"], name: "index_admin_users_on_pincodes", using: :gin
   end
 
@@ -452,10 +452,10 @@ ActiveRecord::Schema[8.0].define(version: 2026_06_25_062552) do
     t.decimal "settlement_balance", precision: 14, scale: 2, default: "0.0", null: false
     t.bigint "deleted_by_id"
     t.string "pincode"
-    t.index ["dealer_code"], name: "index_dealers_on_dealer_code", unique: true
+    t.index ["dealer_code"], name: "index_dealers_on_dealer_code", unique: true, where: "(deleted_at IS NULL)"
     t.index ["deleted_by_id"], name: "index_dealers_on_deleted_by_id"
-    t.index ["email"], name: "index_dealers_on_email", unique: true
-    t.index ["phone"], name: "index_dealers_on_phone", unique: true
+    t.index ["email"], name: "index_dealers_on_email", unique: true, where: "(deleted_at IS NULL)"
+    t.index ["phone"], name: "index_dealers_on_phone", unique: true, where: "(deleted_at IS NULL)"
     t.index ["pincode"], name: "index_dealers_on_pincode"
   end
 
@@ -636,7 +636,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_06_25_062552) do
     t.bigint "primary_media_blob_id"
     t.index ["primary_media_blob_id"], name: "index_product_variants_on_primary_media_blob_id"
     t.index ["product_id"], name: "index_product_variants_on_product_id"
-    t.index ["variant_sku"], name: "index_product_variants_on_variant_sku", unique: true
+    t.index ["variant_sku"], name: "index_product_variants_on_variant_sku", unique: true, where: "(deleted_at IS NULL)"
   end
 
   create_table "products", force: :cascade do |t|
@@ -667,8 +667,8 @@ ActiveRecord::Schema[8.0].define(version: 2026_06_25_062552) do
     t.index ["category_id"], name: "index_products_on_category_id"
     t.index ["is_featured"], name: "index_products_on_is_featured"
     t.index ["primary_media_blob_id"], name: "index_products_on_primary_media_blob_id"
-    t.index ["sku"], name: "index_products_on_sku", unique: true
-    t.index ["slug"], name: "index_products_on_slug", unique: true
+    t.index ["sku"], name: "index_products_on_sku", unique: true, where: "(deleted_at IS NULL)"
+    t.index ["slug"], name: "index_products_on_slug", unique: true, where: "(deleted_at IS NULL)"
   end
 
   create_table "push_subscriptions", force: :cascade do |t|
