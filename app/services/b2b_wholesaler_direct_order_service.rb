@@ -1,4 +1,5 @@
 class B2bWholesalerDirectOrderService
+  include Rails.application.routes.url_helpers
   COD_LIMIT = 50_000.to_d
 
   def initialize(buyer:, seller:, wholesaler_post:, quantity:, latitude:, longitude:, requested_radius_km: nil, payment_method:, payment_status: "pending", buyer_payment_attempt: nil)
@@ -252,7 +253,7 @@ class B2bWholesalerDirectOrderService
       return rails_blob_url(attachment, only_path: false) if attachment.present?
     end
 
-    return "#{ENV['FRONTEND_URL']}/images/ac.png"
+    "#{ENV['FRONTEND_URL'] || 'https://salespoints.in'}/images/ac.png"
   rescue StandardError => e
     Rails.logger.error("Failed to get product image: #{e.message}")
     nil
@@ -273,5 +274,9 @@ class B2bWholesalerDirectOrderService
     return nil if dealer.phone.blank?
     cc = dealer.country_code.presence || "+91"
     "#{cc}#{dealer.phone}".gsub(/\s+/, "")
+  end
+  
+  def host_url
+    @host_url ||= ENV['FRONTEND_URL'] || 'https://salespoints.in'
   end
 end
