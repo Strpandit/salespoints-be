@@ -225,7 +225,7 @@ module Api
 
       buyer_pincode = params[:pincode].presence
       if buyer_pincode.blank?
-        buyer_pincode = current_dealer.pincode # Using dealer's pincode
+        buyer_pincode = current_dealer.pincode
         if buyer_pincode.blank?
           return render json: { error: "Pincode is required for buy now" }, status: :unprocessable_entity
         end
@@ -237,6 +237,12 @@ module Api
 
       qty = params[:quantity].to_i.positive? ? params[:quantity].to_i : 1
       payment_method = params[:payment_method].to_s.presence || "cod"
+
+      requested_radius = params[:radius_km].presence&.to_f
+      if requested_radius.blank? || requested_radius <= 0
+        requested_radius = current_dealer.dealer_location&.service_radius_km.to_f
+        requested_radius = 5.0 if requested_radius <= 0
+      end
       
       if post.stock_quantity < qty
         return render json: { error: "Insufficient stock available" }, status: :unprocessable_entity
@@ -250,6 +256,7 @@ module Api
           quantity: qty,
           latitude: buyer_latitude,
           longitude: buyer_longitude,
+          requested_radius_km: requested_radius,
           payment_method: payment_method,
           payment_status: payment_method == "cod" ? "pending" : "paid"
         ).call

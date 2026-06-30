@@ -20,9 +20,10 @@ class AdminUser < ApplicationRecord
   has_many :deleted_admins, class_name: "AdminUser", foreign_key: :deleted_by_id
 
   has_many_attached :marksheets
+  has_many_attached :aadhar_card
   has_one_attached :staff_profile_pic
-  has_one_attached :aadhar_card
   has_one_attached :pan_card
+  has_one_attached :passbook
 
   enum :status, { active: 'active', inactive: 'inactive' }
   scope :approved, -> { where(approval_status: "approved") }
@@ -143,9 +144,10 @@ class AdminUser < ApplicationRecord
 
   def attachments_validity
     validate_document_attachment_set(:marksheets)
+    validate_document_attachment_set(:aadhar_card)
     validate_document_attachment(:staff_profile_pic)
-    validate_document_attachment(:aadhar_card)
     validate_document_attachment(:pan_card)
+    validate_document_attachment(:passbook)
   end
 
   def generate_password

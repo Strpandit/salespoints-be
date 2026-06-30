@@ -370,7 +370,7 @@ module Api
         :tenth_passing_year, :tenth_percentage, :twelfth_school_name,
         :twelfth_board, :twelfth_passing_year, :twelfth_percentage, :joining_date,
         :password, :password_confirmation, :status, :salary, :staff_profile_pic,
-        :aadhar_card, :pan_card, { marksheets: [] },
+        :pan_card, :passbook, { marksheets: [], aadhar_card: [] },
         { pincodes: [] }
       )
     end

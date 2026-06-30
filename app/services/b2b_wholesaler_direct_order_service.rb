@@ -1,13 +1,14 @@
 class B2bWholesalerDirectOrderService
   COD_LIMIT = 50_000.to_d
 
-  def initialize(buyer:, seller:, wholesaler_post:, quantity:, latitude:, longitude:, payment_method:, payment_status: "pending", buyer_payment_attempt: nil)
+  def initialize(buyer:, seller:, wholesaler_post:, quantity:, latitude:, longitude:, requested_radius_km: nil, payment_method:, payment_status: "pending", buyer_payment_attempt: nil)
     @buyer = buyer
     @seller = seller
     @wholesaler_post = wholesaler_post
     @quantity = quantity.to_i.positive? ? quantity.to_i : 1
     @latitude = latitude.to_f
     @longitude = longitude.to_f
+    @requested_radius_km = requested_radius_km || 5.0
     @payment_method = payment_method.to_s.presence || "cod"
     @payment_status = payment_status.to_s.presence || "pending"
     @buyer_payment_attempt = buyer_payment_attempt
@@ -15,7 +16,10 @@ class B2bWholesalerDirectOrderService
 
   def call
     validate!
-
+    if @requested_radius_km <= 0
+      raise "Requested radius km must be greater than 0"
+    end
+    
     raise StandardError, "Insufficient stock" if @wholesaler_post.stock_quantity.to_i < @quantity
 
     dealer_product = @wholesaler_post.dealer_product
@@ -36,7 +40,7 @@ class B2bWholesalerDirectOrderService
         request_status: "pending_request",
         status: "pending_request",
         requested_at: Time.current,
-        requested_radius_km: 0,
+        requested_radius_km: @requested_radius_km,
         latitude: @latitude,
         longitude: @longitude,
         subtotal_amount: pricing[:subtotal],
