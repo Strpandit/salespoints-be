@@ -175,6 +175,27 @@ module Api
       render json: { message: "Post deleted" }, status: :ok
     end
 
+    def reupload
+      return render json: { error: "Only dealers can re-upload posts" }, status: :forbidden unless current_dealer
+
+      post = WholesalerPost.find_by(id: params[:id])
+      return render json: { error: "Post not found" }, status: :not_found unless post
+      return render json: { error: "You can re-upload only your own post" }, status: :forbidden unless post.dealer_id == current_dealer.id
+
+      unless post.can_reupload?
+        return render json: { error: "This post cannot be re-uploaded. Only expired approved posts can be re-uploaded." }, status: :unprocessable_entity
+      end
+
+      if post.reupload!
+        render json: { 
+          data: post_payload(post), 
+          message: "Post re-uploaded successfully. Waiting for admin approval." 
+        }, status: :ok
+      else
+        render json: { error: post.errors.full_messages }, status: :unprocessable_entity
+      end
+    end
+
     def buy
       return render json: { error: "Only dealers can buy" }, status: :forbidden unless current_dealer
 
@@ -379,6 +400,7 @@ module Api
         visible_until: post.visible_until,
         is_expired: !post.visible_to_others?,
         is_owner: current_dealer.present? && post.dealer_id == current_dealer.id,
+        can_reupload: post.can_reupload?,
         dealer_id: post.dealer_id,
         dealer_product_id: post.dealer_product_id,
         dealer_name: dealer_display_name(dealer),

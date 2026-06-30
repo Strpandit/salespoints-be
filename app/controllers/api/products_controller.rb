@@ -20,7 +20,7 @@ module Api
     end
 
     def active_products
-      products = Product.active.includes(:category, :brand, :product_variants)
+      products = Product.active_in_stock.includes(:category, :brand, :product_variants)
 
       if params[:category_id].present?
         products = products.where(category_id: params[:category_id])
@@ -47,13 +47,17 @@ module Api
     end
 
     def show
+      unless @product.stock_quantity.to_i > 0
+        return render json: { error: "Product is out of stock" }, status: :not_found
+      end
+
       render json: serialize_resource(@product, ProductSerializer, base_url: request.base_url).merge(
         message: "Product fetched successfully"
       ), status: :ok
     end
 
     def similar_product
-      products = Product.where(category_id: params[:category_id])
+      products = Product.active_in_stock.where(category_id: params[:category_id])
                         .where.not(id: params[:product_id])
                         .limit(4)
     
@@ -121,7 +125,7 @@ module Api
         :name, :slug, :sku, :desc, :material, :brand_id, :category_id,
         :is_featured, :is_new, :is_active, :tax_rate,
         :price, :selling_price, :dealer_price, :dealer_selling_price, :discount_percentage,
-        :primary_media_blob_id, :primary_new_media_index,
+        :stock_quantity, :primary_media_blob_id, :primary_new_media_index,
         { purge_media_blob_ids: [] },
         media: [],
         features: [], care_instructions: [],

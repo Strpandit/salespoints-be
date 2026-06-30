@@ -1,7 +1,7 @@
 class DealerProduct < ApplicationRecord
   belongs_to :dealer
   belongs_to :product
-  belongs_to :product_variant
+  belongs_to :product_variant, optional: true
 
   has_many :reviews, dependent: :destroy
   has_many :wholesaler_posts, dependent: :destroy
@@ -11,7 +11,10 @@ class DealerProduct < ApplicationRecord
   validates :stock_quantity, numericality: { greater_than_or_equal_to: 0 }
   validates :product_variant_id, uniqueness: { scope: :dealer_id }
 
-  scope :live, -> { where(is_active: true, approve_status: 1).where("stock_quantity > 0") }
+  scope :with_active_dealer, -> { 
+    joins(:dealer).where(dealers: { deleted_at: nil, status: 'active' })
+  }
+  scope :live, -> { with_active_dealer.where(is_active: true, approve_status: 1).where("stock_quantity > 0 OR stock_quantity IS NULL") }
   
   def ranking_score
     variant = product_variant

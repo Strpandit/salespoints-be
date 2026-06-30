@@ -4,7 +4,7 @@ class Dealer < ApplicationRecord
 
   has_one :dealer_profile, dependent: :destroy, inverse_of: :dealer
   has_one :dealer_location, dependent: :destroy, inverse_of: :dealer
-  has_many :dealer_products
+  has_many :dealer_products, dependent: :nullify
   has_many :coupons, foreign_key: :created_by_dealer_id, dependent: :nullify
   has_many :buyer_b2b_orders, class_name: "B2bOrder", foreign_key: :buyer_dealer_id, dependent: :destroy
   has_many :seller_b2b_orders, class_name: "B2bOrder", foreign_key: :seller_dealer_id, dependent: :nullify
@@ -33,6 +33,7 @@ class Dealer < ApplicationRecord
   before_validation :normalize_phone
   before_validation :normalize_email
   before_validation :generate_dealer_code, on: :create
+  before_destroy :deactivate_associated_records, prepend: true
   # before_validation :generate_password, on: :create
 
   scope :active, -> { where(status: "active") }
@@ -90,5 +91,17 @@ class Dealer < ApplicationRecord
 
     last_number = last_code.to_s.delete_prefix("SPIN").to_i
     self.dealer_code = format("SPIN%04d", last_number + 1)
+  end
+
+  def deactivate_associated_records
+    dealer_products.update_all(
+      is_active: false,
+      approve_status: 'inactive'
+    )
+    
+    wholesaler_posts.update_all(
+      is_active: false,
+      approve_status: 'rejected'
+    )
   end
 end

@@ -23,11 +23,31 @@ class WholesalerPost < ApplicationRecord
   scope :by_pincodes, ->(pincodes) { where("pincodes && ARRAY[?]::varchar[]", pincodes) }
 
   def visible_to_others?
-    created_at.present? && created_at >= 7.days.ago
+    updated_at.present? && updated_at >= 7.days.ago && approve_status == 'approved'
   end
 
   def visible_until
-    created_at&.+(7.days)
+    updated_at&.+(7.days)
+  end
+
+  def can_reupload?
+    is_expired? && approve_status == 'approved'
+  end
+
+  def reupload!
+    return false unless can_reupload?
+
+    update!(
+      approve_status: 'pending',
+      reviewed_at: nil,
+      rejection_reason: nil,
+      reviewed_by_admin: nil,
+      updated_at: Time.current
+    )
+  end
+
+  def is_expired?
+    !visible_to_others?
   end
 
   private

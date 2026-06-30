@@ -270,11 +270,14 @@ module Api
         error: "Only super admin can delete dealers"
       }, status: :forbidden unless current_admin.super_admin?
 
-      @dealer.update!(
-        deleted_by: current_admin
-      )
+      Dealer.transaction do      
+        @dealer.update!(
+          status: 'inactive',
+          deleted_by: current_admin
+        )
 
-      @dealer.destroy
+        @dealer.destroy
+      end
 
       DeletionNotificationService.direct_deleted(@dealer, current_admin)
       DeletionMailService.direct_deleted(@dealer, current_admin)

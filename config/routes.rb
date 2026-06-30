@@ -174,6 +174,7 @@ Rails.application.routes.draw do
         patch :approve
         patch :reject
         patch :toggle_status
+        post :reupload
         post :buy
         post :rate
       end

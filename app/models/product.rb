@@ -8,7 +8,7 @@ class Product < ApplicationRecord
 
   has_many :product_variants, dependent: :destroy, inverse_of: :product
   has_many :product_specifications, dependent: :destroy, inverse_of: :product
-  has_many :dealer_products
+  has_many :dealer_products, dependent: :destroy
   has_many :reviews, dependent: :destroy
 
   accepts_nested_attributes_for :product_specifications, allow_destroy: true, reject_if: :all_blank
@@ -16,6 +16,8 @@ class Product < ApplicationRecord
 
   validates :name, :slug, :sku, presence: true
   validates :slug, :sku, uniqueness: true
+  validates :stock_quantity, numericality: { greater_than_or_equal_to: 0 }, allow_nil: true
+
   validate :catalog_media_presence
   validate :media_files_valid
   validate :brand_category_relation
@@ -23,6 +25,8 @@ class Product < ApplicationRecord
   scope :featured, -> { where(is_featured: true) }
   scope :new_arrivals, -> { where('created_at >= ?', 15.days.ago) } 
   scope :active, -> { where(is_active: true, deleted_at: nil) }
+  scope :in_stock, -> { where("stock_quantity > 0") }
+  scope :active_in_stock, -> { active.in_stock }
 
   before_validation :set_slug, on: [:create, :update]
 

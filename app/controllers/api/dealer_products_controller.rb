@@ -7,7 +7,7 @@ module Api
       if current_dealer
         items = current_dealer.dealer_products.includes(:product, :product_variant).order(created_at: :desc).page(params[:page]).per(params[:per_page] || 20)
       elsif current_admin
-        items = DealerProduct.includes(:dealer, :product, :product_variant).order(created_at: :desc)
+        items = DealerProduct.includes(:dealer, :product, :product_variant).where(dealers: { deleted_at: nil }).order(created_at: :desc)
         items = items.where(approve_status: params[:approve_status]) if params[:approve_status].present?
         items = items.page(params[:page]).per(params[:per_page] || 20)
       else
@@ -28,7 +28,7 @@ module Api
 
     # Public listing for customers: only approved, active, in-stock dealer products.
     def shop_index
-      items = DealerProduct.live.includes(:dealer, :product, :product_variant)
+      items = DealerProduct.live.where("dealer_products.stock_quantity > 0").includes(:dealer, :product, :product_variant)
 
       if params[:category_id].present?
         items = items.joins(:product).where(products: { category_id: params[:category_id] })
@@ -85,6 +85,7 @@ module Api
       radius = 10.0 if radius <= 0
 
       items = DealerProduct.live
+                           .where("dealer_products.stock_quantity > 0")
                            .where.not(dealer_id: current_dealer.id)
                            .includes(dealer: :dealer_location, product: {}, product_variant: {})
 
@@ -188,6 +189,7 @@ module Api
       return unauthorized("Dealers only") unless current_dealer
 
       item = DealerProduct.live
+                          .where("dealer_products.stock_quantity > 0")
                           .where.not(dealer_id: current_dealer.id)
                           .includes(:dealer, :product, :product_variant)
                           .find_by(id: params[:id])
@@ -274,6 +276,12 @@ module Api
     def toggle_active
       return unauthorized("Unauthorized") unless authorized_dealer_product_action?
 
+      if @dealer_product.dealer.deleted_at.present?
+        return render json: { 
+          error: "Cannot activate product. Associated dealer is deleted." 
+        }, status: :unprocessable_entity
+      end
+
       if @dealer_product.approve_status != "approved"
         return render json: { error: "Product must be approved before activation" }, status: :unprocessable_entity
       end
@@ -287,7 +295,7 @@ module Api
 
     # Public similar products for customers.
     def similar
-      base_scope = DealerProduct.live.includes(:product, :product_variant)
+      base_scope = DealerProduct.live.where("dealer_products.stock_quantity > 0").includes(:product, :product_variant)
 
       if params[:dealer_product_id].present?
         current = DealerProduct.live.includes(:product).find_by(id: params[:dealer_product_id])
@@ -313,6 +321,7 @@ module Api
       return unauthorized("Dealers only") unless current_dealer
 
       base_scope = DealerProduct.live
+                                .where("dealer_products.stock_quantity > 0")
                                 .where.not(dealer_id: current_dealer.id)
                                 .includes(:product, :product_variant)
 
