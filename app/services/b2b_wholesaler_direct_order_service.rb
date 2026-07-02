@@ -252,7 +252,6 @@ class B2bWholesalerDirectOrderService
       attachment = product.media.first
       return rails_blob_url(attachment, only_path: false) if attachment.present?
     end
-
     "#{ENV['FRONTEND_URL'] || 'https://salespoints.in'}/images/ac.png"
   rescue StandardError => e
     Rails.logger.error("Failed to get product image: #{e.message}")

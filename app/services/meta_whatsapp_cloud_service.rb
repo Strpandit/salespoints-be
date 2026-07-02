@@ -174,6 +174,9 @@ class MetaWhatsappCloudService
   end
 
   def post_message!(payload)
+    Rails.logger.info "========== META REQUEST =========="
+    Rails.logger.info endpoint
+    Rails.logger.info JSON.pretty_generate(payload)
     uri = URI(endpoint)
     request = Net::HTTP::Post.new(uri)
     request["Authorization"] = "Bearer #{access_token}"
@@ -181,6 +184,10 @@ class MetaWhatsappCloudService
     request.body = JSON.generate(payload)
 
     response = http_client(uri).request(request)
+   
+    Rails.logger.info "========== META RESPONSE =========="
+    Rails.logger.info response.code
+    Rails.logger.info response.body
     return JSON.parse(response.body) if response.is_a?(Net::HTTPSuccess)
 
     raise StandardError, "Meta WhatsApp API error #{response.code}: #{response.body}"
