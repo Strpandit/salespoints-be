@@ -30,7 +30,17 @@ class MetaWhatsappWebhookService
 
   def process_messages(messages)
     messages.each do |message|
+
+      Rails.logger.info "===== MESSAGE TYPE ====="
+      Rails.logger.info message.inspect
       case message["type"]
+      when "button"
+        Rails.logger.info "BUTTON EVENT RECEIVED"
+        process_button_reply(
+          button_id: message.dig("button", "payload").to_s,
+          from: message["from"].to_s
+        )
+
       when "interactive"
         button_reply = message.dig("interactive", "button_reply")
         next unless button_reply.present?
