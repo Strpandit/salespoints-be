@@ -190,6 +190,9 @@ class B2bWholesalerDirectOrderService
     offer.update!(whatsapp_status: "sent", sent_at: Time.current)
   rescue StandardError => e
     Rails.logger.error("Failed to send dealer_order_request template: #{e.message}")
+    Rails.logger.error e.class
+    Rails.logger.error e.message
+    Rails.logger.error e.backtrace.join("\n")
     offer.update!(whatsapp_status: "failed", failed_at: Time.current, failure_reason: e.message)
   end
 

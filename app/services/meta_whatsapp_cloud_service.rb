@@ -6,7 +6,7 @@ class MetaWhatsappCloudService
   GRAPH_BASE = "https://graph.facebook.com".freeze
 
   TEMPLATE_DEALER_ORDER_REQUEST = "dealer_order_request"
-  TEMPLATE_PAYMENT_REQUEST = "payment_request"
+  TEMPLATE_PAYMENT_REQUEST = "b2b_payment_request"
   TEMPLATE_ORDER_ACCEPT = "order_accept"
   TEMPLATE_PAYMENT_SUCCESS = "payment_success_order_details"
 
@@ -86,7 +86,7 @@ class MetaWhatsappCloudService
   end
 
   def send_payment_request(to:, product:, variant:, unit_price:, quantity:, total_amount:, payment_url:)
-  components = [
+    components = [
       {
         type: "body",
         parameters: [
