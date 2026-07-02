@@ -24,7 +24,7 @@ class B2bWholesalerDirectOrderService
     raise StandardError, "Insufficient stock" if @wholesaler_post.stock_quantity.to_i < @quantity
 
     dealer_product = @wholesaler_post.dealer_product
-    raise StandardError, "Product not available" unless dealer_product&.sellable?
+    raise StandardError, "Dealer product mapping not found" unless dealer_product
 
     variant = dealer_product.product_variant
     raise StandardError, "Product variant not found" unless variant

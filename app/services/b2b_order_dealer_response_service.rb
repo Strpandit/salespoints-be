@@ -18,23 +18,26 @@ class B2bOrderDealerResponseService
       updated_items = resolve_all_items_for_seller(open_items)
       raise StandardError, "You don't have enough stock to fulfill this order" if updated_items.blank?
 
-      updated_items.each do |item, dealer_product, pricing|
+      updated_items.each do |item, source, pricing|
+        source.update!(
+          stock_quantity: source.stock_quantity - item.quantity
+        )
+        
+        dealer_product_id =
+          if source.is_a?(WholesalerPost)
+            source.dealer_product_id
+          else
+            source.id
+          end
+
         item.update!(
-          dealer_product_id: dealer_product.id,
+          dealer_product_id: dealer_product_id,
           status: "accepted",
           responded_at: Time.current,
           unit_price: pricing[:unit_price],
           total_price: pricing[:subtotal]
         )
 
-        if item.wholesaler_post_id.present?
-          wholesaler_post = WholesalerPost.find_by(id: item.wholesaler_post_id)
-          if wholesaler_post && wholesaler_post.dealer_id == @dealer.id
-            wholesaler_post.update!(stock_quantity: wholesaler_post.stock_quantity - item.quantity)
-          end
-        end
-
-        dealer_product.update!(stock_quantity: dealer_product.stock_quantity - item.quantity)
       end
 
       lock_order.mark_accepted!(@dealer)
@@ -101,23 +104,39 @@ class B2bOrderDealerResponseService
     resolved = []
 
     items_scope.each do |item|
-      dealer_product = @dealer.dealer_products.live.find_by(
-        product_variant_id: item.product_variant_id
-      )
+      if item.wholesaler_post_id.present?
+        wholesaler_post = WholesalerPost.lock.find(item.wholesaler_post_id)
 
-      unless dealer_product && dealer_product.stock_quantity.to_i >= item.quantity.to_i
-        Rails.logger.warn "Dealer #{@dealer.id} doesn't have enough stock for variant #{item.product_variant_id}"
-        return nil
+        unless wholesaler_post.stock_quantity.to_i >= item.quantity.to_i
+          Rails.logger.warn "Wholesaler post #{wholesaler_post.id} has insufficient stock"
+          return nil
+        end
+
+        pricing = Pricing::PriceCalculator.new(
+          variant: wholesaler_post.dealer_product.product_variant,
+          quantity: item.quantity,
+          user_type: :dealer
+        ).call
+
+        resolved << [item, wholesaler_post, pricing]
+      else
+        dealer_product = @dealer.dealer_products.live.find_by(
+          product_variant_id: item.product_variant_id
+        )
+
+        unless dealer_product && dealer_product.stock_quantity.to_i >= item.quantity.to_i
+          Rails.logger.warn "Dealer #{@dealer.id} doesn't have enough stock for variant #{item.product_variant_id}"
+          return nil
+        end
+
+        pricing = Pricing::PriceCalculator.new(
+          variant: dealer_product.product_variant,
+          quantity: item.quantity,
+          user_type: :dealer
+        ).call
+
+        resolved << [item, dealer_product, pricing]
       end
-
-      pricing = Pricing::PriceCalculator.new(
-        variant: dealer_product.product_variant,
-        quantity: item.quantity,
-        user_type: :dealer
-      ).call
-
-      resolved << [item, dealer_product, pricing]
-    end
 
     resolved
   end
@@ -139,7 +158,8 @@ class B2bOrderDealerResponseService
     variant = first_item&.product_variant
     product = variant&.product
     
-    payment_url = "#{ENV['FRONTEND_URL']}/payment/#{order.id}"
+    # payment_url = "#{ENV['FRONTEND_URL']}/payment/#{order.id}"
+    payment_url = order.id.to_s
 
     MetaWhatsappCloudService.new.send_payment_request(
       to: formatted_phone_for(buyer),
