@@ -293,12 +293,12 @@ module Api
       params.require(:dealer).permit(
         :first_name, :last_name, :email, :phone, :gender, :country_code, :status, :pincode, :password, :password_confirmation,
         dealer_profile_attributes: [
-          :business_name, :business_type, :gst_number, :pan_number, :aadhar_number,
+          :id, :business_name, :business_type, :gst_number, :pan_number, :aadhar_number,
           :bank_name, :bank_account_number, :ifsc_code, :business_address,
           :business_contact_number, :business_email, :work_category, :associated_brands,
           :is_verified, :pan_card, :gst_certificate, :cancel_cheque, { store_image: [], aadhar_card: [] }
         ],
-        dealer_location_attributes: [:latitude, :longitude, :service_radius_km, :is_active]
+        dealer_location_attributes: [:id, :latitude, :longitude, :service_radius_km, :is_active]
       )
     end
 
