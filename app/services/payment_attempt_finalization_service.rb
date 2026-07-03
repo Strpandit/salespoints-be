@@ -6,7 +6,7 @@ class PaymentAttemptFinalizationService
   end
 
   def call
-    return finalize_b2b_request! if checkout_context == "b2b_request"
+    return finalize_b2b_request! if checkout_context == "b2b_order"
 
     orders = []
 

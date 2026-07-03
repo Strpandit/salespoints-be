@@ -50,6 +50,7 @@ Rails.application.routes.draw do
     get "payments/cashfree/verify", to: "payments#verify_cashfree"
     post "payments/cashfree/cancel", to: "payments#cancel_cashfree"
     post "payments/cashfree/webhook", to: "payments#cashfree_webhook"
+    get "payments/:token", to: "payments#payment_details"
     get "whatsapp/webhook", to: "whatsapp_webhooks#verify"
     post "whatsapp/webhook", to: "whatsapp_webhooks#receive"
 

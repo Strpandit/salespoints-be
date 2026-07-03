@@ -137,6 +137,7 @@ class B2bOrderDealerResponseService
 
         resolved << [item, dealer_product, pricing]
       end
+    end
 
     resolved
   end
@@ -159,7 +160,7 @@ class B2bOrderDealerResponseService
     product = variant&.product
     
     # payment_url = "#{ENV['FRONTEND_URL']}/payment/#{order.id}"
-    payment_url = order.id.to_s
+    payment_url = order.payment_token
 
     MetaWhatsappCloudService.new.send_payment_request(
       to: formatted_phone_for(buyer),

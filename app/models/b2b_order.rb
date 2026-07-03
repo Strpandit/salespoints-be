@@ -24,6 +24,8 @@ class B2bOrder < ApplicationRecord
   scope :from_wholesaler_post, -> { where(source_type: 'WholesalerPost') }
   scope :direct_buy, -> { where(is_direct_buy: true) }
 
+  before_validation :assign_payment_token, on: :create
+
   def pending_request?
     request_status == "pending_request" && status == "pending_request"
   end
@@ -113,6 +115,12 @@ class B2bOrder < ApplicationRecord
     self.tax_amount = tax
     self.total_amount = subtotal - discount_amount.to_d
     save!
+  end
+
+  private
+
+  def assign_payment_token
+    self.payment_token ||= SecureRandom.hex(32)
   end
   
 end

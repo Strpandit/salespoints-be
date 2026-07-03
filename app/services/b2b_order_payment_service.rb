@@ -123,6 +123,25 @@ class B2bOrderPaymentService
   private
 
   def create_online_payment_attempt(order)
+    existing_attempt = PaymentAttempt.find_by(
+      buyer: order.buyer_dealer,
+      status: "pending"
+    )
+
+    if existing_attempt.present? &&
+      existing_attempt.result_payload["b2b_order_id"] == order.id
+
+      return {
+        payment_attempt: existing_attempt,
+        payment_data: {
+          payment_session_id: existing_attempt.payment_session_id,
+          gateway_order_reference: existing_attempt.gateway_order_reference,
+          payment_attempt_id: existing_attempt.id,
+          provider: "cashfree"
+        }
+      }
+    end
+
     attempt = PaymentAttempt.create!(
       buyer: order.buyer_dealer,
       status: "pending",
@@ -132,7 +151,12 @@ class B2bOrderPaymentService
       result_payload: {
         checkout_context: "b2b_order",
         order_id: order.id,
-        b2b_order_id: order.id
+        b2b_order_id: order.id,
+        request_metadata: {
+          latitude: order.latitude,
+          longitude: order.longitude,
+          radius_km: order.requested_radius_km
+        }
       }
     )
 

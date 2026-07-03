@@ -54,7 +54,7 @@ class CashfreeService
       customer_details: customer_details_for(customer),
       order_meta: {
         return_url: "#{@frontend_url}/payment-status?cashfree_return=1&#{return_params.to_query}",
-        notify_url: "#{@backend_url}/api/payments/cashfree_webhook"
+        notify_url: "#{@backend_url}/api/payments/cashfree/webhook"
       }
     }
 

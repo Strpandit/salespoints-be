@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_06_30_091732) do
+ActiveRecord::Schema[8.0].define(version: 2026_07_02_192336) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -227,11 +227,13 @@ ActiveRecord::Schema[8.0].define(version: 2026_06_30_091732) do
     t.datetime "expired_at"
     t.datetime "payment_confirmed_at"
     t.datetime "confirmed_at"
+    t.string "payment_token"
     t.index ["buyer_dealer_id"], name: "index_b2b_orders_on_buyer_dealer_id"
     t.index ["buyer_payment_attempt_id"], name: "index_b2b_orders_on_buyer_payment_attempt_id"
     t.index ["is_direct_buy"], name: "index_b2b_orders_on_is_direct_buy"
     t.index ["payment_method"], name: "index_b2b_orders_on_payment_method"
     t.index ["payment_status"], name: "index_b2b_orders_on_payment_status"
+    t.index ["payment_token"], name: "index_b2b_orders_on_payment_token", unique: true
     t.index ["request_status", "expires_at"], name: "index_b2b_orders_on_request_status_and_expires_at"
     t.index ["request_status"], name: "index_b2b_orders_on_request_status"
     t.index ["seller_dealer_id"], name: "index_b2b_orders_on_seller_dealer_id"
