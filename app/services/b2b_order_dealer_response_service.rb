@@ -19,10 +19,6 @@ class B2bOrderDealerResponseService
       raise StandardError, "You don't have enough stock to fulfill this order" if updated_items.blank?
 
       updated_items.each do |item, source, pricing|
-        source.update!(
-          stock_quantity: source.stock_quantity - item.quantity
-        )
-        
         dealer_product_id =
           if source.is_a?(WholesalerPost)
             source.dealer_product_id
@@ -159,8 +155,7 @@ class B2bOrderDealerResponseService
     variant = first_item&.product_variant
     product = variant&.product
     
-    # payment_url = "#{ENV['FRONTEND_URL']}/payment/#{order.id}"
-    payment_url = order.payment_token
+    payment_url = "#{ENV['FRONTEND_URL'] || 'https://salespoints.in'}/payment/#{order.payment_token}"
 
     MetaWhatsappCloudService.new.send_payment_request(
       to: formatted_phone_for(buyer),

@@ -7,17 +7,18 @@ class PaymentAttemptFinalizationService
 
   def call
     attempt = PaymentAttempt.find(@payment_attempt.id)
+
     if attempt.processed?
       Rails.logger.info "Payment Attempt #{attempt.id} already processed. Returning existing result."
+
       if checkout_context == "b2b_order"
-        order = B2bOrder.find_by(buyer_payment_attempt_id: attempt.id)
+        order = B2bOrder.find_by(buyer_payment_attempt_id: attempt.id, request_status: nil)
         return Result.new(orders: [], b2b_order: order) if order.present?
       else
         orders = load_orders(attempt)
         return Result.new(orders: orders, b2b_order: nil) if orders.present?
       end
-      
-      # If no orders found but processed, still return success
+
       return Result.new(orders: [], b2b_order: nil)
     end
 
@@ -43,7 +44,7 @@ class PaymentAttemptFinalizationService
 
         OrderNotificationJob.perform_later(order.id, "placed", attempt.buyer_type, attempt.buyer_id)
         OrderNotificationJob.perform_later(order.id, "payment_paid", attempt.buyer_type, attempt.buyer_id)
-        
+
         orders << order
       end
 
@@ -71,28 +72,30 @@ class PaymentAttemptFinalizationService
       attempt = PaymentAttempt.lock.find(@payment_attempt.id)
 
       if attempt.processed?
-        existing_order = B2bOrder.find_by(buyer_payment_attempt_id: attempt.id)
+        existing_order = B2bOrder.find_by(buyer_payment_attempt_id: attempt.id, request_status: nil)
         return Result.new(orders: [], b2b_order: existing_order) if existing_order.present?
+
         return Result.new(orders: [], b2b_order: nil)
       end
-      
+
       raise StandardError, "Payment is not marked as paid" unless attempt.paid?
 
       metadata = attempt.result_payload.fetch("request_metadata", {}).stringify_keys
-      existing_order = B2bOrder.find_by(buyer_payment_attempt_id: attempt.id)
+      existing_order = B2bOrder.find_by(buyer_payment_attempt_id: attempt.id, request_status: nil)
+
       if existing_order.present?
         attempt.update!(status: "processed", processed_at: Time.current)
         return Result.new(orders: [], b2b_order: existing_order)
       end
 
+      request_order = B2bOrder.find_by(id: metadata["request_order_id"])
+      raise StandardError, "Accepted B2B request not found for payment finalization" if request_order.blank?
+
       order = B2bOrderCreationService.new(
-        buyer: attempt.buyer,
-        latitude: metadata["latitude"],
-        longitude: metadata["longitude"],
-        radius_km: metadata["radius_km"],
+        request_order: request_order,
         payment_method: "online",
         payment_status: "paid",
-        buyer_payment_attempt: attempt,
+        buyer_payment_attempt: attempt
       ).call
 
       send_order_accept_to_seller(order)
@@ -120,18 +123,18 @@ class PaymentAttemptFinalizationService
 
     buyer = order.buyer_dealer
     latitude, longitude, location_name = get_buyer_location(buyer)
-    
+
     MetaWhatsappCloudService.new.send_order_accept(
       to: formatted_phone_for(seller),
-      dealer_code: buyer.dealer_code.to_s,       
+      dealer_code: buyer.dealer_code.to_s,
       phone: formatted_phone_for(buyer) || "N/A",
-      address: get_address(buyer),               
+      address: get_address(buyer),
       order_id: order.reference_number,
       latitude: latitude,
       longitude: longitude,
-      location_name:location_name
+      location_name: location_name
     )
-    rescue StandardError => e
+  rescue StandardError => e
     Rails.logger.error("Failed to send order_accept template to seller: #{e.message}")
   end
 
@@ -141,12 +144,12 @@ class PaymentAttemptFinalizationService
       actor: order.buyer_dealer,
       notifiable: order,
       kind: "b2b_order_payment_success",
-      title: "✅ Payment Successful!",
-      message: "Your order ##{order.id} has been confirmed with Online Payment.",
+      title: "Payment Successful!",
+      message: "Your order ##{order.reference_number} has been confirmed with Online Payment.",
       visible_in_app: true,
       delivery_channels: { push: true, whatsapp: false, sms: false, email: false, in_app: true },
       payload: {
-        order_id: order.id,
+        order_id: order.reference_number,
         total_amount: order.total_amount.to_f,
         payment_method: "Online"
       }
@@ -159,12 +162,12 @@ class PaymentAttemptFinalizationService
       actor: order.buyer_dealer,
       notifiable: order,
       kind: "b2b_order_payment_confirmed_seller",
-      title: "💰 Payment Confirmed!",
-      message: "Buyer #{order.buyer_dealer.dealer_code} has completed payment for order ##{order.id}.",
+      title: "Payment Confirmed!",
+      message: "Buyer #{order.buyer_dealer.dealer_code} has completed payment for order ##{order.reference_number}.",
       visible_in_app: true,
       delivery_channels: { push: true, whatsapp: false, sms: false, email: false, in_app: true },
       payload: {
-        order_id: order.id,
+        order_id: order.reference_number,
         buyer_dealer_id: order.buyer_dealer_id,
         total_amount: order.total_amount.to_f,
         payment_method: "Online"
@@ -179,12 +182,12 @@ class PaymentAttemptFinalizationService
         actor: order.buyer_dealer,
         notifiable: order,
         kind: "admin_b2b_order_confirmed",
-        title: "📦 New B2B Order Confirmed (Online)",
-        message: "B2B Order ##{order.id} confirmed by #{order.buyer_dealer.dealer_code}. Amount: ₹#{order.total_amount} (Online Payment)",
+        title: "New B2B Order Confirmed (Online)",
+        message: "B2B Order ##{order.reference_number} confirmed by #{order.buyer_dealer.dealer_code}. Amount: Rs #{order.total_amount} (Online Payment)",
         visible_in_app: true,
         delivery_channels: { push: true, whatsapp: false, sms: false, email: false, in_app: true },
         payload: {
-          order_id: order.id,
+          order_id: order.reference_number,
           buyer_dealer_id: order.buyer_dealer_id,
           seller_dealer_id: order.seller_dealer_id,
           total_amount: order.total_amount.to_f,
@@ -196,9 +199,9 @@ class PaymentAttemptFinalizationService
 
   def get_buyer_location(dealer)
     return [28.6139, 77.2090, "Default Location"] if dealer.blank?
-    
+
     location = dealer.dealer_location
-    
+
     if location.present? && location.latitude.present? && location.longitude.present?
       name = dealer.dealer_profile&.business_name.presence || "Dealer Location"
       [location.latitude.to_f, location.longitude.to_f, name]
@@ -214,22 +217,23 @@ class PaymentAttemptFinalizationService
       [28.6139, 77.2090, "Default Location"]
     end
   end
-  
+
   def get_address(dealer)
     return "Address not available" if dealer.blank?
-    
+
     profile = dealer.dealer_profile
     return "Address not available" if profile.blank?
-    
+
     profile.business_address.presence || "Address not available"
   end
 
   def formatted_phone_for(dealer)
     return nil if dealer.phone.blank?
+
     cc = dealer.country_code.presence || "+91"
     "#{cc}#{dealer.phone}".gsub(/\s+/, "")
   end
-  
+
   def load_orders(attempt)
     ids = Array(attempt.result_payload["order_ids"])
     Order.where(id: ids).order(:id)

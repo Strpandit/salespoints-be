@@ -13,11 +13,15 @@ module Api
           B2bOrder.joins(b2b_order_items: :dealer_product)
                   .where(dealer_products: { dealer_id: current_dealer.id })
                   .where(request_status: "accepted_request")
+                  .where(status: "pending_payment")
                   .includes(:buyer_dealer, :seller_dealer, b2b_order_items: { dealer_product: :dealer })
                   .distinct
                   .order(created_at: :desc)
         else
-          current_dealer.buyer_b2b_orders.includes(:buyer_dealer, :seller_dealer, b2b_order_items: { dealer_product: :dealer }).order(created_at: :desc)
+          current_dealer.buyer_b2b_orders
+                        .where("request_status IS NULL OR status IN (?)", %w[pending_request pending_payment])
+                        .includes(:buyer_dealer, :seller_dealer, b2b_order_items: { dealer_product: :dealer })
+                        .order(created_at: :desc)
         end
 
       paginated = orders.respond_to?(:page) ? orders.page(params[:page]).per(params[:per_page] || 20) : Kaminari.paginate_array(orders).page(params[:page]).per(params[:per_page] || 20)

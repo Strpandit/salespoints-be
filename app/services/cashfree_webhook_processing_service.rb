@@ -121,7 +121,11 @@ class CashfreeWebhookProcessingService
 
   def normalize_headers(raw_headers)
     raw_headers.to_h.each_with_object({}) do |(key, value), memo|
-      memo[key.to_s.downcase] = value
+      original = key.to_s
+      memo[original.downcase] = value
+
+      normalized = original.sub(/\AHTTP_/, "").tr("_", "-").downcase
+      memo[normalized] = value if normalized.present?
     end
   end
 

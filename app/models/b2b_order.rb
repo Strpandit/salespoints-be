@@ -44,6 +44,14 @@ class B2bOrder < ApplicationRecord
     status == "pending_payment"
   end
 
+  def request_record?
+    request_status.present?
+  end
+
+  def final_order?
+    request_status.nil?
+  end
+
   def paid?
     status == "paid"
   end
@@ -94,6 +102,29 @@ class B2bOrder < ApplicationRecord
       status: "cancelled",
       expired_at: Time.current
     ) if pending_request?
+  end
+
+  def expire_pending_payment!
+    return unless pending_payment?
+
+    update!(
+      request_status: "expired_request",
+      status: "cancelled",
+      payment_status: "failed",
+      expired_at: Time.current
+    )
+  end
+
+  def release_reserved_inventory!
+    b2b_order_items.accepted_items.find_each do |item|
+      if item.wholesaler_post_id.present?
+        wholesaler_post = WholesalerPost.lock.find_by(id: item.wholesaler_post_id)
+        wholesaler_post&.update!(stock_quantity: wholesaler_post.stock_quantity.to_i + item.quantity.to_i)
+      elsif item.dealer_product_id.present?
+        dealer_product = DealerProduct.lock.find_by(id: item.dealer_product_id)
+        dealer_product&.update!(stock_quantity: dealer_product.stock_quantity.to_i + item.quantity.to_i)
+      end
+    end
   end
 
   def recalculate_totals!

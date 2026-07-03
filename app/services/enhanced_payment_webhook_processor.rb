@@ -267,7 +267,11 @@ class EnhancedPaymentWebhookProcessor
 
   def normalize_headers(headers)
     headers.each_with_object({}) do |(key, value), hash|
-      hash[key.to_s.downcase] = value
+      original = key.to_s
+      hash[original.downcase] = value
+
+      normalized = original.sub(/\AHTTP_/, "").tr("_", "-").downcase
+      hash[normalized] = value if normalized.present?
     end
   end
 end

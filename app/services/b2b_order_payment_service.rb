@@ -11,14 +11,18 @@ class B2bOrderPaymentService
     raise StandardError, "Invalid payment method" unless B2bOrder::PAYMENT_METHODS.include?(@payment_method)
 
     if @payment_method == "cod"
-      @order.mark_payment_paid!
-      @order.mark_order_confirmed!
-      send_order_accept_to_seller(@order)
-      send_payment_success_to_buyer(@order)
-      create_buyer_payment_success_notification(@order)
-      create_seller_payment_success_notification(@order)
-      notify_admin_order_confirmed(@order)
-      return { order: @order, payment_method: "cod", status: "confirmed", message: "Order confirmed with COD" }
+      final_order = B2bOrderCreationService.new(
+        request_order: @order,
+        payment_method: "cod",
+        payment_status: "pending"
+      ).call
+
+      send_order_accept_to_seller(final_order)
+      send_payment_success_to_buyer(final_order)
+      create_buyer_payment_success_notification(final_order)
+      create_seller_payment_success_notification(final_order)
+      notify_admin_order_confirmed(final_order)
+      return { order: final_order, payment_method: "cod", status: "confirmed", message: "Order confirmed with COD" }
     else
       result = create_online_payment_attempt(@order)
       return { 
@@ -48,14 +52,14 @@ class B2bOrderPaymentService
 
     MetaWhatsappCloudService.new.send_payment_success(
       to: formatted_phone_for(buyer),
-      product: product_name,                            
-      variant: variant_name,                            
-      quantity: quantity.to_s,                          
-      unit_price: unit_price.to_f.round(2).to_s,        
-      total_paid: total_amount.to_f.round(2).to_s,      
-      payment_id: "COD",                                
-      order_id: order.reference_number,                          
-      dealer_code: seller&.dealer_code || "N/A",        
+      product: product_name,
+      variant: variant_name,
+      quantity: quantity.to_s,
+      unit_price: unit_price.to_f.round(2).to_s,
+      total_paid: total_amount.to_f.round(2).to_s,
+      payment_id: order.payment_method.to_s.upcase,
+      order_id: order.reference_number,
+      dealer_code: seller&.dealer_code || "N/A",
       dealer_phone: formatted_phone_for(seller) || "N/A"
     )
   rescue StandardError => e
@@ -69,13 +73,13 @@ class B2bOrderPaymentService
       notifiable: order,
       kind: "b2b_order_payment_success",
       title: "✅ Payment Successful!",
-      message: "Your order ##{order.reference_number} has been confirmed with COD.",
+      message: "Your order ##{order.reference_number} has been confirmed with #{order.payment_method.to_s.upcase}.",
       visible_in_app: true,
       delivery_channels: { push: true, whatsapp: false, sms: false, email: false, in_app: true },
       payload: {
         order_id: order.reference_number,
         total_amount: order.total_amount.to_f,
-        payment_method: "COD"
+        payment_method: order.payment_method.to_s.upcase
       }
     )
   end
@@ -87,14 +91,14 @@ class B2bOrderPaymentService
       notifiable: order,
       kind: "b2b_order_payment_confirmed_seller",
       title: "💰 Payment Confirmed!",
-      message: "Buyer #{order.buyer_dealer.dealer_code} has confirmed payment for order ##{order.reference_number}.",
+      message: "Buyer #{order.buyer_dealer.dealer_code} has confirmed #{order.payment_method.to_s.upcase} for order ##{order.reference_number}.",
       visible_in_app: true,
       delivery_channels: { push: true, whatsapp: false, sms: false, email: false, in_app: true },
       payload: {
         order_id: order.reference_number,
         buyer_dealer_id: order.buyer_dealer_id,
         total_amount: order.total_amount.to_f,
-        payment_method: "COD"
+        payment_method: order.payment_method.to_s.upcase
       }
     )
   end
@@ -115,7 +119,7 @@ class B2bOrderPaymentService
           buyer_dealer_id: order.buyer_dealer_id,
           seller_dealer_id: order.seller_dealer_id,
           total_amount: order.total_amount.to_f,
-          payment_method: "COD"
+          payment_method: order.payment_method.to_s.upcase
         }
       )
     end
@@ -154,6 +158,7 @@ class B2bOrderPaymentService
         order_id: order.id,
         b2b_order_id: order.id,
         request_metadata: {
+          request_order_id: order.id,
           latitude: order.latitude,
           longitude: order.longitude,
           radius_km: order.requested_radius_km

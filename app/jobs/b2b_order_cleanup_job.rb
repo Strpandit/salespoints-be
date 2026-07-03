@@ -3,9 +3,14 @@ class B2bOrderCleanupJob < ApplicationJob
 
   def perform
     expired_orders = B2bOrder.pending_requests.where("expires_at < ?", Time.current)
+    expired_pending_payments = B2bOrder.pending_payments.where("expires_at < ?", Time.current)
 
     expired_orders.find_each do |order|
       expire_order(order)
+    end
+
+    expired_pending_payments.find_each do |order|
+      expire_pending_payment(order)
     end
   end
 
@@ -44,6 +49,55 @@ class B2bOrderCleanupJob < ApplicationJob
     )
   rescue StandardError => e
     Rails.logger.error "Failed to send expiry notification: #{e.message}"
+  end
+
+  def expire_pending_payment(order)
+    ActiveRecord::Base.transaction do
+      order.release_reserved_inventory!
+      order.expire_pending_payment!
+      order.b2b_order_offers.active_state.update_all(
+        status: "expired",
+        responded_at: Time.current
+      )
+      send_pending_payment_expiry_notification(order)
+      create_pending_payment_expiry_notification(order)
+    rescue StandardError => e
+      Rails.logger.error "Failed to expire pending payment order #{order.id}: #{e.message}"
+    end
+  end
+
+  def send_pending_payment_expiry_notification(order)
+    message = <<~TEXT
+      ⏰ *Payment Window Expired*
+
+      Your accepted B2B request for #{order.b2b_order_items.first&.product_variant&.product&.name || 'product'} expired because payment was not completed in time.
+
+      Please place a new request if you still want to buy.
+    TEXT
+
+    MetaWhatsappCloudService.new.send_text_message(
+      to: formatted_phone_for(order.buyer_dealer),
+      body: message
+    )
+  rescue StandardError => e
+    Rails.logger.error "Failed to send pending payment expiry notification: #{e.message}"
+  end
+
+  def create_pending_payment_expiry_notification(order)
+    NotificationService.deliver(
+      recipient: order.buyer_dealer,
+      actor: order.buyer_dealer,
+      notifiable: order,
+      kind: "b2b_order_payment_expired",
+      title: "⏰ Payment Window Expired",
+      message: "Your accepted request ##{order.reference_number} expired because payment was not completed in time.",
+      visible_in_app: true,
+      delivery_channels: { push: true, whatsapp: false, sms: false, email: false, in_app: true },
+      payload: {
+        order_id: order.reference_number,
+        expires_at: order.expires_at
+      }
+    )
   end
 
   def create_expiry_notification(order)
