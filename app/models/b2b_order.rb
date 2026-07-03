@@ -26,7 +26,7 @@ class B2bOrder < ApplicationRecord
   scope :direct_buy, -> { where(is_direct_buy: true) }
 
   before_validation :assign_payment_token, on: :create
-  before_create :generate_reference_number
+  before_create :set_reference_number
 
   def pending_request?
     request_status == "pending_request" && status == "pending_request"
@@ -124,13 +124,27 @@ class B2bOrder < ApplicationRecord
   def assign_payment_token
     self.payment_token ||= SecureRandom.hex(32)
   end
+
+  def set_reference_number
+    self.reference_number = generate_reference_number
+  end
   
   def generate_reference_number
-    loop do
-      self.reference_number =
-        "SPINB2B#{Time.current.strftime('%y%m%d')}#{SecureRandom.random_number(1_000_000).to_s.rjust(6, '0')}"
-
-      break unless self.class.exists?(reference_number: reference_number)
+    date_prefix = Time.current.strftime("%d%m%Y")
+    
+    self.class.transaction do
+      last_order = self.class.where("reference_number LIKE ?", "SPINB2B#{date_prefix}%")
+                             .order(reference_number: :desc)
+                             .lock
+                             .first
+      
+      serial = if last_order.present?
+                 last_order.reference_number[-6..-1].to_i + 1
+               else
+                 1
+               end
+      
+      "SPINB2B#{date_prefix}#{serial.to_s.rjust(6, '0')}"
     end
   end
 end
