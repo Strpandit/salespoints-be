@@ -62,7 +62,7 @@ module Api
 
       return render json: { error: "Invalid payment link" }, status: :not_found unless order
       return render json: { error: "Unauthorized" } unless current_dealer == order.buyer_dealer
-      return render json: { error: "Order is not ready for payment" }, status: :unprocessable_entity unless order.pending_payment?
+      # return render json: { error: "Order is not ready for payment" }, status: :unprocessable_entity unless order.pending_payment?
       return render json: { error: "Order cancelled" } if order.status == "cancelled"
       return render json: { error: "Order rejected" } if order.request_status == "rejected_request"
       return render json: { error: "Payment link expired" }, status: :unprocessable_entity if order.expires_at.present? && order.expires_at < Time.current
