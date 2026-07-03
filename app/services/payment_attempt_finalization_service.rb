@@ -6,6 +6,21 @@ class PaymentAttemptFinalizationService
   end
 
   def call
+    attempt = PaymentAttempt.find(@payment_attempt.id)
+    if attempt.processed?
+      Rails.logger.info "Payment Attempt #{attempt.id} already processed. Returning existing result."
+      if checkout_context == "b2b_order"
+        order = B2bOrder.find_by(buyer_payment_attempt_id: attempt.id)
+        return Result.new(orders: [], b2b_order: order) if order.present?
+      else
+        orders = load_orders(attempt)
+        return Result.new(orders: orders, b2b_order: nil) if orders.present?
+      end
+      
+      # If no orders found but processed, still return success
+      return Result.new(orders: [], b2b_order: nil)
+    end
+
     return finalize_b2b_request! if checkout_context == "b2b_order"
 
     orders = []
@@ -54,11 +69,22 @@ class PaymentAttemptFinalizationService
 
     ActiveRecord::Base.transaction do
       attempt = PaymentAttempt.lock.find(@payment_attempt.id)
-      existing_order = B2bOrder.find_by(buyer_payment_attempt_id: attempt.id)
-      return Result.new(orders: [], b2b_order: existing_order) if attempt.processed? && existing_order.present?
+
+      if attempt.processed?
+        existing_order = B2bOrder.find_by(buyer_payment_attempt_id: attempt.id)
+        return Result.new(orders: [], b2b_order: existing_order) if existing_order.present?
+        return Result.new(orders: [], b2b_order: nil)
+      end
+      
       raise StandardError, "Payment is not marked as paid" unless attempt.paid?
 
       metadata = attempt.result_payload.fetch("request_metadata", {}).stringify_keys
+      existing_order = B2bOrder.find_by(buyer_payment_attempt_id: attempt.id)
+      if existing_order.present?
+        attempt.update!(status: "processed", processed_at: Time.current)
+        return Result.new(orders: [], b2b_order: existing_order)
+      end
+
       order = B2bOrderCreationService.new(
         buyer: attempt.buyer,
         latitude: metadata["latitude"],
