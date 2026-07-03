@@ -17,7 +17,7 @@ class B2bOrder < ApplicationRecord
   validates :payment_method, inclusion: { in: PAYMENT_METHODS }
   validates :payment_status, inclusion: { in: PAYMENT_STATUSES }
   validates :requested_radius_km, numericality: { greater_than: 0 }
-  validates :reference_number, presence: true, uniqueness: true
+  # validates :reference_number, presence: true, uniqueness: true
 
   scope :pending_requests, -> { where(request_status: "pending_request", status: "pending_request") }
   scope :accepted_requests, -> { where(request_status: "accepted_request") }
@@ -26,7 +26,7 @@ class B2bOrder < ApplicationRecord
   scope :direct_buy, -> { where(is_direct_buy: true) }
 
   before_validation :assign_payment_token, on: :create
-  before_create :set_reference_number
+  before_validation :set_reference_number, on: :create
 
   def pending_request?
     request_status == "pending_request" && status == "pending_request"
