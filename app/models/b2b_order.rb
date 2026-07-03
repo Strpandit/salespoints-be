@@ -17,6 +17,7 @@ class B2bOrder < ApplicationRecord
   validates :payment_method, inclusion: { in: PAYMENT_METHODS }
   validates :payment_status, inclusion: { in: PAYMENT_STATUSES }
   validates :requested_radius_km, numericality: { greater_than: 0 }
+  validates :reference_number, presence: true, uniqueness: true
 
   scope :pending_requests, -> { where(request_status: "pending_request", status: "pending_request") }
   scope :accepted_requests, -> { where(request_status: "accepted_request") }
@@ -25,6 +26,7 @@ class B2bOrder < ApplicationRecord
   scope :direct_buy, -> { where(is_direct_buy: true) }
 
   before_validation :assign_payment_token, on: :create
+  before_create :generate_reference_number
 
   def pending_request?
     request_status == "pending_request" && status == "pending_request"
@@ -123,4 +125,12 @@ class B2bOrder < ApplicationRecord
     self.payment_token ||= SecureRandom.hex(32)
   end
   
+  def generate_reference_number
+    loop do
+      self.reference_number =
+        "SPINB2B#{Time.current.strftime('%y%m%d')}#{SecureRandom.random_number(1_000_000).to_s.rjust(6, '0')}"
+
+      break unless self.class.exists?(reference_number: reference_number)
+    end
+  end
 end

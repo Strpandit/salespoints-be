@@ -234,7 +234,7 @@ class MetaWhatsappWebhookService
         button_id: offer.accept_token,
         from: from,
         action: action,
-        order_id: offer.b2b_order&.id,
+        order_id: offer.b2b_order&.reference_number,
         dealer_id: offer.dealer&.id
       }
     )

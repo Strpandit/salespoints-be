@@ -70,6 +70,7 @@ class PaymentAttemptFinalizationService
       ).call
 
       send_order_accept_to_seller(order)
+      send_payment_success_to_buyer(order)
       create_buyer_online_payment_notification(order)
       create_seller_online_payment_notification(order)
       notify_admin_online_payment(order)
@@ -92,13 +93,17 @@ class PaymentAttemptFinalizationService
     return if seller.blank?
 
     buyer = order.buyer_dealer
+    latitude, longitude, location_name = get_buyer_location(buyer)
     
     MetaWhatsappCloudService.new.send_order_accept(
       to: formatted_phone_for(seller),
       dealer_code: buyer.dealer_code.to_s,       
       phone: formatted_phone_for(buyer) || "N/A",
       address: get_address(buyer),               
-      order_id: order.id.to_s                    
+      order_id: order.reference_number,
+      latitude: latitude,
+      longitude: longitude,
+      location_name:location_name
     )
     rescue StandardError => e
     Rails.logger.error("Failed to send order_accept template to seller: #{e.message}")
@@ -163,6 +168,27 @@ class PaymentAttemptFinalizationService
     end
   end
 
+  def get_buyer_location(dealer)
+    return [28.6139, 77.2090, "Default Location"] if dealer.blank?
+    
+    location = dealer.dealer_location
+    
+    if location.present? && location.latitude.present? && location.longitude.present?
+      name = dealer.dealer_profile&.business_name.presence || "Dealer Location"
+      [location.latitude.to_f, location.longitude.to_f, name]
+    else
+      address = get_address(dealer)
+      if address.present? && address != "Address not available"
+        results = Geocoder.search(address)
+        if results.any?
+          name = dealer.dealer_profile&.business_name.presence || "Dealer Location"
+          return [results.first.latitude, results.first.longitude, name]
+        end
+      end
+      [28.6139, 77.2090, "Default Location"]
+    end
+  end
+  
   def get_address(dealer)
     return "Address not available" if dealer.blank?
     

@@ -200,7 +200,7 @@ class B2bOrderDealerResponseService
       visible_in_app: true,
       delivery_channels: { push: true, whatsapp: false, sms: false, email: false, in_app: true },
       payload: {
-        order_id: order.id,
+        order_id: order.reference_number,
         dealer_id: @dealer.id,
         status: status,
         total_amount: order.total_amount.to_f
@@ -219,7 +219,7 @@ class B2bOrderDealerResponseService
       visible_in_app: true,
       delivery_channels: { push: true, whatsapp: false, sms: false, email: false, in_app: true },
       payload: {
-        order_id: order.id,
+        order_id: order.reference_number,
         buyer_dealer_id: order.buyer_dealer_id,
         total_amount: order.total_amount.to_f
       }

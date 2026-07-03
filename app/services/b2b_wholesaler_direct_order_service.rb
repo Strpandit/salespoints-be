@@ -220,7 +220,7 @@ class B2bWholesalerDirectOrderService
       delivery_channels: { push: true, whatsapp: false, sms: false, email: false, in_app: true },
       payload: {
         offer_id: offer.id,
-        order_id: order.id,
+        order_id: order.reference_number,
         buyer_dealer_id: @buyer.id,
         seller_dealer_id: @seller.id,
         wholesaler_post_id: @wholesaler_post.id,
@@ -267,9 +267,19 @@ class B2bWholesalerDirectOrderService
     address = dealer.dealer_profile&.business_address
     return "Location not available" if address.blank?
     
-    trimmed = address.to_s.strip.truncate(60, separator: ' ')
+    cleaned = address.to_s.strip
     
-    trimmed
+    if cleaned.include?(',')
+      parts = cleaned.split(',').map(&:strip).reject(&:blank?)
+      return parts.last(2).join(', ') if parts.size >= 2
+      return parts.first if parts.size == 1
+    end
+    
+    words = cleaned.split(/\s+/)
+    return words.last(2).join(' ') if words.size >= 2
+    return words.first if words.size == 1
+    
+    "Location not available"
   end
 
   def formatted_phone_for(dealer)

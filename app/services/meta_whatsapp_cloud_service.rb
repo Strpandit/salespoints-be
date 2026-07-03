@@ -65,8 +65,19 @@ class MetaWhatsappCloudService
     )
   end
 
-  def send_order_accept(to:, dealer_code:, phone:, address:, order_id:)
+  def send_order_accept(to:, dealer_code:, phone:, address:, order_id:, latitude:, longitude:, location_name:)
     components = [
+      {
+        type: "header",
+        parameters: [
+          { 
+            type: "location", 
+            latitude: latitude,
+            longitude: longitude,
+            name: location_name
+          }
+        ]
+      },
       {
         type: "body",
         parameters: [

@@ -57,7 +57,7 @@ class B2bOrderBroadcastService
     
     product_name = product&.name || "Product"
     variant_name = variant&.variant_sku || variant&.variant_attributes&.to_s || "Standard"
-    sku = variant&.variant_sku || product&.sku || "N/A"
+    sku = product&.sku || variant&.variant_sku || "N/A"
     unit_price = first_item&.unit_price || 0
     quantity = matched_items.sum(&:quantity)
     total_amount = matched_items.sum(&:total_price)
@@ -124,7 +124,7 @@ class B2bOrderBroadcastService
       delivery_channels: { push: true, whatsapp: false, sms: false, email: false, in_app: true },
       payload: {
         offer_id: offer.id,
-        order_id: @order.id,
+        order_id: @order.reference_number,
         buyer_dealer_id: @order.buyer_dealer_id,
         dealer_id: dealer.id,
         buyer_name: @actor.dealer_code,
@@ -153,7 +153,7 @@ class B2bOrderBroadcastService
         visible_in_app: true,
         delivery_channels: { push: true, whatsapp: false, sms: false, email: false, in_app: true },
         payload: {
-          order_id: @order.id,
+          order_id: @order.reference_number,
           buyer_dealer_id: @order.buyer_dealer_id,
           total_amount: total_amount.to_f,
           total_items: total_items,
@@ -179,7 +179,7 @@ class B2bOrderBroadcastService
       return rails_blob_url(attachment, only_path: false) if attachment.present?
     end
 
-    return "#{ENV['FRONTEND_URL']}/images/default-product.png"
+    return "#{ENV['FRONTEND_URL']}/images/ac.png"
   rescue StandardError => e
     Rails.logger.error("Failed to get product image: #{e.message}")
     nil
@@ -188,10 +188,22 @@ class B2bOrderBroadcastService
   def get_location(dealer)
     return "Location not available" if dealer.blank?
     
-    location = dealer.dealer_location
-    return "Location not available" if location.blank?
+    address = dealer.dealer_profile&.business_address
+    return "Location not available" if address.blank?
     
-    [location.city, location.state].compact.join(", ").presence || "Location not available"
+    cleaned = address.to_s.strip
+    
+    if cleaned.include?(',')
+      parts = cleaned.split(',').map(&:strip).reject(&:blank?)
+      return parts.last(2).join(', ') if parts.size >= 2
+      return parts.first if parts.size == 1
+    end
+    
+    words = cleaned.split(/\s+/)
+    return words.last(2).join(' ') if words.size >= 2
+    return words.first if words.size == 1
+    
+    "Location not available"
   end
 
   def open_offer_for(dealer:, item_ids:)

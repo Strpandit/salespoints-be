@@ -125,7 +125,7 @@ class Order < ApplicationRecord
     return if order_number.present?
 
     loop do
-      candidate = "SP#{Time.current.strftime('%y%m%d')}#{SecureRandom.random_number(1_000_000).to_s.rjust(6, '0')}"
+      candidate = "SPIN#{Time.current.strftime('%y%m%d')}#{SecureRandom.random_number(1_000_000).to_s.rjust(6, '0')}"
       unless self.class.exists?(order_number: candidate)
         self.order_number = candidate
         break
