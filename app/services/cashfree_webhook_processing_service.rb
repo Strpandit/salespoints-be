@@ -5,6 +5,10 @@ class CashfreeWebhookProcessingService
   end
 
   def call
+    Rails.logger.info "=== Cashfree Webhook Received ==="
+    Rails.logger.info "Headers: #{@headers.inspect}"
+    Rails.logger.info "Raw Body: #{@raw_body[0..200]}..."
+
     verify_signature!
     payload = parse_payload!
     event = find_or_create_event!(payload)
@@ -30,11 +34,34 @@ class CashfreeWebhookProcessingService
   attr_reader :headers, :raw_body
 
   def verify_signature!
+
+    signature = headers["x-webhook-signature"]
+    timestamp = headers["x-webhook-timestamp"]
+
+    Rails.logger.info "Signature: #{signature}"
+    Rails.logger.info "Timestamp: #{timestamp}"
+
+    if signature.blank?
+      Rails.logger.warn "Missing webhook signature"
+      raise StandardError, "Missing webhook signature"
+    end
+
+    if timestamp.blank?
+      Rails.logger.warn "Missing webhook timestamp"
+      raise StandardError, "Missing webhook timestamp"
+    end
+
     CashfreeService.new.verify_webhook_signature!(
       raw_body: raw_body,
-      signature: headers["x-webhook-signature"],
-      timestamp: headers["x-webhook-timestamp"]
+      signature: signature,
+      timestamp: timestamp
+      # signature: headers["x-webhook-signature"],
+      # timestamp: headers["x-webhook-timestamp"]
     )
+    rescue StandardError => e
+      Rails.logger.error "Signature verification failed: #{e.message}"
+      raise StandardError, "Invalid webhook signature: #{e.message}"
+    end
   end
 
   def parse_payload!

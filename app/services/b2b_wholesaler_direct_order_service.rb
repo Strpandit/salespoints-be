@@ -10,7 +10,7 @@ class B2bWholesalerDirectOrderService
     @latitude = latitude.to_f
     @longitude = longitude.to_f
     @requested_radius_km = requested_radius_km || 5.0
-    @payment_method = payment_method.to_s.presence || "cod"
+    @payment_method = payment_method
     @payment_status = payment_status.to_s.presence || "pending"
     @buyer_payment_attempt = buyer_payment_attempt
   end
@@ -30,7 +30,9 @@ class B2bWholesalerDirectOrderService
     raise StandardError, "Product variant not found" unless variant
 
     pricing = calculate_pricing(variant)
-    check_cod_limit(pricing[:total])
+    if @payment_method.present? && @payment_method == "cod"
+      check_cod_limit(pricing[:total])
+    end
 
     order = nil
 
@@ -49,7 +51,7 @@ class B2bWholesalerDirectOrderService
         discount_amount: 0,
         total_amount: pricing[:total],
         expires_at: 10.minutes.from_now,
-        payment_method: @payment_method,
+        payment_method: @payment_method || "cod",
         payment_status: @payment_status,
         buyer_payment_attempt: @buyer_payment_attempt,
         is_direct_buy: true,

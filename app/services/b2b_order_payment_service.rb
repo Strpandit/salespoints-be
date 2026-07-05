@@ -1,4 +1,6 @@
 class B2bOrderPaymentService
+  COD_LIMIT = 50_000.to_d
+  
   def initialize(order_id:, payment_method:)
     @order_id = order_id
     @payment_method = payment_method.to_s.presence || "cod"
@@ -9,6 +11,10 @@ class B2bOrderPaymentService
     raise StandardError, "Order not found" unless @order
     raise StandardError, "Order is not in pending_payment state" unless @order.pending_payment?
     raise StandardError, "Invalid payment method" unless B2bOrder::PAYMENT_METHODS.include?(@payment_method)
+
+    if @payment_method == "cod" && @order.total_amount > COD_LIMIT
+      raise StandardError, "COD is not allowed for orders above ₹#{COD_LIMIT}. Please choose online payment."
+    end
 
     if @payment_method == "cod"
       final_order = B2bOrderCreationService.new(

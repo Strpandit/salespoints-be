@@ -62,11 +62,16 @@ module Api
 
       return render json: { error: "Invalid payment link" }, status: :not_found unless order
       return render json: { error: "Unauthorized" } unless current_dealer == order.buyer_dealer
-      # return render json: { error: "Order is not ready for payment" }, status: :unprocessable_entity unless order.pending_payment?
       return render json: { error: "Order cancelled" } if order.status == "cancelled"
       return render json: { error: "Order rejected" } if order.request_status == "rejected_request"
       return render json: { error: "Payment link expired" }, status: :unprocessable_entity if order.expires_at.present? && order.expires_at < Time.current
       return render json: { error: "Payment already completed" }, status: :unprocessable_entity if order.payment_status == "paid"
+
+      if order.total_amount > 50000 && order.payment_method == "cod"
+        cod_allowed = false
+      else
+        cod_allowed = true
+      end
 
       items = order.b2b_order_items
 
@@ -78,6 +83,7 @@ module Api
         payment_method: order.payment_method,
         request_status: order.request_status,
         expires_at: order.expires_at,
+        cod_allowed: cod_allowed,
         items: B2bOrderItemSerializer.render(items)
       }
     end

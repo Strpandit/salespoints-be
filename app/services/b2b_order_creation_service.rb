@@ -56,6 +56,7 @@ class B2bOrderCreationService
           responded_at: request_item.responded_at || Time.current
         )
 
+        deduct_stock!(request_item)
       end
 
       final_order.recalculate_totals!
@@ -73,6 +74,28 @@ class B2bOrderCreationService
   end
 
   private
+
+  def deduct_stock!(request_item)
+    if request_item.wholesaler_post_id.present?
+      wholesaler_post = WholesalerPost.lock.find(request_item.wholesaler_post_id)
+      if wholesaler_post.stock_quantity.to_i < request_item.quantity.to_i
+        raise StandardError, "Insufficient stock for wholesaler buy #{wholesaler_post.id}"
+      end
+      wholesaler_post.update!(
+        stock_quantity: wholesaler_post.stock_quantity - request_item.quantity
+      )
+    elsif request_item.dealer_product_id.present?
+      dealer_product = DealerProduct.lock.find(request_item.dealer_product_id)
+      if dealer_product.stock_quantity.to_i < request_item.quantity.to_i
+        raise StandardError, "Insufficient stock for dealer product #{dealer_product.id}"
+      end
+      dealer_product.update!(
+        stock_quantity: dealer_product.stock_quantity - request_item.quantity
+      )
+    else
+      raise StandardError, "Cannot deduct stock: no source found for request item #{request_item.id}"
+    end
+  end
 
   def ensure_request_ready!(request_order)
     raise StandardError, "Accepted request not found" unless request_order.request_status == "accepted_request"
