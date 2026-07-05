@@ -5,10 +5,6 @@ class CashfreeWebhookProcessingService
   end
 
   def call
-    Rails.logger.info "=== Cashfree Webhook Received ==="
-    Rails.logger.info "Headers: #{@headers.inspect}"
-    Rails.logger.info "Raw Body: #{@raw_body[0..200]}..."
-
     verify_signature!
     payload = parse_payload!
     event = find_or_create_event!(payload)
@@ -20,6 +16,10 @@ class CashfreeWebhookProcessingService
     event.update!(status: "processed", processed_at: Time.current, response_code: 200, payload: payload)
     event
   rescue StandardError => e
+    if e.message.include?("already been taken") || e.message.include?("duplicate")
+      Rails.logger.warn "Duplicate webhook event, ignoring"
+      return @event if @event.present?
+    end
     @event&.update!(
       status: failure_status_for(e),
       error_message: e.message,

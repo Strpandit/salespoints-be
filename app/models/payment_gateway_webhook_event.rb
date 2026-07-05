@@ -8,4 +8,28 @@ class PaymentGatewayWebhookEvent < ApplicationRecord
   validates :event_id, uniqueness: { scope: :provider }
 
   scope :recent, -> { order(received_at: :desc) }
+
+  def processed?
+    status == "processed"
+  end
+
+  def ignored?
+    status == "ignored"
+  end
+
+  def failed?
+    status == "failed"
+  end
+
+  def pending?
+    status == "received" || status == "processing"
+  end
+
+  def mark_processed!
+    update!(status: "processed", processed_at: Time.current)
+  end
+
+  def mark_failed!(error_message)
+    update!(status: "failed", error_message: error_message, processed_at: Time.current)
+  end
 end
