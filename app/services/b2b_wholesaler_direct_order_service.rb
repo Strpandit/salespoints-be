@@ -2,7 +2,7 @@ class B2bWholesalerDirectOrderService
   include Rails.application.routes.url_helpers
   COD_LIMIT = 50_000.to_d
 
-  def initialize(buyer:, seller:, wholesaler_post:, quantity:, latitude:, longitude:, requested_radius_km: nil, payment_method:, payment_status: "pending", buyer_payment_attempt: nil)
+  def initialize(buyer:, seller:, wholesaler_post:, quantity:, latitude:, longitude:, requested_radius_km: nil, payment_method: nil, payment_status: "pending", buyer_payment_attempt: nil)
     @buyer = buyer
     @seller = seller
     @wholesaler_post = wholesaler_post
@@ -109,7 +109,9 @@ class B2bWholesalerDirectOrderService
 
   def validate!
     raise StandardError, "Current location is required" if @latitude.zero? || @longitude.zero?
-    raise StandardError, "Invalid payment method" unless B2bOrder::PAYMENT_METHODS.include?(@payment_method)
+    if @payment_method.present? && !B2bOrder::PAYMENT_METHODS.include?(@payment_method)
+      raise StandardError, "Invalid payment method"
+    end
   end
 
   def calculate_pricing(variant)
