@@ -51,10 +51,17 @@ module Api
     end
 
     def cashfree_webhook
-      CashfreeWebhookProcessingService.new(headers: request.headers, raw_body: request.raw_post).call
+      begin
+        service = CashfreeWebhookProcessingService.new(
+          headers: request.headers, 
+          raw_body: request.raw_post
+        )
+        service.call
+      rescue StandardError => e
+        Rails.logger.error "Webhook processing failed: #{e.message}"
+        Rails.logger.error e.backtrace.join("\n")
+      end
       head :ok
-    rescue StandardError => e
-      render json: { error: e.message }, status: unauthorized_webhook_error?(e) ? :unauthorized : :unprocessable_entity
     end
 
     def payment_details

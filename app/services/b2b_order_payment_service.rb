@@ -252,7 +252,7 @@ class B2bOrderPaymentService
   end
 
   def get_buyer_location(dealer)
-    return [28.6139, 77.2090, "Default Location"] if dealer.blank?
+    return [28.6139, 77.2090, "Default Location", "Address not available"] if dealer.blank?
     
     location = dealer.dealer_location
     profile = dealer.dealer_profile
@@ -269,7 +269,7 @@ class B2bOrderPaymentService
           return [results.first.latitude, results.first.longitude, name, address]
         end
       end
-      [28.6139, 77.2090, "Default Location"]
+      [28.6139, 77.2090, "Default Location", address]
     end
   end
 
