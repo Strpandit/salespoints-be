@@ -34,20 +34,14 @@ class CashfreeWebhookProcessingService
   attr_reader :headers, :raw_body
 
   def verify_signature!
-
     signature = headers["x-webhook-signature"]
     timestamp = headers["x-webhook-timestamp"]
 
-    Rails.logger.info "Signature: #{signature}"
-    Rails.logger.info "Timestamp: #{timestamp}"
-
     if signature.blank?
-      Rails.logger.warn "Missing webhook signature"
       raise StandardError, "Missing webhook signature"
     end
 
     if timestamp.blank?
-      Rails.logger.warn "Missing webhook timestamp"
       raise StandardError, "Missing webhook timestamp"
     end
 
@@ -55,11 +49,8 @@ class CashfreeWebhookProcessingService
       raw_body: raw_body,
       signature: signature,
       timestamp: timestamp
-      # signature: headers["x-webhook-signature"],
-      # timestamp: headers["x-webhook-timestamp"]
     )
   rescue StandardError => e
-    Rails.logger.error "Signature verification failed: #{e.message}"
     raise StandardError, "Invalid webhook signature: #{e.message}"
   end
 

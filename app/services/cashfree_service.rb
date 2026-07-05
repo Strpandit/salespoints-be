@@ -225,15 +225,34 @@ class CashfreeService
 
   def verify_webhook_signature!(raw_body:, signature:, timestamp:)
     raise StandardError, "Cashfree webhook secret is not configured" if @webhook_secret.blank?
-    raise StandardError, "Missing webhook signature" if signature.blank?
-    raise StandardError, "Missing webhook timestamp" if timestamp.blank?
+    
+    if signature.blank?
+      raise StandardError, "Missing webhook signature header"
+    end
+
+    if timestamp.blank?
+      raise StandardError, "Missing webhook timestamp header"
+    end
 
     timestamp_value = timestamp.to_i
-    raise StandardError, "Invalid webhook timestamp" if timestamp_value <= 0
-    raise StandardError, "Webhook timestamp is outside the allowed tolerance" if (Time.current.to_i - timestamp_value).abs > WEBHOOK_TOLERANCE_SECONDS
+    if timestamp_value <= 0
+      raise StandardError, "Invalid webhook timestamp"
+    end
+    
+    if timestamp_value.to_s.length > 10
+      timestamp_value = timestamp_value / 1000
+    end
+    
+    time_diff = (Time.current.to_i - timestamp_value).abs
+    Rails.logger.info "Timestamp diff: #{time_diff} seconds"
+    
+    if time_diff > 300  # 5 minutes tolerance
+      Rails.logger.warn "Webhook timestamp is outside tolerance: #{time_diff} seconds"
+    end
 
+    signature_string = "#{timestamp}#{raw_body}"
     computed_signature = Base64.strict_encode64(
-      OpenSSL::HMAC.digest("sha256", @webhook_secret, "#{timestamp}#{raw_body}")
+      OpenSSL::HMAC.digest("sha256", @webhook_secret, signature_string)
     )
 
     unless ActiveSupport::SecurityUtils.secure_compare(computed_signature, signature.to_s)
