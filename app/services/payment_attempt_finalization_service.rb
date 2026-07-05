@@ -138,6 +138,36 @@ class PaymentAttemptFinalizationService
     Rails.logger.error("Failed to send order_accept template to seller: #{e.message}")
   end
 
+  def send_payment_success_to_buyer(order)
+    buyer = order.buyer_dealer
+    seller = order.seller_dealer
+    items = order.b2b_order_items.accepted_items
+    first_item = items.first
+    variant = first_item&.product_variant
+    product = variant&.product
+    
+    product_name = product&.name || "Product"
+    variant_name = variant&.variant_sku || "Standard"
+    unit_price = first_item&.unit_price || 0
+    quantity = items.sum(&:quantity)
+    total_amount = order.total_amount
+
+    MetaWhatsappCloudService.new.send_payment_success(
+      to: formatted_phone_for(buyer),
+      product: product_name,
+      variant: variant_name,
+      quantity: quantity.to_s,
+      unit_price: unit_price.to_f.round(2).to_s,
+      total_paid: total_amount.to_f.round(2).to_s,
+      payment_id: order.payment_method.to_s.upcase,
+      order_id: order.reference_number,
+      dealer_code: seller&.dealer_code || "N/A",
+      dealer_phone: formatted_phone_for(seller) || "N/A"
+    )
+  rescue StandardError => e
+    Rails.logger.error("Failed to send payment_success template to buyer: #{e.message}")
+  end
+
   def create_buyer_online_payment_notification(order)
     NotificationService.deliver(
       recipient: order.buyer_dealer,

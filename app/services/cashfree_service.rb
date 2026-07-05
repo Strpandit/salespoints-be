@@ -246,7 +246,7 @@ class CashfreeService
     time_diff = (Time.current.to_i - timestamp_value).abs
     Rails.logger.info "Timestamp diff: #{time_diff} seconds"
     
-    if time_diff > 300  # 5 minutes tolerance
+    if time_diff > 600  # 10 minutes tolerance
       Rails.logger.warn "Webhook timestamp is outside tolerance: #{time_diff} seconds"
     end
 
