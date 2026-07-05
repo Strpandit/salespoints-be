@@ -237,13 +237,13 @@ class B2bOrderPaymentService
 
     buyer = order.buyer_dealer
     
-    latitude, longitude, location_name = get_buyer_location(buyer)
+    latitude, longitude, location_name, address = get_buyer_location(buyer)
     
     MetaWhatsappCloudService.new.send_order_accept(
       to: formatted_phone_for(seller),
       dealer_code: buyer.dealer_code.to_s,       
       phone: formatted_phone_for(buyer) || "N/A",
-      address: get_address(buyer),               
+      address: address,
       order_id: order.reference_number,
       latitude: latitude,
       longitude: longitude,
@@ -255,17 +255,18 @@ class B2bOrderPaymentService
     return [28.6139, 77.2090, "Default Location"] if dealer.blank?
     
     location = dealer.dealer_location
+    profile = dealer.dealer_profile
+    address = profile&.business_address.presence || "Address not available"
     
     if location.present? && location.latitude.present? && location.longitude.present?
-      name = dealer.dealer_profile&.business_name.presence || "Dealer Location"
-      [location.latitude.to_f, location.longitude.to_f, name]
+      name = profile&.business_name.presence || "Dealer Location"
+      [location.latitude.to_f, location.longitude.to_f, name, address]
     else
-      address = get_address(dealer)
       if address.present? && address != "Address not available"
         results = Geocoder.search(address)
         if results.any?
-          name = dealer.dealer_profile&.business_name.presence || "Dealer Location"
-          return [results.first.latitude, results.first.longitude, name]
+          name = profile&.business_name.presence || "Dealer Location"
+          return [results.first.latitude, results.first.longitude, name, address]
         end
       end
       [28.6139, 77.2090, "Default Location"]
