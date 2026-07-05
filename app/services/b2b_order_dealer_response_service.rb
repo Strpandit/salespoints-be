@@ -156,7 +156,7 @@ class B2bOrderDealerResponseService
     product = variant&.product
     
     # payment_url = "#{ENV['FRONTEND_URL'] || 'https://salespoints.in'}/payment/#{order.payment_token}"
-    payment_url = "/payment/#{order.payment_token}"
+    payment_url = "#{order.payment_token}"
     
     MetaWhatsappCloudService.new.send_payment_request(
       to: formatted_phone_for(buyer),

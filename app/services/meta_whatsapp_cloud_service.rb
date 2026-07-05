@@ -72,9 +72,11 @@ class MetaWhatsappCloudService
         parameters: [
           { 
             type: "location", 
-            latitude: latitude,
-            longitude: longitude,
-            name: location_name
+            location: {
+              latitude: latitude.to_s,
+              longitude: longitude.to_s,
+              name: location_name.to_s
+            }
           }
         ]
       },

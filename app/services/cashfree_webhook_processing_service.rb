@@ -58,10 +58,9 @@ class CashfreeWebhookProcessingService
       # signature: headers["x-webhook-signature"],
       # timestamp: headers["x-webhook-timestamp"]
     )
-    rescue StandardError => e
-      Rails.logger.error "Signature verification failed: #{e.message}"
-      raise StandardError, "Invalid webhook signature: #{e.message}"
-    end
+  rescue StandardError => e
+    Rails.logger.error "Signature verification failed: #{e.message}"
+    raise StandardError, "Invalid webhook signature: #{e.message}"
   end
 
   def parse_payload!
