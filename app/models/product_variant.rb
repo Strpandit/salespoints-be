@@ -7,6 +7,8 @@ class ProductVariant < ApplicationRecord
   has_many :dealer_products
   has_many :order_items
 
+  attr_accessor :purge_media_blob_ids
+
   validates :variant_sku, presence: true, uniqueness: true
   validates :selling_price, :dealer_selling_price, presence: true, numericality: true
   validate :media_files_valid

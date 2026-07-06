@@ -125,7 +125,7 @@ module Api
         :is_featured, :is_new, :is_active, :tax_rate,
         :price, :selling_price, :dealer_price, :dealer_selling_price, :discount_percentage,
         :stock_quantity, :primary_media_blob_id, :primary_new_media_index,
-        { purge_media_blob_ids: [] },
+        :purge_media_blob_ids, { purge_media_blob_ids: [] },
         media: [],
         features: [], care_instructions: [],
         product_specifications_attributes: [:id, :key, :value, :_destroy],
@@ -133,7 +133,7 @@ module Api
           :id, :variant_sku, :price, :selling_price, :dealer_price,
           :dealer_selling_price, :discount_percentage, :is_active, :_destroy,
           :primary_media_blob_id, :primary_new_media_index,
-          { purge_media_blob_ids: [] },
+          :purge_media_blob_ids, { purge_media_blob_ids: [] },
           { media: [], variant_attributes: [:key, :value] }
         ]
       )
@@ -212,7 +212,7 @@ module Api
 
       product_blob_ids = params.dig(:product, :purge_media_blob_ids)
       if product_blob_ids.present?
-        blob_ids.concat(Array(product_blob_ids).map(&:to_i))
+        blob_ids.concat(Array(product_blob_ids))
       end
 
       variants = params.dig(:product, :product_variants_attributes)
@@ -224,12 +224,12 @@ module Api
 
           variant_blob_ids = attrs["purge_media_blob_ids"] || attrs[:purge_media_blob_ids]
           if variant_blob_ids.present?
-            blob_ids.concat(Array(variant_blob_ids).map(&:to_i))
+            blob_ids.concat(Array(variant_blob_ids))
           end
         end
       end
 
-      blob_ids.reject(&:zero?).uniq
+      blob_ids.map(&:to_i).reject(&:zero?).uniq
     end
 
     def extract_variant_purge_blob_ids
@@ -245,10 +245,17 @@ module Api
 
         variant_id = attrs["id"] || attrs[:id]
         next if variant_id.blank?
+        blob_ids = []
 
-        blob_ids = Array(attrs["purge_media_blob_ids"] || attrs[:purge_media_blob_ids])
-                    .map(&:to_i)
-                    .reject(&:zero?)
+        if attrs["purge_media_blob_ids"].present?
+          blob_ids.concat(Array(attrs["purge_media_blob_ids"]))
+        end
+
+        if attrs[:purge_media_blob_ids].present?
+          blob_ids.concat(Array(attrs[:purge_media_blob_ids]))
+        end
+
+        blob_ids = blob_ids.map(&:to_i).reject(&:zero?).uniq
 
         map[variant_id.to_i] = blob_ids if blob_ids.any?
       end
@@ -259,14 +266,15 @@ module Api
     def purge_media_blobs!(record, blob_ids)
       return if blob_ids.blank?
 
-       record.media_attachments.each do |attachment|
+      record.media_attachments.each do |attachment|
         if blob_ids.include?(attachment.blob_id)
           attachment.purge
         end
       end
+
       if blob_ids.include?(record.primary_media_blob_id)
         remaining = record.media_attachments.first
-        record.update_column(:primary_media_blob_id, nil)
+        record.update_column(:primary_media_blob_id, remaining&.blob_id)
       end
     end
 

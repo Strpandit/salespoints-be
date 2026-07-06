@@ -6,6 +6,8 @@ class Product < ApplicationRecord
   belongs_to :brand
   has_many_attached :media
 
+  attr_accessor :purge_media_blob_ids
+
   has_many :product_variants, dependent: :destroy, inverse_of: :product
   has_many :product_specifications, dependent: :destroy, inverse_of: :product
   has_many :dealer_products, dependent: :destroy
