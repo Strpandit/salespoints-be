@@ -103,13 +103,20 @@ module Api
     def payment
       order = current_dealer.buyer_b2b_orders.find_by(id: params[:id])
       return render json: { error: "Order not found" }, status: :not_found unless order
-      return render json: { error: "Order is not ready for payment" }, status: :unprocessable_entity unless order.pending_payment?
+
       if order.status == "confirmed"
         return render json: {
           message: "Order already confirmed",
           order: B2bOrderSerializer.render(order, base_url: request.base_url),
           payment_status: "confirmed"
         }, status: :ok
+      end
+
+      unless order.pending_payment?
+        return render json: { 
+          error: "Order is not ready for payment. Current status: #{order.status}",
+          current_status: order.status
+        }, status: :unprocessable_entity
       end
 
       payment_method = params[:payment_method].to_s.presence || "cod"

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_07_03_172631) do
+ActiveRecord::Schema[8.0].define(version: 2026_07_05_095836) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -229,8 +229,12 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_03_172631) do
     t.datetime "confirmed_at"
     t.string "payment_token"
     t.string "reference_number", default: ""
+    t.integer "current_broadcast_radius", default: 5
+    t.integer "broadcast_attempts", default: 0
+    t.index ["broadcast_attempts"], name: "index_b2b_orders_on_broadcast_attempts"
     t.index ["buyer_dealer_id"], name: "index_b2b_orders_on_buyer_dealer_id"
     t.index ["buyer_payment_attempt_id"], name: "index_b2b_orders_on_buyer_payment_attempt_id"
+    t.index ["current_broadcast_radius"], name: "index_b2b_orders_on_current_broadcast_radius"
     t.index ["is_direct_buy"], name: "index_b2b_orders_on_is_direct_buy"
     t.index ["payment_method"], name: "index_b2b_orders_on_payment_method"
     t.index ["payment_status"], name: "index_b2b_orders_on_payment_status"
@@ -338,6 +342,21 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_03_172631) do
     t.index ["audience"], name: "index_coupons_on_audience"
     t.index ["code"], name: "index_coupons_on_code", unique: true
     t.index ["created_by_dealer_id"], name: "index_coupons_on_created_by_dealer_id"
+  end
+
+  create_table "dealer_broadcast_trackers", force: :cascade do |t|
+    t.integer "broadcast_radius_km", default: 5
+    t.integer "attempt_count", default: 1
+    t.datetime "last_broadcast_at"
+    t.string "status", default: "pending"
+    t.bigint "dealer_id", null: false
+    t.bigint "b2b_order_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["b2b_order_id", "dealer_id"], name: "idx_broadcast_trackers_order_dealer", unique: true
+    t.index ["b2b_order_id", "status"], name: "idx_broadcast_trackers_order_status"
+    t.index ["b2b_order_id"], name: "index_dealer_broadcast_trackers_on_b2b_order_id"
+    t.index ["dealer_id"], name: "index_dealer_broadcast_trackers_on_dealer_id"
   end
 
   create_table "dealer_ledger_entries", force: :cascade do |t|
@@ -865,6 +884,8 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_03_172631) do
   add_foreign_key "contact_form_submissions", "admin_users"
   add_foreign_key "coupon_usages", "coupons"
   add_foreign_key "coupons", "dealers", column: "created_by_dealer_id"
+  add_foreign_key "dealer_broadcast_trackers", "b2b_orders"
+  add_foreign_key "dealer_broadcast_trackers", "dealers"
   add_foreign_key "dealer_ledger_entries", "dealers"
   add_foreign_key "dealer_ledger_entries", "orders"
   add_foreign_key "dealer_ledger_entries", "return_requests"

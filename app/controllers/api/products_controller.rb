@@ -208,14 +208,34 @@ module Api
     end
 
     def extract_purge_blob_ids
-      Array(params.dig(:product, :purge_media_blob_ids)).map(&:to_i).reject(&:zero?)
+      blob_ids = []
+
+      product_blob_ids = params.dig(:product, :purge_media_blob_ids)
+      if product_blob_ids.present?
+        blob_ids.concat(Array(product_blob_ids).map(&:to_i))
+      end
+
+      variants = params.dig(:product, :product_variants_attributes)
+      if variants.present?
+        variants.each do |_index, attrs|
+          if attrs.is_a?(ActionController::Parameters)
+            attrs = attrs.to_unsafe_h
+          end
+
+          variant_blob_ids = attrs["purge_media_blob_ids"] || attrs[:purge_media_blob_ids]
+          if variant_blob_ids.present?
+            blob_ids.concat(Array(variant_blob_ids).map(&:to_i))
+          end
+        end
+      end
+
+      blob_ids.reject(&:zero?).uniq
     end
 
     def extract_variant_purge_blob_ids
       variants = params.dig(:product, :product_variants_attributes)
       return {} if variants.blank?
 
-      # Convert ActionController::Parameters to Hash
       variants = variants.to_unsafe_h if variants.is_a?(ActionController::Parameters)
 
       map = {}
@@ -239,10 +259,13 @@ module Api
     def purge_media_blobs!(record, blob_ids)
       return if blob_ids.blank?
 
-      record.media_attachments.each do |attachment|
-        attachment.purge if blob_ids.include?(attachment.blob_id)
+       record.media_attachments.each do |attachment|
+        if blob_ids.include?(attachment.blob_id)
+          attachment.purge
+        end
       end
       if blob_ids.include?(record.primary_media_blob_id)
+        remaining = record.media_attachments.first
         record.update_column(:primary_media_blob_id, nil)
       end
     end

@@ -6,6 +6,7 @@ class B2bOrder < ApplicationRecord
   has_many :b2b_order_items, dependent: :destroy
   has_many :notifications, as: :notifiable, dependent: :destroy
   has_many :b2b_order_offers, dependent: :destroy
+  has_many :dealer_broadcast_trackers, dependent: :destroy
 
   REQUEST_STATUSES = %w[pending_request accepted_request rejected_request expired_request].freeze
   ORDER_STATUSES = %w[pending_request pending_payment paid confirmed cancelled].freeze
@@ -27,6 +28,18 @@ class B2bOrder < ApplicationRecord
 
   before_validation :assign_payment_token, on: :create
   before_validation :set_reference_number, on: :create
+
+  def accepted?
+    request_status == "accepted_request" && status == "pending_payment"
+  end
+
+  def expired?
+    expires_at.present? && expires_at < Time.current
+  end
+
+  def can_accept?
+    pending_request? && !expired? && !accepted?
+  end
 
   def pending_request?
     request_status == "pending_request" && status == "pending_request"
@@ -97,11 +110,20 @@ class B2bOrder < ApplicationRecord
   end
 
   def expire!
+    return unless pending_request?
+
     update!(
       request_status: "expired_request",
       status: "cancelled",
       expired_at: Time.current
-    ) if pending_request?
+    )
+
+    dealer_broadcast_trackers.pending.update_all(status: "expired")
+
+    b2b_order_offers.open_state.update_all(
+      status: "expired",
+      responded_at: Time.current
+    )
   end
 
   def expire_pending_payment!

@@ -1,53 +1,123 @@
 class B2bOrderBroadcastService
-  def initialize(order:, actor:)
+  DEFAULT_RADIUS = 5
+  MAX_RADIUS = 15
+  INCREMENT_PER_MINUTE = 1
+
+  def initialize(order:, actor:, current_radius: nil)
     @order = order
     @actor = actor
+    @current_radius = current_radius || order.current_broadcast_radius || DEFAULT_RADIUS
   end
 
   def initial_broadcast!
-    broadcast!(rebroadcast: false)
+    broadcast!(is_initial: true)
   end
 
-  def rebroadcast_remaining_items!
-    broadcast!(rebroadcast: true)
+  def incremental_broadcast!
+    return if @order.expired?
+    return if @order.accepted?
+
+    @current_radius += INCREMENT_PER_MINUTE
+
+    @order.update!(
+      current_broadcast_radius: @current_radius,
+      last_broadcast_at: Time.current,
+      broadcast_attempts: @order.broadcast_attempts + 1
+    )
+
+    Rails.logger.info "📡 B2B Broadcast: Order ##{@order.id}, Radius: #{@current_radius}km, Attempt: #{@order.broadcast_attempts}"
+
+    broadcast!(is_initial: false)
+
+    schedule_next_broadcast if !@order.expired? && !@order.accepted?
   end
 
   private
 
-  def broadcast!(rebroadcast:)
+  def broadcast!(is_initial:)
     open_items = @order.b2b_order_items.open_items.includes(product_variant: :product).to_a
-    raise StandardError, "No open items are available for broadcast" if open_items.empty?
+    return if open_items.empty?
 
-    dealer_matches = eligible_nearby_dealers(items: open_items)
-    dealer_matches = dealer_matches.reject { |_dealer, items| items.empty? }
-    raise StandardError, "No nearby dealers available within range" if dealer_matches.empty?
+    eligible_dealers = eligible_nearby_dealers(items: open_items, radius: @current_radius)
+    
+    already_broadcasted = DealerBroadcastTracker.for_order(@order.id).pluck(:dealer_id)
+    new_dealers = eligible_dealers.reject { |dealer, _| already_broadcasted.include?(dealer.id) }
+
+    Rails.logger.info "📡 New dealers at radius #{@current_radius}km: #{new_dealers.keys.map(&:id)}"
+
+    return if new_dealers.empty?
 
     ActiveRecord::Base.transaction do
-      dealer_matches.each do |dealer, matched_items|
-        item_ids = matched_items.map(&:id)
-        next if open_offer_for(dealer: dealer, item_ids: item_ids).present?
-
-        offer = B2bOrderOffer.create!(
+      new_dealers.each do |dealer, matched_items|
+        DealerBroadcastTracker.create!(
           b2b_order: @order,
           dealer: dealer,
-          status: "open",
-          delivery_channel: "whatsapp",
-          item_ids: item_ids,
-          delivery_payload: serialized_offer_items(matched_items),
-          accept_token: "b2b_accept_#{SecureRandom.hex(8)}",
-          reject_token: "b2b_reject_#{SecureRandom.hex(8)}",
-          recipient_phone: formatted_phone_for(dealer),
-          expires_at: @order.expires_at,
-          rebroadcast_count: rebroadcast ? offer_rebroadcast_count(dealer: dealer) + 1 : 0
+          broadcast_radius_km: @current_radius,
+          attempt_count: is_initial ? 1 : @order.broadcast_attempts + 1,
+          last_broadcast_at: Time.current,
+          status: "pending"
         )
+
+        offer = B2bOrderOffer.find_or_initialize_by(
+          b2b_order: @order,
+          dealer: dealer
+        )
+
+        if offer.new_record?
+          offer.assign_attributes(
+            status: "open",
+            delivery_channel: "whatsapp",
+            item_ids: matched_items.map(&:id),
+            delivery_payload: serialized_offer_items(matched_items),
+            accept_token: "b2b_accept_#{SecureRandom.hex(8)}",
+            reject_token: "b2b_reject_#{SecureRandom.hex(8)}",
+            recipient_phone: formatted_phone_for(dealer),
+            expires_at: @order.expires_at,
+            whatsapp_status: "pending",
+            rebroadcast_count: 0
+          )
+          offer.save!
+        end
 
         send_dealer_order_request_template(offer, dealer, matched_items)
         create_in_app_notification_for_seller(dealer, offer, matched_items)
         notify_admin_new_b2b_request(dealer, matched_items)
       end
 
-      @order.update!(last_rebroadcast_at: Time.current)
     end
+  end
+
+  def eligible_nearby_dealers(items:, radius:)
+    buyer_lat = @order.latitude
+    buyer_lng = @order.longitude
+
+    Dealer.active
+          .includes(:dealer_location, dealer_products: [:product_variant, :product])
+          .where.not(id: @order.buyer_dealer_id)
+          .each_with_object({}) do |dealer, matches|
+      loc = dealer.dealer_location
+      next unless loc&.is_active && loc.latitude.present? && loc.longitude.present?
+
+      distance = DealerLocation.distance_km(buyer_lat, buyer_lng, loc.latitude, loc.longitude)
+      next if distance > radius
+
+      dealer_radius = loc.service_radius_km.to_f
+      next if dealer_radius.positive? && distance > dealer_radius
+
+      matched_items = items.select do |item|
+        dealer.dealer_products.any? do |dp|
+          dp.approved? && dp.is_active && dp.stock_quantity.to_i >= item.quantity.to_i && dp.product_variant_id == item.product_variant_id
+        end
+      end
+
+      matches[dealer] = matched_items if matched_items.any?
+    end
+  end
+
+  def schedule_next_broadcast
+    return if @current_radius >= MAX_RADIUS
+    
+    BroadcastB2bOrderJob.set(wait: 1.minute).perform_later(@order.id)
   end
 
   def send_dealer_order_request_template(offer, dealer, matched_items)
@@ -66,7 +136,9 @@ class B2bOrderBroadcastService
     seller_location = dealer&.dealer_location
     
     delivery_location = get_location(dealer)
-    approx_distance = if buyer_location.present? && seller_location.present?
+    approx_distance = if buyer_location.present? && seller_location.present? &&
+                        buyer_location.latitude.present? && buyer_location.longitude.present? &&
+                        seller_location.latitude.present? && seller_location.longitude.present?
       DealerLocation.distance_km(
         buyer_location.latitude.to_f,
         buyer_location.longitude.to_f,
@@ -77,14 +149,7 @@ class B2bOrderBroadcastService
       "0"
     end
 
-    base_url = ENV["FRONTEND_URL"] || "https://yourapp.com"
-    accept_url = "#{base_url}/b2b/accept/#{offer.accept_token}"
-    reject_url = "#{base_url}/b2b/reject/#{offer.reject_token}"
-
     image_url = get_product_image(product, variant)
-
-    accept_token = offer.accept_token
-    reject_token = offer.reject_token
 
     MetaWhatsappCloudService.new.send_dealer_order_request(
       to: formatted_phone_for(dealer),
@@ -118,7 +183,7 @@ class B2bOrderBroadcastService
       actor: @actor,
       notifiable: @order,
       kind: "b2b_order_request",
-      title: "📦 New B2B Request",
+      title: "📦 New Order Request",
       message: "#{@actor.dealer_code} wants to buy #{total_items} unit(s) of #{product_name}. Total: ₹#{total_amount}",
       visible_in_app: true,
       delivery_channels: { push: true, whatsapp: false, sms: false, email: false, in_app: true },
@@ -131,6 +196,7 @@ class B2bOrderBroadcastService
         total_amount: total_amount.to_f,
         item_ids: matched_items.map(&:id),
         items: serialized_offer_items(matched_items),
+        broadcast_radius: @current_radius,
         rebroadcast: false
       }
     )
@@ -148,7 +214,7 @@ class B2bOrderBroadcastService
         actor: @actor,
         notifiable: @order,
         kind: "admin_b2b_new_request",
-        title: "📢 New B2B Request Created",
+        title: "📢 New B2B Order Request Created",
         message: "#{@actor.dealer_code} created B2B request for #{product_name} (Qty: #{total_items}). Amount: ₹#{total_amount}",
         visible_in_app: true,
         delivery_channels: { push: true, whatsapp: false, sms: false, email: false, in_app: true },
@@ -180,9 +246,6 @@ class B2bOrderBroadcastService
     end
 
     return "#{ENV['FRONTEND_URL']}/images/ac.png"
-  rescue StandardError => e
-    Rails.logger.error("Failed to get product image: #{e.message}")
-    nil
   end
 
   def get_location(dealer)
@@ -195,47 +258,22 @@ class B2bOrderBroadcastService
     
     if cleaned.include?(',')
       parts = cleaned.split(',').map(&:strip).reject(&:blank?)
-      return parts.last(2).join(', ') if parts.size >= 2
+      return parts.last(3).join(', ') if parts.size >= 3
       return parts.first if parts.size == 1
     end
     
     words = cleaned.split(/\s+/)
-    return words.last(2).join(' ') if words.size >= 2
+    return words.last(3).join(' ') if words.size >= 3
     return words.first if words.size == 1
     
     "Location not available"
   end
 
-  def open_offer_for(dealer:, item_ids:)
-    @order.b2b_order_offers.open_state.find do |offer|
-      offer.dealer_id == dealer.id && (offer.item_id_values & item_ids).any?
-    end
-  end
+  def formatted_phone_for(dealer)
+    return nil if dealer.phone.blank?
 
-  def offer_rebroadcast_count(dealer:)
-    @order.b2b_order_offers.where(dealer_id: dealer.id).maximum(:rebroadcast_count).to_i
-  end
-
-  def eligible_nearby_dealers(items:)
-    Dealer.active
-          .includes(:dealer_location, dealer_products: [:product_variant, :product])
-          .where.not(id: @order.buyer_dealer_id)
-          .each_with_object({}) do |dealer, matches|
-      loc = dealer.dealer_location
-      next unless loc&.is_active && loc.latitude.present? && loc.longitude.present?
-
-      distance = DealerLocation.distance_km(@order.latitude, @order.longitude, loc.latitude, loc.longitude)
-      next if distance > @order.requested_radius_km.to_f
-      next if loc.service_radius_km.present? && distance > loc.service_radius_km.to_f
-
-      matched_items = items.select do |item|
-        dealer.dealer_products.any? do |dp|
-          dp.approved? && dp.is_active && dp.stock_quantity.to_i >= item.quantity.to_i && dp.product_variant_id == item.product_variant_id
-        end
-      end
-
-      matches[dealer] = matched_items if matched_items.any?
-    end
+    cc = dealer.country_code.presence || "+91"
+    "#{cc}#{dealer.phone}".gsub(/\s+/, "")
   end
 
   def serialized_offer_items(items)
@@ -253,10 +291,4 @@ class B2bOrderBroadcastService
     end
   end
 
-  def formatted_phone_for(dealer)
-    return nil if dealer.phone.blank?
-
-    cc = dealer.country_code.presence || "+91"
-    "#{cc}#{dealer.phone}".gsub(/\s+/, "")
-  end
 end

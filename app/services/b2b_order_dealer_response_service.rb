@@ -9,6 +9,11 @@ class B2bOrderDealerResponseService
   def accept!
     ActiveRecord::Base.transaction do
       lock_order = B2bOrder.lock.find(@order.id)
+
+      if lock_order.accepted?
+        raise StandardError, "This request has already been accepted by another dealer"
+      end
+
       offer = lock_b2b_request_offer!(order: lock_order)
       ensure_order_can_be_accepted!(order: lock_order)
 
@@ -38,8 +43,11 @@ class B2bOrderDealerResponseService
 
       lock_order.mark_accepted!(@dealer)
       lock_order.recalculate_totals!
-      offer.update!(status: "accepted", responded_at: Time.current, whatsapp_status: "replied")
+
+      DealerBroadcastTracker.for_order(lock_order.id).update_all(status: "accepted")
       close_other_offers!(lock_order)
+
+      offer.update!(status: "accepted", responded_at: Time.current, whatsapp_status: "replied")
 
       send_payment_request_template(lock_order)
       create_buyer_notification(lock_order, "accepted")
@@ -47,15 +55,16 @@ class B2bOrderDealerResponseService
 
       updated_items.map(&:first)
     end
-  rescue StandardError => e
-    Rails.logger.error "B2bOrderDealerResponseService.accept! error: #{e.message}"
-    raise
   end
 
   def reject!
     ActiveRecord::Base.transaction do
       lock_order = B2bOrder.lock.find(@order.id)
       offer = lock_b2b_request_offer!(order: lock_order)
+
+      if lock_order.accepted?
+        raise StandardError, "This request has already been accepted by another dealer"
+      end
 
       ensure_order_can_be_accepted!(order: lock_order)
 
@@ -67,14 +76,25 @@ class B2bOrderDealerResponseService
         whatsapp_status: "replied"
       )
 
+      tracker = DealerBroadcastTracker.find_by(b2b_order: lock_order, dealer: @dealer)
+      tracker&.update!(status: "rejected")
+
       close_other_offers!(lock_order)
 
       notify_buyer_of_rejection(lock_order)
       create_buyer_notification(lock_order, "rejected")
+
+      total_dealers = DealerBroadcastTracker.for_order(lock_order.id).count
+      rejected_count = DealerBroadcastTracker.for_order(lock_order.id).where(status: "rejected").count
+      
+      if total_dealers > 0 && total_dealers == rejected_count
+        lock_order.update!(
+          request_status: "rejected_request",
+          status: "cancelled",
+          rejected_at: Time.current
+        )
+      end
     end
-  rescue StandardError => e
-    Rails.logger.error "B2bOrderDealerResponseService.reject! error: #{e.message}"
-    raise
   end
 
   private
@@ -155,7 +175,6 @@ class B2bOrderDealerResponseService
     variant = first_item&.product_variant
     product = variant&.product
     
-    # payment_url = "#{ENV['FRONTEND_URL'] || 'https://salespoints.in'}/payment/#{order.payment_token}"
     payment_url = "#{order.payment_token}"
     
     MetaWhatsappCloudService.new.send_payment_request(
@@ -169,8 +188,6 @@ class B2bOrderDealerResponseService
     )
 
     order.update!(payment_link_sent_at: Time.current)
-  rescue StandardError => e
-    Rails.logger.error("Failed to send payment_request template: #{e.message}")
   end
 
   def create_buyer_notification(order, status)

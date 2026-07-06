@@ -235,13 +235,13 @@ class PaymentAttemptFinalizationService
     address = profile&.business_address.presence || "Address not available"
 
     if location.present? && location.latitude.present? && location.longitude.present?
-      name = profile&.business_name.presence || "Dealer Location"
+      name = "Salespoints Dealer Point #{dealer&.dealer_code.presence || 'N/A'}"
       [location.latitude.to_f, location.longitude.to_f, name, address]
     else
       if address.present? && address != "Address not available"
         results = Geocoder.search(address)
         if results.any?
-          name = profile&.business_name.presence || "Dealer Location"
+          name = "Salespoints Dealer Point #{dealer&.dealer_code.presence || 'N/A'}"
           return [results.first.latitude, results.first.longitude, name, address]
         end
       end

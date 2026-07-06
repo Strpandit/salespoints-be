@@ -20,6 +20,8 @@ class B2bOrderCleanupJob < ApplicationJob
     ActiveRecord::Base.transaction do
       order.expire!
 
+      DealerBroadcastTracker.for_order(order.id).pending.update_all(status: "expired")
+
       order.b2b_order_offers.open_state.update_all(
         status: "expired",
         responded_at: Time.current
@@ -47,14 +49,15 @@ class B2bOrderCleanupJob < ApplicationJob
       to: formatted_phone_for(order.buyer_dealer),
       body: message
     )
-  rescue StandardError => e
-    Rails.logger.error "Failed to send expiry notification: #{e.message}"
   end
 
   def expire_pending_payment(order)
     ActiveRecord::Base.transaction do
       order.release_reserved_inventory!
       order.expire_pending_payment!
+
+      DealerBroadcastTracker.for_order(order.id).pending.update_all(status: "expired")
+
       order.b2b_order_offers.active_state.update_all(
         status: "expired",
         responded_at: Time.current
@@ -70,7 +73,7 @@ class B2bOrderCleanupJob < ApplicationJob
     message = <<~TEXT
       ⏰ *Payment Window Expired*
 
-      Your accepted B2B request for #{order.b2b_order_items.first&.product_variant&.product&.name || 'product'} expired because payment was not completed in time.
+      Your accepted Order request for #{order.b2b_order_items.first&.product_variant&.product&.name || 'product'} expired because payment was not completed in time.
 
       Please place a new request if you still want to buy.
     TEXT
@@ -107,11 +110,11 @@ class B2bOrderCleanupJob < ApplicationJob
       notifiable: order,
       kind: "b2b_order_expired",
       title: "⏰ Request Expired",
-      message: "Your request ##{order.id} has expired. No dealer responded within the time limit.",
+      message: "Your request ##{order.reference_number} has expired. No dealer responded within the time limit.",
       visible_in_app: true,
       delivery_channels: { push: true, whatsapp: false, sms: false, email: false, in_app: true },
       payload: {
-        order_id: order.id,
+        order_id: order.reference_number,
         expires_at: order.expires_at
       }
     )

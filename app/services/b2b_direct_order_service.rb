@@ -1,14 +1,14 @@
 class B2bDirectOrderService
   COD_LIMIT = 50_000.to_d
 
-  def initialize(buyer:, dealer_product_id:, quantity:, latitude:, longitude:, radius_km:, payment_method:, payment_status: "pending", buyer_payment_attempt: nil)
+  def initialize(buyer:, dealer_product_id:, quantity:, latitude:, longitude:, radius_km:, payment_method: nil, payment_status: "pending", buyer_payment_attempt: nil)
     @buyer = buyer
     @dealer_product_id = dealer_product_id
     @quantity = quantity.to_i.positive? ? quantity.to_i : 1
     @latitude = latitude.to_f
     @longitude = longitude.to_f
     @radius_km = radius_km.to_i.positive? ? radius_km.to_i : 5
-    @payment_method = payment_method.to_s.presence || "cod"
+    @payment_method = payment_method
     @payment_status = payment_status.to_s.presence || "pending"
     @buyer_payment_attempt = buyer_payment_attempt
   end
@@ -26,18 +26,22 @@ class B2bDirectOrderService
 
     variant = dealer_product.product_variant
     pricing = calculate_pricing(variant)
-    check_cod_limit(pricing[:total])
+    if @payment_method.present? && @payment_method == "cod"
+      check_cod_limit(pricing[:total])
+    end
 
     order = nil
 
     ActiveRecord::Base.transaction do
       order = B2bOrder.create!(
         buyer_dealer_id: @buyer.id,
-        seller_dealer_id: seller.id,
+        seller_dealer_id: nil,
         request_status: "pending_request",
         status: "pending_request",
         requested_at: Time.current,
         requested_radius_km: @radius_km,
+        current_broadcast_radius: 5,
+        broadcast_attempts: 0,
         latitude: @latitude,
         longitude: @longitude,
         subtotal_amount: pricing[:subtotal],
@@ -45,7 +49,7 @@ class B2bDirectOrderService
         discount_amount: 0,
         total_amount: pricing[:total],
         expires_at: 10.minutes.from_now,
-        payment_method: @payment_method,
+        payment_method: @payment_method || "cod",
         payment_status: "pending",
         buyer_payment_attempt: @buyer_payment_attempt,
         is_direct_buy: true,
@@ -63,7 +67,9 @@ class B2bDirectOrderService
         status: "open"
       )
 
-      B2bOrderBroadcastService.new(order: order, actor: @buyer).initial_broadcast!
+      B2bOrderBroadcastService.new(order: order, actor: @buyer, current_radius: 5).initial_broadcast!
+
+      B2bOrderBroadcastJob.set(wait: 1.minute).perform_later(order.id)
     end
 
     order
