@@ -23,6 +23,7 @@ class Dealer < ApplicationRecord
   has_many :dealer_payouts, dependent: :destroy
   has_many :support_tickets, foreign_key: "dealer_id", dependent: :destroy
   has_many :ticket_messages, foreign_key: "dealer_id", dependent: :destroy
+  has_many :dealer_broadcast_trackers, dependent: :destroy
   belongs_to :deleted_by, class_name: "AdminUser", optional: true
 
   accepts_nested_attributes_for :dealer_profile, reject_if: :all_blank
