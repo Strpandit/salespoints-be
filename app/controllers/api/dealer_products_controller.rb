@@ -86,7 +86,7 @@ module Api
       configured_radius = current_dealer.dealer_location&.service_radius_km.to_f
       radius = params[:radius_km].to_f
       radius = configured_radius if radius <= 0 && configured_radius.positive?
-      radius = 10.0 if radius <= 0
+      radius = 5.0 if radius <= 0
 
       items = DealerProduct.live
                            .where("dealer_products.stock_quantity > 0")

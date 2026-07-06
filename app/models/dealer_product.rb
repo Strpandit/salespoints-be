@@ -14,7 +14,7 @@ class DealerProduct < ApplicationRecord
   scope :with_active_dealer, -> { 
     joins(:dealer).where(dealers: { deleted_at: nil, status: 'active' })
   }
-  scope :live, -> { with_active_dealer.where(is_active: true, approve_status: 1).where("stock_quantity > 0 OR stock_quantity IS NULL") }
+  scope :live, -> { with_active_dealer.where(is_active: true, approve_status: 1).where("dealer_products.stock_quantity > 0 OR dealer_products.stock_quantity IS NULL") }
   
   def ranking_score
     variant = product_variant
