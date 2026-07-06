@@ -69,7 +69,7 @@ class B2bDirectOrderService
 
       B2bOrderBroadcastService.new(order: order, actor: @buyer, current_radius: 5).initial_broadcast!
 
-      B2bOrderBroadcastJob.set(wait: 1.minute).perform_later(order.id)
+      BroadcastB2bOrderJob.set(wait: 1.minute).perform_later(order.id)
     end
 
     order

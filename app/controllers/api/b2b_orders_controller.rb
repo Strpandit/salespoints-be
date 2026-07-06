@@ -45,7 +45,7 @@ module Api
       end
 
       radius = params[:radius_km].to_i
-      radius = 10 if radius <= 0
+      radius = 5 if radius <= 0
       payment_method = params[:payment_method].to_s.presence || "cod"
 
       order = B2bDirectOrderService.new(
