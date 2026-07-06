@@ -9,7 +9,7 @@ module Api
       if current_dealer.present?
         dealer_pincode = current_dealer.pincode
         posts = posts.where(
-          "dealer_id = :dealer_id OR (approve_status = :approved AND created_at >= :cutoff AND :dealer_pincode = ANY(pincodes))",
+          "dealer_id = :dealer_id OR (approve_status = :approved AND (created_at >= :cutoff OR reuploaded_at >= :cutoff) AND :dealer_pincode = ANY(pincodes))",
           dealer_id: current_dealer.id,
           approved: "approved",
           cutoff: 7.days.ago,
@@ -422,7 +422,8 @@ module Api
         },
         distance_km: post.respond_to?(:distance_km) ? post.distance_km : nil,
         media: post.media.map { |file| attachment_payload(file) },
-        created_at: post.created_at
+        created_at: post.created_at,
+        reuploaded_at: post.reuploaded_at
       }
     end
 

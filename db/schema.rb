@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_07_05_095836) do
+ActiveRecord::Schema[8.0].define(version: 2026_07_06_064122) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -854,6 +854,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_05_095836) do
     t.text "rejection_reason"
     t.bigint "reviewed_by_admin_id"
     t.string "pincodes", default: [], array: true
+    t.datetime "reuploaded_at"
     t.index ["approve_status"], name: "index_wholesaler_posts_on_approve_status"
     t.index ["dealer_id"], name: "index_wholesaler_posts_on_dealer_id"
     t.index ["dealer_product_id"], name: "index_wholesaler_posts_on_dealer_product_id"

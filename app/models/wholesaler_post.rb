@@ -18,20 +18,24 @@ class WholesalerPost < ApplicationRecord
   validate :media_files_valid
   validate :validate_pincodes_format
 
-  scope :visible_to_marketplace, -> { where("created_at >= ?", 7.days.ago) }
+  scope :visible_to_marketplace, -> { 
+    where("created_at >= ? OR reuploaded_at >= ?", 7.days.ago, 7.days.ago)
+  }
   scope :by_pincode, ->(pincode) { where("? = ANY(pincodes)", pincode) }
   scope :by_pincodes, ->(pincodes) { where("pincodes && ARRAY[?]::varchar[]", pincodes) }
 
   def visible_to_others?
-    updated_at.present? && updated_at >= 7.days.ago && approve_status == 'approved'
+    base_date = reuploaded_at.presence || created_at
+    approve_status == 'approved' && base_date.present? && base_date >= 7.days.ago
   end
 
   def visible_until
-    updated_at&.+(7.days)
+    base_date = reuploaded_at.presence || created_at
+    base_date&.+(7.days)
   end
 
   def can_reupload?
-    is_expired? && approve_status == 'approved'
+   is_expired? && approve_status == 'approved'
   end
 
   def reupload!
@@ -42,7 +46,8 @@ class WholesalerPost < ApplicationRecord
       reviewed_at: nil,
       rejection_reason: nil,
       reviewed_by_admin: nil,
-      updated_at: Time.current
+      updated_at: Time.current,
+      reuploaded_at: Time.current
     )
   end
 
