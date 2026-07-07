@@ -1,4 +1,5 @@
 class B2bOrderBroadcastService
+  include Rails.application.routes.url_helpers
   DEFAULT_RADIUS = 5
   MAX_RADIUS = 15
   INCREMENT_PER_MINUTE = 1
@@ -25,8 +26,6 @@ class B2bOrderBroadcastService
       broadcast_attempts: @order.broadcast_attempts + 1
     )
 
-    Rails.logger.info "📡 B2B Broadcast: Order ##{@order.id}, Radius: #{@current_radius}km, Attempt: #{@order.broadcast_attempts}"
-
     broadcast!(is_initial: false)
 
     schedule_next_broadcast if !@order.expired? && !@order.accepted?
@@ -42,8 +41,6 @@ class B2bOrderBroadcastService
     
     already_broadcasted = DealerBroadcastTracker.for_order(@order.id).pluck(:dealer_id)
     new_dealers = eligible_dealers.reject { |dealer, _| already_broadcasted.include?(dealer.id) }
-
-    Rails.logger.info "📡 New dealers at radius #{@current_radius}km: #{new_dealers.keys.map(&:id)}"
 
     return if new_dealers.empty?
 
@@ -126,7 +123,7 @@ class B2bOrderBroadcastService
     product = variant&.product
     
     product_name = product&.name || "Product"
-    variant_name = variant&.variant_sku || variant&.variant_attributes&.to_s || "Standard"
+    variant_name = variant&.variant_attributes&.to_s || variant&.variant_sku || "Standard"
     sku = product&.sku || variant&.variant_sku || "N/A"
     unit_price = first_item&.unit_price || 0
     quantity = matched_items.sum(&:quantity)

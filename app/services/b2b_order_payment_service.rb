@@ -51,7 +51,7 @@ class B2bOrderPaymentService
     product = variant&.product
     
     product_name = product&.name || "Product"
-    variant_name = variant&.variant_sku || "Standard"
+    variant_name = variant&.variant_attributes&.to_s || variant&.variant_sku || "Standard"
     unit_price = first_item&.unit_price || 0
     quantity = items.sum(&:quantity)
     total_amount = order.total_amount

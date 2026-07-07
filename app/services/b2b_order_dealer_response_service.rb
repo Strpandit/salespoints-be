@@ -180,7 +180,7 @@ class B2bOrderDealerResponseService
     MetaWhatsappCloudService.new.send_payment_request(
       to: formatted_phone_for(buyer),
       product: product&.name || "Product",
-      variant: variant&.variant_sku || "Standard",
+      variant: variant&.variant_attributes&.to_s || variant&.variant_sku || "Standard",
       unit_price: first_item&.unit_price.to_f.round(2).to_s,
       quantity: items.sum(&:quantity).to_s,
       total_amount: order.total_amount.to_f.round(2).to_s,
