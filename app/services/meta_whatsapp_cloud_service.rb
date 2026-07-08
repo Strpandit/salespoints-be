@@ -10,6 +10,21 @@ class MetaWhatsappCloudService
   TEMPLATE_ORDER_ACCEPT = "order_accept"
   TEMPLATE_PAYMENT_SUCCESS = "payment_success_order_details"
 
+  def send_otp(to:, otp_pin:, name: "User")
+    return unless configured?
+    return if to.blank?
+
+    message = "🔐 Your OTP for Salespoints verification is: *#{otp_pin}*\n\n"
+    message += "⏱️ This OTP is valid for 10 minutes.\n"
+    message += "🔒 Please do not share this OTP with anyone.\n\n"
+    message += "Thank you,\nSalespoints Team"
+
+    send_text_message(
+      to: to,
+      body: message
+    )
+  end
+
   def send_dealer_order_request(to:, product:, variant:, sku:, price:, quantity:, total_amount:, delivery_location:, approx_distance:, accept_token:, reject_token:, image_url: nil)
     components = []
     image_to_use = image_url.presence || "#{ENV['FRONTEND_URL']}/images/ac.png"
@@ -189,9 +204,6 @@ class MetaWhatsappCloudService
   end
 
   def post_message!(payload)
-    Rails.logger.info "========== META REQUEST =========="
-    Rails.logger.info endpoint
-    Rails.logger.info JSON.pretty_generate(payload)
     uri = URI(endpoint)
     request = Net::HTTP::Post.new(uri)
     request["Authorization"] = "Bearer #{access_token}"
@@ -199,10 +211,7 @@ class MetaWhatsappCloudService
     request.body = JSON.generate(payload)
 
     response = http_client(uri).request(request)
-   
-    Rails.logger.info "========== META RESPONSE =========="
-    Rails.logger.info response.code
-    Rails.logger.info response.body
+
     return JSON.parse(response.body) if response.is_a?(Net::HTTPSuccess)
 
     raise StandardError, "Meta WhatsApp API error #{response.code}: #{response.body}"
