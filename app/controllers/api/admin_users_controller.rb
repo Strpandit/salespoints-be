@@ -440,9 +440,8 @@ module Api
       if admin.country_code.present?
         phone_number = "#{admin.country_code}#{phone_number}"
       end
-      name = admin.full_name.presence || admin.first_name.presence || "Admin"
 
-      WhatsappOtpService.send_otp(phone_number, admin.otp_pin, name)
+      WhatsappOtpService.send_otp(phone_number, admin.otp_pin)
     end
     # def notify_admin_approvers(admin)
     #   approver_scope = AdminUser.active.select { |user| user.approver_admin? && user.email.present? && user.id != admin.id }

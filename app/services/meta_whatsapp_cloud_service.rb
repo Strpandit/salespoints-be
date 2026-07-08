@@ -9,19 +9,19 @@ class MetaWhatsappCloudService
   TEMPLATE_PAYMENT_REQUEST = "b2b_payment_request"
   TEMPLATE_ORDER_ACCEPT = "order_accept"
   TEMPLATE_PAYMENT_SUCCESS = "payment_success_order_details"
+  TEMPLATE_OTP = "onbording_otp"
 
-  def send_otp(to:, otp_pin:, name: "User")
+  def send_otp(to:, otp_pin:)
     return unless configured?
     return if to.blank?
 
-    message = "🔐 Your OTP for Salespoints verification is: *#{otp_pin}*\n\n"
-    message += "⏱️ This OTP is valid for 10 minutes.\n"
-    message += "🔒 Please do not share this OTP with anyone.\n\n"
-    message += "Thank you,\nSalespoints Team"
-
-    send_text_message(
+    send_template_message(
       to: to,
-      body: message
+      template_name: "onbording_otp",
+      language_code: "en",
+      body_parameters: [
+        otp_pin
+      ]
     )
   end
 

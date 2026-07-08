@@ -2,7 +2,7 @@ module Api
   class DealersController < ApplicationController
     skip_before_action :authenticate_request!, only: [:verify_otp, :resend_signup_otp]
     # before_action :authenticate_request!, except: [:verify_otp]
-    before_action :require_admin, only: [:create, :index, :active_dealers, :block, :unblock, :destroy, :approve, :reject, :admin_overview, :resend_signup_otp]
+    before_action :require_admin, only: [:create, :index, :active_dealers, :block, :unblock, :destroy, :approve, :reject, :admin_overview]
     before_action :require_admin_approver!, only: [:approve, :reject]
     before_action :set_dealer, only: [:show, :update, :destroy, :block, :unblock, :approve, :reject, :verify_otp, :admin_overview]
     before_action :authorize_dealer_update, only: [:update, :show]
@@ -351,15 +351,14 @@ module Api
     end
 
     def send_whatsapp_otp_to_dealer(dealer)
-      phone_number = dealer.business_contact_number.presence || dealer.phone
+      phone_number = dealer&.dealer_profile&.business_contact_number.presence || dealer.phone
       return unless phone_number.present?
 
       if dealer.country_code.present?
         phone_number = "#{dealer.country_code}#{phone_number}"
       end
-      name = dealer.business_name.presence || dealer.first_name.presence || "Dealer"
 
-      WhatsappOtpService.send_otp(phone_number, dealer.otp_pin, name)
+      WhatsappOtpService.send_otp(phone_number, dealer.otp_pin)
     end
 
     def require_admin_approver!

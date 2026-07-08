@@ -1,5 +1,5 @@
 class WhatsappOtpService
-  def self.send_otp(phone_number, otp_pin, name = "User")
+  def self.send_otp(phone_number, otp_pin)
     return if phone_number.blank?
 
     formatted_phone = format_phone_number(phone_number)
@@ -7,7 +7,6 @@ class WhatsappOtpService
     MetaWhatsappCloudService.new.send_otp(
       to: formatted_phone,
       otp_pin: otp_pin,
-      name: name
     )
   end
 
