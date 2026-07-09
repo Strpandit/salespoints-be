@@ -9,21 +9,6 @@ class MetaWhatsappCloudService
   TEMPLATE_PAYMENT_REQUEST = "b2b_payment_request"
   TEMPLATE_ORDER_ACCEPT = "order_accept"
   TEMPLATE_PAYMENT_SUCCESS = "payment_success_order_details"
-  TEMPLATE_OTP = "onbording_otp"
-
-  def send_otp(to:, otp_pin:)
-    return unless configured?
-    return if to.blank?
-
-    send_template_message(
-      to: to,
-      template_name: "onbording_otp",
-      language_code: "en",
-      body_parameters: [
-        otp_pin
-      ]
-    )
-  end
 
   def send_dealer_order_request(to:, product:, variant:, sku:, price:, quantity:, total_amount:, delivery_location:, approx_distance:, accept_token:, reject_token:, image_url: nil)
     components = []

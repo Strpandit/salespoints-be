@@ -89,7 +89,6 @@ module Api
 
       if dealer.save
         DealerAuthMailer.signup_otp(dealer).deliver_later if dealer.email.present?
-        send_whatsapp_otp_to_dealer(dealer)
         notify_admins_about_dealer_creation(dealer)
 
         verify_url = "#{ENV['FRONTEND_URL'] || request.base_url}/dealer/signup-verify-otp?id=#{dealer.id}&email=#{CGI.escape(dealer.email)}"
@@ -115,7 +114,6 @@ module Api
       )
 
       DealerAuthMailer.signup_otp(dealer).deliver_later
-      send_whatsapp_otp_to_dealer(dealer)
 
       render json: {
         message: "Signup OTP sent successfully"
@@ -187,6 +185,7 @@ module Api
 
     def update
       if @dealer.update(dealer_params)
+        notify_admins_entity_updated(@dealer)
         render json: serialize_resource(@dealer, DealerSerializer, base_url: request.base_url).merge(message: "Dealer updated successfully"), status: :ok
       else
         render json: {
@@ -197,11 +196,13 @@ module Api
 
     def block
       @dealer.update(status: "banned")
+      notify_admins_entity_updated(@dealer)
       render json: { message: "Dealer blocked successfully" }, status: :ok
     end
 
     def unblock
       @dealer.update(status: "active")
+      notify_admins_entity_updated(@dealer)
       render json: { message: "Dealer unblocked successfully" }, status: :ok
     end
 
@@ -350,15 +351,10 @@ module Api
       end
     end
 
-    def send_whatsapp_otp_to_dealer(dealer)
-      phone_number = dealer&.dealer_profile&.business_contact_number.presence || dealer.phone
-      return unless phone_number.present?
-
-      if dealer.country_code.present?
-        phone_number = "#{dealer.country_code}#{phone_number}"
+    def notify_admins_entity_updated(dealer)
+      get_admin_emails.each do |email|
+        AdminNotificationMailer.entity_updated(email, "Dealer", dealer.full_name, current_admin&.email).deliver_later
       end
-
-      WhatsappOtpService.send_otp(phone_number, dealer.otp_pin)
     end
 
     def require_admin_approver!

@@ -98,7 +98,6 @@ module Api
       end
 
       AdminAuthMailer.signup_otp(admin).deliver_later if admin.email.present?
-      send_whatsapp_otp(admin)
       notify_admin_approvers(admin)
 
       verify_url = "#{ENV['FRONTEND_URL'] || request.base_url}/admin/signup-verify-otp?id=#{admin.id}&email=#{CGI.escape(admin.email)}"
@@ -123,7 +122,6 @@ module Api
       )
 
       AdminAuthMailer.signup_otp(admin).deliver_later
-      send_whatsapp_otp(admin)
 
       render json: {
         message: "Signup OTP sent successfully"
@@ -433,16 +431,6 @@ module Api
       end
     end
 
-    def send_whatsapp_otp(admin)
-      phone_number = admin.phone.presence || admin.alternate_phone
-      return unless phone_number.present?
-
-      if admin.country_code.present?
-        phone_number = "#{admin.country_code}#{phone_number}"
-      end
-
-      WhatsappOtpService.send_otp(phone_number, admin.otp_pin)
-    end
     # def notify_admin_approvers(admin)
     #   approver_scope = AdminUser.active.select { |user| user.approver_admin? && user.email.present? && user.id != admin.id }
     #   approver_scope.each do |approver|
