@@ -12,13 +12,13 @@ module Api
         when "accepted"
           B2bOrder.joins(b2b_order_items: :dealer_product)
                   .where(dealer_products: { dealer_id: current_dealer.id })
-                  .where("b2b_orders.request_status = ? OR (b2b_orders.request_status IS NULL AND b2b_orders.status IN (?))", "accepted_request", %w[confirmed shipped delivered])
+                  .where("b2b_orders.request_status = ? OR (b2b_orders.request_status IS NULL AND b2b_orders.status IN (?))", "accepted_request", %w[paid confirmed shipped delivered])
                   .includes(:buyer_dealer, :seller_dealer, b2b_order_items: { dealer_product: :dealer })
                   .distinct
                   .order(created_at: :desc)
         else
           current_dealer.buyer_b2b_orders
-                        .where("request_status IS NULL OR status IN (?)", %w[pending_request pending_payment confirmed shipped delivered])
+                        .where("request_status IS NULL OR status IN (?)", %w[pending_request pending_payment paid confirmed shipped delivered])
                         .includes(:buyer_dealer, :seller_dealer, b2b_order_items: { dealer_product: :dealer })
                         .order(created_at: :desc)
         end
