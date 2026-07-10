@@ -7,9 +7,10 @@ class B2bOrder < ApplicationRecord
   has_many :notifications, as: :notifiable, dependent: :destroy
   has_many :b2b_order_offers, dependent: :destroy
   has_many :dealer_broadcast_trackers, dependent: :destroy
+  has_one :delivery_confirmation, as: :deliverable, dependent: :destroy
 
   REQUEST_STATUSES = %w[pending_request accepted_request rejected_request expired_request].freeze
-  ORDER_STATUSES = %w[pending_request pending_payment paid confirmed cancelled].freeze
+  ORDER_STATUSES = %w[pending_request pending_payment paid confirmed shipped delivered cancelled].freeze
   PAYMENT_METHODS = %w[cod online].freeze
   PAYMENT_STATUSES = %w[pending paid failed].freeze
 
@@ -71,6 +72,41 @@ class B2bOrder < ApplicationRecord
 
   def confirmed?
     status == "confirmed"
+  end
+
+  def shipped?
+    status == "shipped"
+  end
+
+  def delivered?
+    status == "delivered"
+  end
+
+  def can_transition_to?(next_status)
+    allowed = {
+      "confirmed" => %w[shipped cancelled],
+      "shipped" => %w[delivered cancelled],
+      "delivered" => [],
+      "cancelled" => []
+    }
+
+    allowed.fetch(status.to_s, []).include?(next_status.to_s)
+  end
+
+  def mark_shipped!(note: nil)
+    update!(
+      status: "shipped",
+      status_note: note.presence || status_note,
+      shipped_at: shipped_at || Time.current
+    )
+  end
+
+  def mark_delivered!(note: nil)
+    update!(
+      status: "delivered",
+      status_note: note.presence || status_note,
+      delivered_at: delivered_at || Time.current
+    )
   end
 
   def can_accept?

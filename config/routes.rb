@@ -36,6 +36,13 @@ Rails.application.routes.draw do
 
       resources :return_requests, only: [:index, :create, :update]
     end
+    resources :delivery_confirmations, only: [:show], param: :token do
+      member do
+        post :submit
+        post :resend_otps
+        post :verify_otps
+      end
+    end
     resources :notifications, only: [:index] do
       collection do
         get :unread_count
@@ -154,6 +161,7 @@ Rails.application.routes.draw do
         post :accept
         post :reject
         post :payment
+        patch :update_status
       end
     end
     resources :dealer_notifications, only: [:index] do

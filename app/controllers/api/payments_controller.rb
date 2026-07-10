@@ -17,6 +17,14 @@ module Api
       case status
       when "PAID"
         order.mark_payment_paid!(reference: payload["cf_payment_id"] || payload["payment_id"], gateway_payload: payload)
+        if order.status == "pending"
+          OrderLifecycleService.new(
+            order: order,
+            actor: current_user,
+            status_note: "Online payment confirmed successfully."
+          ).transition!(next_status: "processing")
+          OrderNotificationJob.perform_later(order.id, "placed", current_user.class.name, current_user.id) if current_user.present?
+        end
         OrderNotificationJob.perform_later(order.id, "payment_paid", current_user.class.name, current_user.id) if current_user.present?
       when "ACTIVE"
         order.update!(payment_gateway_payload: order.payment_gateway_payload.merge(payload))

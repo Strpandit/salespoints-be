@@ -51,16 +51,25 @@ module Api
     end
 
     def update
-      order = scoped_orders.find_by(id: params[:id])
+      order = scoped_orders.includes(:delivery_confirmation).find_by(id: params[:id])
       return render json: { error: "Order not found" }, status: :not_found unless order
       return render json: { error: "You are not allowed to update this order" }, status: :forbidden unless can_update_order?(order)
 
       next_status = params[:status].to_s
       return render json: { error: "Status is required" }, status: :unprocessable_entity if next_status.blank?
+      if next_status == "delivered"
+        return render json: { error: "Delivered status will be set automatically after delivery form and dual OTP verification" }, status: :unprocessable_entity
+      end
+
       OrderLifecycleService.new(order: order, actor: current_user, status_note: params[:status_note]).transition!(next_status: next_status)
+      delivery_confirmation = nil
+      if next_status == "shipped"
+        delivery_confirmation = DeliveryConfirmationService.new(deliverable: order, actor: current_user).create_or_refresh!
+      end
       OrderNotificationJob.perform_later(order.id, "status_updated", current_user.class.name, current_user.id)
 
-      render json: serialize_resource(order.reload, OrderSerializer, base_url: request.base_url).merge(
+      render json: serialize_resource(order.reload, OrderSerializer, include: [:delivery_confirmation], base_url: request.base_url).merge(
+        delivery_confirmation: delivery_confirmation ? DeliveryConfirmationSerializer.render(delivery_confirmation) : nil,
         message: "Order updated successfully"
       ), status: :ok
     rescue StandardError => e
@@ -115,7 +124,8 @@ module Api
       if current_admin
         Order.includes(:buyer, order_items: :product_variant)
       elsif current_dealer
-        current_dealer.orders.includes(:buyer, order_items: :product_variant)
+        dealer_scope = params[:view].to_s == "sales" ? current_dealer.sales_orders : current_dealer.orders
+        dealer_scope.includes(:buyer, order_items: :product_variant)
       elsif current_account
         current_account.orders.includes(:buyer, order_items: :product_variant)
       else

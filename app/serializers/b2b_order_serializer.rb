@@ -4,9 +4,11 @@ class B2bOrderSerializer < ApplicationSerializer
              :subtotal_amount, :taxable_amount, :tax_amount, :discount_amount, :total_amount,
              :buyer_name, :seller_name, :open_items_count, :accepted_items_count, :latitude, :longitude,
              :payment_method, :payment_status, :request_status, :source_type, :is_direct_buy,
-             :payment_link_sent_at, :confirmed_at, :payment_confirmed_at
+             :payment_link_sent_at, :confirmed_at, :payment_confirmed_at, :shipped_at, :delivered_at,
+             :status_note
 
   has_many :b2b_order_items
+  has_one :delivery_confirmation
 
   def subtotal_amount
     object.subtotal_amount.to_f

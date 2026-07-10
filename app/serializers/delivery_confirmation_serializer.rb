@@ -1,0 +1,40 @@
+class DeliveryConfirmationSerializer < ApplicationSerializer
+  attributes :token, :status, :notes, :seller_phone, :buyer_phone, :submitted_at, :completed_at,
+             :seller_otp_sent_at, :buyer_otp_sent_at, :seller_otp_verified, :buyer_otp_verified,
+             :invoice_reference_time, :buyer_name, :seller_name, :declarations, :uploads
+
+  def seller_otp_verified
+    object.seller_verified?
+  end
+
+  def buyer_otp_verified
+    object.buyer_verified?
+  end
+
+  def uploads
+    {
+      product_with_customer_image: attachment_payload(object.product_with_customer_image),
+      product_packaging_image: attachment_payload(object.product_packaging_image),
+      product_open_box_images: object.product_open_box_images.map { |file| attachment_payload(file) }.compact
+    }
+  end
+
+  private
+
+  def attachment_payload(file)
+    return nil unless file.attached?
+
+    {
+      filename: file.filename.to_s,
+      content_type: file.content_type,
+      byte_size: file.byte_size,
+      url: Rails.application.routes.url_helpers.rails_blob_url(file, only_path: false)
+    }
+  rescue StandardError
+    {
+      filename: file.filename.to_s,
+      content_type: file.content_type,
+      byte_size: file.byte_size
+    }
+  end
+end

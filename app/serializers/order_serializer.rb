@@ -8,10 +8,11 @@ class OrderSerializer < ApplicationSerializer
              :seller_settlement_amount, :settlement_status, :settlement_due_at,
              :settled_at, :hold_released_at, :refund_status, :refund_amount,
              :refunded_at, :refund_reason, :return_window_closes_at, :payment_reference,
-             :status_note
+             :status_note, :shipped_at, :delivered_at
 
   has_many :order_items
   has_many :return_requests
+  has_one :delivery_confirmation
 
   def items_count
     object.order_items.sum(:quantity)

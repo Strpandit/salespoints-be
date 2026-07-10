@@ -184,6 +184,26 @@ class MetaWhatsappCloudService
     )
   end
 
+  def send_delivery_form_link(to:, order_reference:, buyer_name:, form_url:)
+    body = <<~TEXT.squish
+      SalesPoints delivery verification is required for order #{order_reference}.
+      Recipient: #{buyer_name}.
+      Please open the secure form below, upload the required proof images, confirm the declarations, and complete OTP verification:
+      #{form_url}
+    TEXT
+
+    send_text_message(to: to, body: body)
+  end
+
+  def send_delivery_otp(to:, otp:, order_reference:, recipient_label:)
+    body = <<~TEXT.squish
+      SalesPoints #{recipient_label} verification code for order #{order_reference}: #{otp}.
+      This code is valid for 10 minutes. Please share it only for the on-site delivery verification process.
+    TEXT
+
+    send_text_message(to: to, body: body)
+  end
+
   def configured?
     access_token.present? && phone_number_id.present?
   end

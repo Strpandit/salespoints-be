@@ -12,14 +12,13 @@ module Api
         when "accepted"
           B2bOrder.joins(b2b_order_items: :dealer_product)
                   .where(dealer_products: { dealer_id: current_dealer.id })
-                  .where(request_status: "accepted_request")
-                  .where(status: "pending_payment")
+                  .where("b2b_orders.request_status = ? OR (b2b_orders.request_status IS NULL AND b2b_orders.status IN (?))", "accepted_request", %w[confirmed shipped delivered])
                   .includes(:buyer_dealer, :seller_dealer, b2b_order_items: { dealer_product: :dealer })
                   .distinct
                   .order(created_at: :desc)
         else
           current_dealer.buyer_b2b_orders
-                        .where("request_status IS NULL OR status IN (?)", %w[pending_request pending_payment])
+                        .where("request_status IS NULL OR status IN (?)", %w[pending_request pending_payment confirmed shipped delivered])
                         .includes(:buyer_dealer, :seller_dealer, b2b_order_items: { dealer_product: :dealer })
                         .order(created_at: :desc)
         end
@@ -144,6 +143,31 @@ module Api
           payment_status: "pending"
         }, status: :ok
       end
+    rescue StandardError => e
+      render json: { error: e.message }, status: :unprocessable_entity
+    end
+
+    def update_status
+      order = current_dealer.seller_b2b_orders.includes(:delivery_confirmation).find_by(id: params[:id])
+      return render json: { error: "Order not found" }, status: :not_found unless order
+
+      next_status = params[:status].to_s
+      return render json: { error: "Status is required" }, status: :unprocessable_entity if next_status.blank?
+      return render json: { error: "Delivered status will be set automatically after delivery proof verification" }, status: :unprocessable_entity if next_status == "delivered"
+      return render json: { error: "Invalid status transition" }, status: :unprocessable_entity unless order.can_transition_to?(next_status)
+
+      case next_status
+      when "shipped"
+        order.mark_shipped!(note: params[:status_note])
+        delivery_confirmation = DeliveryConfirmationService.new(deliverable: order, actor: current_dealer).create_or_refresh!
+      else
+        return render json: { error: "Unsupported status update" }, status: :unprocessable_entity
+      end
+
+      render json: serialize_resource(order.reload, B2bOrderSerializer, include: [:delivery_confirmation], base_url: request.base_url).merge(
+        delivery_confirmation: delivery_confirmation ? DeliveryConfirmationSerializer.render(delivery_confirmation) : nil,
+        message: "B2B order updated successfully"
+      ), status: :ok
     rescue StandardError => e
       render json: { error: e.message }, status: :unprocessable_entity
     end

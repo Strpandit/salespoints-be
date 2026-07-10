@@ -29,4 +29,38 @@ class B2bOrderMailer < ApplicationMailer
       BODY
     )
   end
+
+  def delivery_invoice(order_id, recipient_kind)
+    @order = B2bOrder.includes(:buyer_dealer, :seller_dealer, :delivery_confirmation).find(order_id)
+    recipient_kind = recipient_kind.to_s
+    recipient =
+      if recipient_kind == "seller"
+        @order.seller_dealer
+      else
+        @order.buyer_dealer
+      end
+
+    return if recipient&.email.blank?
+
+    recipient_name = recipient.full_name.presence || recipient.dealer_code || "Dealer"
+    invoice_time = @order.shipped_at || @order.delivery_confirmation&.invoice_reference_time || Time.current
+
+    mail(
+      to: recipient.email,
+      subject: "Invoice for B2B order #{@order.reference_number}",
+      body: <<~BODY
+        Hello #{recipient_name},
+
+        B2B order #{@order.reference_number} has been delivered and verified through delivery proof plus dual OTP confirmation.
+
+        Invoice reference date: #{invoice_time.strftime("%d %b %Y %I:%M %p")}
+        Order amount: Rs #{@order.total_amount.to_f.round(2)}
+        Payment method: #{@order.payment_method.to_s.upcase}
+        Payment status: #{@order.payment_status.to_s.upcase}
+        Delivery status: #{@order.status.to_s.humanize}
+
+        Please keep this email for your invoice reference.
+      BODY
+    )
+  end
 end

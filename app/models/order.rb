@@ -5,6 +5,7 @@ class Order < ApplicationRecord
   has_many :notifications, as: :notifiable, dependent: :nullify
   has_many :return_requests, dependent: :destroy
   has_many :dealer_ledger_entries, dependent: :nullify
+  has_one :delivery_confirmation, as: :deliverable, dependent: :destroy
 
   enum :status, {
     pending: "pending",

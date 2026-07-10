@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_07_06_064122) do
+ActiveRecord::Schema[8.0].define(version: 2026_07_10_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -231,6 +231,9 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_06_064122) do
     t.string "reference_number", default: ""
     t.integer "current_broadcast_radius", default: 5
     t.integer "broadcast_attempts", default: 0
+    t.datetime "shipped_at"
+    t.datetime "delivered_at"
+    t.text "status_note"
     t.index ["broadcast_attempts"], name: "index_b2b_orders_on_broadcast_attempts"
     t.index ["buyer_dealer_id"], name: "index_b2b_orders_on_buyer_dealer_id"
     t.index ["buyer_payment_attempt_id"], name: "index_b2b_orders_on_buyer_payment_attempt_id"
@@ -497,6 +500,35 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_06_064122) do
     t.index ["requestable_type", "requestable_id"], name: "index_deletion_requests_on_requestable"
     t.index ["reviewed_by_admin_id"], name: "index_deletion_requests_on_reviewed_by_admin_id"
     t.index ["status"], name: "index_deletion_requests_on_status"
+  end
+
+  create_table "delivery_confirmations", force: :cascade do |t|
+    t.string "token", null: false
+    t.string "deliverable_type", null: false
+    t.bigint "deliverable_id", null: false
+    t.bigint "seller_dealer_id"
+    t.string "buyer_type", null: false
+    t.bigint "buyer_id", null: false
+    t.string "status", default: "pending_form", null: false
+    t.jsonb "declarations", default: {}, null: false
+    t.text "notes"
+    t.string "seller_phone"
+    t.string "buyer_phone"
+    t.string "seller_otp"
+    t.datetime "seller_otp_sent_at"
+    t.datetime "seller_otp_verified_at"
+    t.string "buyer_otp"
+    t.datetime "buyer_otp_sent_at"
+    t.datetime "buyer_otp_verified_at"
+    t.datetime "submitted_at"
+    t.datetime "completed_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["buyer_type", "buyer_id"], name: "index_delivery_confirmations_on_buyer_type_and_buyer_id"
+    t.index ["deliverable_type", "deliverable_id"], name: "idx_delivery_confirmations_on_deliverable", unique: true
+    t.index ["seller_dealer_id"], name: "index_delivery_confirmations_on_seller_dealer_id"
+    t.index ["status"], name: "index_delivery_confirmations_on_status"
+    t.index ["token"], name: "index_delivery_confirmations_on_token", unique: true
   end
 
   create_table "notifications", force: :cascade do |t|
