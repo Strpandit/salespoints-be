@@ -103,6 +103,8 @@ class DeliveryConfirmationService
   end
 
   def attach_files!(confirmation, files)
+    Rails.logger.info "ATTACH SKIPPED"
+    return
     confirmation.product_with_customer_image.purge if confirmation.product_with_customer_image.attached?
     confirmation.product_packaging_image.purge if confirmation.product_packaging_image.attached?
     confirmation.product_open_box_images.purge if confirmation.product_open_box_images.attached?
