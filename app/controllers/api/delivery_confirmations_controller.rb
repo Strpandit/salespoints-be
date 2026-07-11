@@ -11,9 +11,6 @@ module Api
     end
 
     def submit
-      Rails.logger.info "===== SUBMIT HIT ====="
-
-      render json: { ok: true } and return
       service.submit_form!(
         confirmation: @confirmation,
         declarations: params[:declarations] || {},
