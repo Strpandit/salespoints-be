@@ -24,24 +24,17 @@ class DeliveryConfirmationService
   end
 
   def submit_form!(confirmation:, declarations:, notes:, files:)
-    Rails.logger.info "STEP A"
     ensure_required_declarations!(declarations)
-    Rails.logger.info "STEP B"
     ensure_required_files!(files)
-    Rails.logger.info "STEP C"
 
     confirmation.declarations = normalized_declarations(declarations)
     confirmation.notes = notes.to_s.strip.presence
-    Rails.logger.info "STEP D"
     attach_files!(confirmation, files)
-    Rails.logger.info "STEP E"
     confirmation.submitted_at = Time.current
     confirmation.status = "pending_otp"
-    Rails.logger.info "STEP F"
     confirmation.save!
-    Rails.logger.info "STEP G"
+
     send_otps!(confirmation)
-    Rails.logger.info "STEP H"
     confirmation
   end
 
@@ -110,8 +103,6 @@ class DeliveryConfirmationService
   end
 
   def attach_files!(confirmation, files)
-    Rails.logger.info "ATTACH SKIPPED"
-    return
     confirmation.product_with_customer_image.purge if confirmation.product_with_customer_image.attached?
     confirmation.product_packaging_image.purge if confirmation.product_packaging_image.attached?
     confirmation.product_open_box_images.purge if confirmation.product_open_box_images.attached?
