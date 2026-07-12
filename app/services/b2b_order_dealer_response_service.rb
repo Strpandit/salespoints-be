@@ -111,7 +111,7 @@ class B2bOrderDealerResponseService
   def accept_direct_buy!(order)
     offer = lock_b2b_request_offer!(order: order)
     ensure_order_can_be_accepted!(order: order)
-    raise StandardError, "Order is not in processing state" unless order.status == "processing"
+    raise StandardError, "Order is not in pending request" unless order.status == "pending_request"
 
     order.b2b_order_items.each do |item|
       deduct_stock!(item)
@@ -119,7 +119,7 @@ class B2bOrderDealerResponseService
 
     order.update!(
       status: "confirmed",
-      request_status: "direct_buy_confirmed",
+      request_status: "accepted_request",
       confirmed_at: Time.current
     )
 
@@ -134,6 +134,7 @@ class B2bOrderDealerResponseService
     offer = lock_b2b_request_offer!(order: order)
     ensure_order_can_be_accepted!(order: order)
 
+    raise StandardError, "Order is not in pending_request state" unless order.status == "pending_request"
     order.update!(status: "cancelled", rejected_at: Time.current)
     offer.update!(status: "rejected", responded_at: Time.current, whatsapp_status: "replied")
 

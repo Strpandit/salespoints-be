@@ -16,11 +16,19 @@ class B2bOrderCreationService
 
       ensure_request_ready!(request_order)
 
+      if request_order.is_direct_buy?
+        final_order_status = "pending_request"
+        final_order_request_status = "pending_request"
+      else
+        final_order_status = "confirmed"
+        final_order_request_status = nil
+      end
+
       final_order = B2bOrder.create!(
         buyer_dealer_id: request_order.buyer_dealer_id,
         seller_dealer_id: request_order.seller_dealer_id,
-        request_status: nil,
-        status: request_order.is_direct_buy? ? "pending_request" : "confirmed",
+        request_status: final_order_request_status,
+        status: final_order_status,
         requested_at: request_order.requested_at,
         requested_radius_km: request_order.requested_radius_km,
         latitude: request_order.latitude,

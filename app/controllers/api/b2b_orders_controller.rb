@@ -66,8 +66,12 @@ module Api
     end
 
     def accept
-      order = B2bOrder.pending_requests.find_by(id: params[:id])
+      order = B2bOrder.find_by(id: params[:id], seller_dealer_id: current_dealer.id)
       return render json: { error: "Request not found or already processed" }, status: :not_found unless order
+
+      unless acceptable_order?(order)
+        return render json: { error: "Request not available for acceptance" }, status: :unprocessable_entity
+      end
 
       offer = matching_open_offer(order: order)
 
@@ -77,14 +81,18 @@ module Api
         offer: offer
       ).accept!
 
-      render json: { message: "Order accepted successfully. Payment link sent to buyer." }, status: :ok
+      render json: { message: "Order accepted successfully." }, status: :ok
     rescue StandardError => e
       render json: { error: e.message }, status: :unprocessable_entity
     end
 
     def reject
-      order = B2bOrder.pending_requests.find_by(id: params[:id])
+      order = B2bOrder.find_by(id: params[:id], seller_dealer_id: current_dealer.id)
       return render json: { error: "Request not found or already processed" }, status: :not_found unless order
+
+      unless acceptable_order?(order)
+        return render json: { error: "Request not available for rejection" }, status: :unprocessable_entity
+      end
 
       offer = matching_open_offer(order: order)
 
@@ -196,6 +204,10 @@ module Api
       end
 
       deduped.values
+    end
+
+    def acceptable_order?(order)
+      order.request_status == "pending_request" && order.status == "pending_request"
     end
 
     def matching_open_offer(order:)
