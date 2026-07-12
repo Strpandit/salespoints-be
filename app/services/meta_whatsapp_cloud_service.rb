@@ -129,7 +129,7 @@ class MetaWhatsappCloudService
     )
   end
 
-  def send_payment_success(to:, product:, variant:, quantity:, unit_price:, total_paid:, payment_id:, order_id:, dealer_code:, dealer_phone:)
+  def send_payment_success(to:, product:, variant:, quantity:, unit_price:, total_paid:, payment_id:, order_id:)
     components = [
       {
         type: "body",
@@ -140,9 +140,7 @@ class MetaWhatsappCloudService
           { type: "text", text: unit_price.to_s }, 
           { type: "text", text: total_paid.to_s }, 
           { type: "text", text: payment_id.to_s }, 
-          { type: "text", text: order_id.to_s },   
-          { type: "text", text: dealer_code.to_s },
-          { type: "text", text: dealer_phone.to_s }
+          { type: "text", text: order_id.to_s }
         ]
       }
     ]

@@ -66,7 +66,6 @@ module Api
         )
         service.call
       rescue StandardError => e
-        Rails.logger.error "Webhook processing failed: #{e.message}"
         Rails.logger.error e.backtrace.join("\n")
       end
       head :ok
@@ -74,6 +73,7 @@ module Api
 
     def payment_details
       order = B2bOrder.find_by(payment_token: params[:token])
+      raise ActiveRecord::RecordNotFound unless order.buyer_dealer_id == current_dealer.id
 
       return render json: { error: "Invalid payment link" }, status: :not_found unless order
       return render json: { error: "Unauthorized" } unless current_dealer == order.buyer_dealer

@@ -20,7 +20,7 @@ class B2bOrderCreationService
         buyer_dealer_id: request_order.buyer_dealer_id,
         seller_dealer_id: request_order.seller_dealer_id,
         request_status: nil,
-        status: "confirmed",
+        status: request_order.is_direct_buy? ? "pending_request" : "confirmed",
         requested_at: request_order.requested_at,
         requested_radius_km: request_order.requested_radius_km,
         latitude: request_order.latitude,
@@ -56,7 +56,7 @@ class B2bOrderCreationService
           responded_at: request_item.responded_at || Time.current
         )
 
-        deduct_stock!(request_item)
+        deduct_stock!(request_item) unless request_order.is_direct_buy?
       end
 
       final_order.recalculate_totals!
@@ -98,10 +98,15 @@ class B2bOrderCreationService
   end
 
   def ensure_request_ready!(request_order)
-    raise StandardError, "Accepted request not found" unless request_order.request_status == "accepted_request"
-    raise StandardError, "Request is no longer awaiting payment" unless request_order.pending_payment?
-    raise StandardError, "Payment window has expired for this request" if request_order.expires_at.present? && request_order.expires_at < Time.current
-    raise StandardError, "Seller is not assigned for this request" if request_order.seller_dealer_id.blank?
+    if request_order.is_direct_buy?
+      raise StandardError, "Order is not in pending_payment state" unless request_order.status == "pending_payment" && request_order.request_status == "pending_request"
+      raise StandardError, "Payment window has expired" if request_order.expires_at.present? && request_order.expires_at < Time.current
+    else
+      raise StandardError, "Accepted request not found" unless request_order.request_status == "accepted_request"
+      raise StandardError, "Request is no longer awaiting payment" unless request_order.pending_payment?
+      raise StandardError, "Payment window has expired for this request" if request_order.expires_at.present? && request_order.expires_at < Time.current
+      raise StandardError, "Seller is not assigned for this request" if request_order.seller_dealer_id.blank?
+    end
   end
 
   def resolve_source!(request_item)

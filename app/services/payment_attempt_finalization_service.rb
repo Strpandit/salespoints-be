@@ -9,8 +9,6 @@ class PaymentAttemptFinalizationService
     attempt = PaymentAttempt.find(@payment_attempt.id)
 
     if attempt.processed?
-      Rails.logger.info "Payment Attempt #{attempt.id} already processed. Returning existing result."
-
       if checkout_context == "b2b_order"
         order = B2bOrder.find_by(buyer_payment_attempt_id: attempt.id, request_status: nil)
         return Result.new(orders: [], b2b_order: order) if order.present?
@@ -99,8 +97,11 @@ class PaymentAttemptFinalizationService
       ).call
 
       send_order_accept_to_seller(order)
-      send_payment_success_to_buyer(order)
-      create_buyer_online_payment_notification(order)
+      unless order.is_direct_buy?
+        send_payment_success_to_buyer(order)
+        create_buyer_online_payment_notification(order)
+      end
+
       create_seller_online_payment_notification(order)
       notify_admin_online_payment(order)
 
@@ -160,9 +161,7 @@ class PaymentAttemptFinalizationService
       unit_price: unit_price.to_f.round(2).to_s,
       total_paid: total_amount.to_f.round(2).to_s,
       payment_id: order.payment_method.to_s.upcase,
-      order_id: order.reference_number,
-      dealer_code: seller&.dealer_code || "N/A",
-      dealer_phone: formatted_phone_for(seller) || "N/A"
+      order_id: order.reference_number
     )
   rescue StandardError => e
     Rails.logger.error("Failed to send payment_success template to buyer: #{e.message}")

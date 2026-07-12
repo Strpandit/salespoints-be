@@ -31,11 +31,8 @@ class MetaWhatsappWebhookService
   def process_messages(messages)
     messages.each do |message|
 
-      Rails.logger.info "===== MESSAGE TYPE ====="
-      Rails.logger.info message.inspect
       case message["type"]
       when "button"
-        Rails.logger.info "BUTTON EVENT RECEIVED"
         process_button_reply(
           button_id: message.dig("button", "payload").to_s,
           from: message["from"].to_s
@@ -134,8 +131,6 @@ class MetaWhatsappWebhookService
       send_text_acknowledgement(to: from, message: "Unknown action.")
     end
   rescue StandardError => e
-    Rails.logger.error "WhatsApp webhook error: #{e.message}"
-    Rails.logger.error e.backtrace.join("\n")
     send_text_acknowledgement(to: from, message: "Error: #{e.message}")
   end
 
@@ -151,7 +146,6 @@ class MetaWhatsappWebhookService
     send_text_acknowledgement(to: from, message: "✅ Request accepted! Payment link sent to buyer.")
     offer.update!(whatsapp_status: "replied")
   rescue StandardError => e
-    Rails.logger.error "Failed to handle accept: #{e.message}"
     send_text_acknowledgement(to: from, message: "❌ Failed to accept request: #{e.message}")
   end
 
@@ -167,7 +161,6 @@ class MetaWhatsappWebhookService
     send_text_acknowledgement(to: from, message: "❌ Request rejected.")
     offer.update!(whatsapp_status: "replied")
   rescue StandardError => e
-    Rails.logger.error "Failed to handle reject: #{e.message}"
     send_text_acknowledgement(to: from, message: "❌ Failed to reject request: #{e.message}")
   end
 

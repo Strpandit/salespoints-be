@@ -41,7 +41,7 @@ class B2bWholesalerDirectOrderService
         buyer_dealer_id: @buyer.id,
         seller_dealer_id: @seller.id,
         request_status: "pending_request",
-        status: "pending_request",
+        status: "pending_payment",
         requested_at: Time.current,
         requested_radius_km: @requested_radius_km,
         latitude: @latitude,
@@ -50,7 +50,7 @@ class B2bWholesalerDirectOrderService
         tax_amount: pricing[:gst_amount],
         discount_amount: 0,
         total_amount: pricing[:total],
-        expires_at: 10.minutes.from_now,
+        expires_at: 30.minutes.from_now,
         payment_method: @payment_method || "cod",
         payment_status: @payment_status,
         buyer_payment_attempt: @buyer_payment_attempt,
@@ -95,14 +95,10 @@ class B2bWholesalerDirectOrderService
         whatsapp_status: "pending"
       )
       
-      send_wholesaler_request_template(order, item, offer)
       create_wholesaler_in_app_notification(order, item, offer)
     end
 
     order
-  rescue StandardError => e
-    Rails.logger.error "B2bWholesalerDirectOrderService error: #{e.message}"
-    raise
   end
 
   private
@@ -128,78 +124,6 @@ class B2bWholesalerDirectOrderService
     end
   end
 
-  def send_wholesaler_request_template(order, item, offer)
-    product = nil
-    variant = nil
-
-    if @wholesaler_post.present?
-      product_name = @wholesaler_post.title || "Product"
-      variant_name = @wholesaler_post.modal_no || "Standard"
-      sku = @wholesaler_post.modal_no || "N/A"
-      unit_price = @wholesaler_post.price || 0
-      product = nil
-      variant = nil
-    else
-      variant = item.product_variant
-      product = variant&.product
-      product_name = product&.name || "Product"
-      variant_name = variant&.variant_sku || variant&.variant_attributes&.to_s || "Standard"
-      sku = variant&.variant_sku || "N/A"
-      unit_price = item.unit_price || 0
-    end
-
-    quantity = item.quantity
-    total_amount = item.total_price || 0
-
-    buyer_location = @buyer&.dealer_location
-    seller_location = @seller&.dealer_location
-
-    delivery_location = get_location(@seller)
-    approx_distance = if buyer_location.present? && seller_location.present? &&
-                      buyer_location.latitude.present? && buyer_location.longitude.present? &&
-                      seller_location.latitude.present? && seller_location.longitude.present?
-    DealerLocation.distance_km(
-      buyer_location.latitude.to_f,
-      buyer_location.longitude.to_f,
-      seller_location.latitude.to_f,
-      seller_location.longitude.to_f
-    ).round(2).to_s
-    else
-      "0"
-    end
-
-    base_url = ENV["FRONTEND_URL"] || "https://salespoints.in"
-    accept_url = "#{base_url}/b2b/accept/#{offer.accept_token}"
-    reject_url = "#{base_url}/b2b/reject/#{offer.reject_token}"
-    image_url = get_product_image(product, variant)
-
-    accept_token = offer.accept_token
-    reject_token = offer.reject_token
-
-    MetaWhatsappCloudService.new.send_dealer_order_request(
-      to: formatted_phone_for(@seller),
-      product: product_name,
-      variant: variant_name,
-      sku: sku,
-      price: unit_price.to_f.round(2).to_s,
-      quantity: quantity.to_s,
-      total_amount: total_amount.to_f.round(2).to_s,
-      delivery_location: delivery_location,
-      approx_distance: approx_distance,
-      accept_token: accept_token,
-      reject_token: reject_token,
-      image_url: image_url
-    )
-
-    offer.update!(whatsapp_status: "sent", sent_at: Time.current)
-  rescue StandardError => e
-    Rails.logger.error("Failed to send dealer_order_request template: #{e.message}")
-    Rails.logger.error e.class
-    Rails.logger.error e.message
-    Rails.logger.error e.backtrace.join("\n")
-    offer.update!(whatsapp_status: "failed", failed_at: Time.current, failure_reason: e.message)
-  end
-
   def create_wholesaler_in_app_notification(order, item, offer)
     variant = item.product_variant
     product = variant&.product
@@ -218,7 +142,7 @@ class B2bWholesalerDirectOrderService
       actor: @buyer,
       notifiable: order,
       kind: "b2b_wholesaler_direct_buy",
-      title: "📦 New Direct Buy Request",
+      title: "📦 New Bulk Buy Request",
       message: "#{@buyer.dealer_code} wants to buy #{quantity} unit(s) of #{product_name} from your post. Total: ₹#{total_amount}",
       visible_in_app: true,
       delivery_channels: { push: true, whatsapp: false, sms: false, email: false, in_app: true },
@@ -243,56 +167,9 @@ class B2bWholesalerDirectOrderService
     )
   end
 
-  def get_product_image(product, variant)
-
-    if @wholesaler_post.present? && @wholesaler_post.media.attached?
-      attachment = @wholesaler_post.media.first
-      return rails_blob_url(attachment, only_path: false) if attachment.present?
-    end
-
-    if variant.present? && variant.media.attached?
-      attachment = variant.media.first
-      return rails_blob_url(attachment, only_path: false) if attachment.present?
-    end
-
-    if product.present? && product.media.attached?
-      attachment = product.media.first
-      return rails_blob_url(attachment, only_path: false) if attachment.present?
-    end
-    "#{ENV['FRONTEND_URL'] || 'https://salespoints.in'}/images/ac.png"
-  rescue StandardError => e
-    Rails.logger.error("Failed to get product image: #{e.message}")
-    nil
-  end
-
-  def get_location(dealer)
-    return "Location not available" if dealer.blank?
-    
-    address = dealer.dealer_profile&.business_address
-    return "Location not available" if address.blank?
-    
-    cleaned = address.to_s.strip
-    
-    if cleaned.include?(',')
-      parts = cleaned.split(',').map(&:strip).reject(&:blank?)
-      return parts.last(2).join(', ') if parts.size >= 2
-      return parts.first if parts.size == 1
-    end
-    
-    words = cleaned.split(/\s+/)
-    return words.last(2).join(' ') if words.size >= 2
-    return words.first if words.size == 1
-    
-    "Location not available"
-  end
-
   def formatted_phone_for(dealer)
     return nil if dealer.phone.blank?
     cc = dealer.country_code.presence || "+91"
     "#{cc}#{dealer.phone}".gsub(/\s+/, "")
-  end
-  
-  def host_url
-    @host_url ||= ENV['FRONTEND_URL'] || 'https://salespoints.in'
   end
 end

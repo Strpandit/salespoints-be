@@ -236,7 +236,6 @@ module Api
       end
 
       qty = params[:quantity].to_i.positive? ? params[:quantity].to_i : 1
-      #payment_method = params[:payment_method].to_s.presence || "cod"
 
       requested_radius = params[:radius_km].presence&.to_f
       if requested_radius.blank? || requested_radius <= 0
@@ -257,12 +256,13 @@ module Api
           latitude: buyer_latitude,
           longitude: buyer_longitude,
           requested_radius_km: requested_radius,
+          payment_method: nil,
           payment_status: "pending"
         ).call
 
         render json: {
           data: B2bOrderSerializer.render(order, base_url: request.base_url),
-          message: "Buy now request sent to seller"
+          message: "Order request created successfully."
         }, status: :created
         
       rescue StandardError => e

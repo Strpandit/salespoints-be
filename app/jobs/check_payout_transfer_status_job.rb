@@ -15,9 +15,5 @@ class CheckPayoutTransferStatusJob < ApplicationJob
     service = SettlementAndPayoutAutomationService.new
     service.check_transfer_status!(payout: payout)
     
-    Rails.logger.info("Payout transfer status checked for payout #{payout_id}")
-  rescue StandardError => e
-    Rails.logger.error("Transfer status check job failed for payout #{payout_id}: #{e.message}")
-    raise
   end
 end

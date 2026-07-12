@@ -10,94 +10,136 @@ class B2bOrderDealerResponseService
     ActiveRecord::Base.transaction do
       lock_order = B2bOrder.lock.find(@order.id)
 
-      if lock_order.accepted?
-        raise StandardError, "This request has already been accepted by another dealer"
+      if lock_order.is_direct_buy?
+        accept_direct_buy!(lock_order)
+      else
+        if lock_order.accepted?
+          raise StandardError, "This request has already been accepted by another dealer"
+        end
+
+        offer = lock_b2b_request_offer!(order: lock_order)
+        ensure_order_can_be_accepted!(order: lock_order)
+
+        open_items = lock_order.b2b_order_items.open_items
+        raise StandardError, "No open items available" if open_items.empty?
+
+        updated_items = resolve_all_items_for_seller(open_items)
+        raise StandardError, "You don't have enough stock to fulfill this order" if updated_items.blank?
+
+        updated_items.each do |item, source, pricing|
+          dealer_product_id =
+            if source.is_a?(WholesalerPost)
+              source.dealer_product_id
+            else
+              source.id
+            end
+
+          item.update!(
+            dealer_product_id: dealer_product_id,
+            status: "accepted",
+            responded_at: Time.current,
+            unit_price: pricing[:unit_price],
+            total_price: pricing[:subtotal]
+          )
+
+        end
+
+        lock_order.mark_accepted!(@dealer)
+        lock_order.recalculate_totals!
+
+        DealerBroadcastTracker.for_order(lock_order.id).update_all(status: "accepted")
+        close_other_offers!(lock_order)
+
+        offer.update!(status: "accepted", responded_at: Time.current, whatsapp_status: "replied")
+
+        send_payment_request_template(lock_order)
+        create_buyer_notification(lock_order, "accepted")
+        create_seller_acceptance_notification(lock_order)
+
+        updated_items.map(&:first)
       end
-
-      offer = lock_b2b_request_offer!(order: lock_order)
-      ensure_order_can_be_accepted!(order: lock_order)
-
-      open_items = lock_order.b2b_order_items.open_items
-      raise StandardError, "No open items available" if open_items.empty?
-
-      updated_items = resolve_all_items_for_seller(open_items)
-      raise StandardError, "You don't have enough stock to fulfill this order" if updated_items.blank?
-
-      updated_items.each do |item, source, pricing|
-        dealer_product_id =
-          if source.is_a?(WholesalerPost)
-            source.dealer_product_id
-          else
-            source.id
-          end
-
-        item.update!(
-          dealer_product_id: dealer_product_id,
-          status: "accepted",
-          responded_at: Time.current,
-          unit_price: pricing[:unit_price],
-          total_price: pricing[:subtotal]
-        )
-
-      end
-
-      lock_order.mark_accepted!(@dealer)
-      lock_order.recalculate_totals!
-
-      DealerBroadcastTracker.for_order(lock_order.id).update_all(status: "accepted")
-      close_other_offers!(lock_order)
-
-      offer.update!(status: "accepted", responded_at: Time.current, whatsapp_status: "replied")
-
-      send_payment_request_template(lock_order)
-      create_buyer_notification(lock_order, "accepted")
-      create_seller_acceptance_notification(lock_order)
-
-      updated_items.map(&:first)
     end
   end
 
   def reject!
     ActiveRecord::Base.transaction do
       lock_order = B2bOrder.lock.find(@order.id)
-      offer = lock_b2b_request_offer!(order: lock_order)
 
-      if lock_order.accepted?
-        raise StandardError, "This request has already been accepted by another dealer"
-      end
+      if lock_order.is_direct_buy?
+        reject_direct_buy!(lock_order)
+      else
+        offer = lock_b2b_request_offer!(order: lock_order)
 
-      ensure_order_can_be_accepted!(order: lock_order)
+        if lock_order.accepted?
+          raise StandardError, "This request has already been accepted by another dealer"
+        end
 
-      lock_order.mark_rejected!
+        ensure_order_can_be_accepted!(order: lock_order)
 
-      offer.update!(
-        status: "rejected",
-        responded_at: Time.current,
-        whatsapp_status: "replied"
-      )
+        lock_order.mark_rejected!
 
-      tracker = DealerBroadcastTracker.find_by(b2b_order: lock_order, dealer: @dealer)
-      tracker&.update!(status: "rejected")
-
-      close_other_offers!(lock_order)
-
-      notify_buyer_of_rejection(lock_order)
-      create_buyer_notification(lock_order, "rejected")
-
-      total_dealers = DealerBroadcastTracker.for_order(lock_order.id).count
-      rejected_count = DealerBroadcastTracker.for_order(lock_order.id).where(status: "rejected").count
-      
-      if total_dealers > 0 && total_dealers == rejected_count
-        lock_order.update!(
-          request_status: "rejected_request",
-          status: "cancelled",
-          rejected_at: Time.current
+        offer.update!(
+          status: "rejected",
+          responded_at: Time.current,
+          whatsapp_status: "replied"
         )
+
+        tracker = DealerBroadcastTracker.find_by(b2b_order: lock_order, dealer: @dealer)
+        tracker&.update!(status: "rejected")
+
+        close_other_offers!(lock_order)
+
+        notify_buyer_of_rejection(lock_order)
+        create_buyer_notification(lock_order, "rejected")
+
+        total_dealers = DealerBroadcastTracker.for_order(lock_order.id).count
+        rejected_count = DealerBroadcastTracker.for_order(lock_order.id).where(status: "rejected").count
+        
+        if total_dealers > 0 && total_dealers == rejected_count
+          lock_order.update!(
+            request_status: "rejected_request",
+            status: "cancelled",
+            rejected_at: Time.current
+          )
+        end
       end
     end
   end
 
   private
+
+  def accept_direct_buy!(order)
+    offer = lock_b2b_request_offer!(order: order)
+    ensure_order_can_be_accepted!(order: order)
+    raise StandardError, "Order is not in processing state" unless order.status == "processing"
+
+    order.b2b_order_items.each do |item|
+      deduct_stock!(item)
+    end
+
+    order.update!(
+      status: "confirmed",
+      request_status: "direct_buy_confirmed",
+      confirmed_at: Time.current
+    )
+
+    offer.update!(status: "accepted", responded_at: Time.current, whatsapp_status: "replied")
+    close_other_offers!(order)
+
+    send_payment_success_to_buyer(order)
+    create_seller_acceptance_notification(order)
+  end
+
+  def reject_direct_buy!(order)
+    offer = lock_b2b_request_offer!(order: order)
+    ensure_order_can_be_accepted!(order: order)
+
+    order.update!(status: "cancelled", rejected_at: Time.current)
+    offer.update!(status: "rejected", responded_at: Time.current, whatsapp_status: "replied")
+
+    notify_buyer_of_rejection(order)
+    # (वैकल्पिक) रिफंड इनिशियेट करें
+  end
 
   def lock_b2b_request_offer!(order:)
     offer = @offer.present? ? B2bOrderOffer.lock.find(@offer.id) :
@@ -254,6 +296,11 @@ class B2bOrderDealerResponseService
       to: formatted_phone_for(buyer),
       body: message
     )
+  end
+
+  def send_payment_success_to_buyer(order)
+    B2bOrderPaymentService.new(order_id: order.id, payment_method: order.payment_method)
+                          .send(:send_payment_success_to_buyer, order)
   end
 
   def formatted_phone_for(dealer)

@@ -24,8 +24,10 @@ class B2bOrderPaymentService
       ).call
 
       send_order_accept_to_seller(final_order)
-      send_payment_success_to_buyer(final_order)
-      create_buyer_payment_success_notification(final_order)
+      unless final_order.is_direct_buy?
+        send_payment_success_to_buyer(final_order)
+        create_buyer_payment_success_notification(final_order)
+      end
       create_seller_payment_success_notification(final_order)
       notify_admin_order_confirmed(final_order)
       return { order: final_order, payment_method: "cod", status: "confirmed", message: "Order confirmed with COD" }
@@ -64,12 +66,8 @@ class B2bOrderPaymentService
       unit_price: unit_price.to_f.round(2).to_s,
       total_paid: total_amount.to_f.round(2).to_s,
       payment_id: order.payment_method.to_s.upcase,
-      order_id: order.reference_number,
-      dealer_code: seller&.dealer_code || "N/A",
-      dealer_phone: formatted_phone_for(seller) || "N/A"
+      order_id: order.reference_number
     )
-  rescue StandardError => e
-    Rails.logger.error("Failed to send payment_success template to buyer: #{e.message}")
   end
 
   def create_buyer_payment_success_notification(order)
@@ -200,36 +198,6 @@ class B2bOrderPaymentService
       }
     }
   end
-
-  # def notify_cod_order_confirmed(order)
-  #   message = <<~TEXT
-  #     🎉 *Order Confirmed!*
-      
-  #     Order ##{order.id} has been confirmed.
-  #     Buyer: #{order.buyer_dealer.dealer_code}
-  #     Total: ₹#{order.total_amount}
-  #     Payment Method: Cash on Delivery
-  #   TEXT
-
-  #   MetaWhatsappCloudService.new.send_text_message(
-  #     to: formatted_phone_for(order.seller_dealer),
-  #     body: message
-  #   )
-
-  #   message = <<~TEXT
-  #     🎉 *Order Confirmed!*
-      
-  #     Your order has been confirmed.
-  #     Seller: #{order.seller_dealer.dealer_code}
-  #     Total: ₹#{order.total_amount}
-  #     Payment Method: Cash on Delivery
-  #   TEXT
-
-  #   MetaWhatsappCloudService.new.send_text_message(
-  #     to: formatted_phone_for(order.buyer_dealer),
-  #     body: message
-  #   )
-  # end
 
   def send_order_accept_to_seller(order)
     seller = order.seller_dealer
