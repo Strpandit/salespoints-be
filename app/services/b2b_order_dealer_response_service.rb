@@ -309,4 +309,26 @@ class B2bOrderDealerResponseService
     cc = dealer.country_code.presence || "+91"
     "#{cc}#{dealer.phone}".gsub(/\s+/, "")
   end
+
+  def deduct_stock!(item)
+    if item.wholesaler_post_id.present?
+      wholesaler_post = WholesalerPost.lock.find(item.wholesaler_post_id)
+      if wholesaler_post.stock_quantity.to_i < item.quantity.to_i
+        raise StandardError, "Insufficient stock for wholesaler post #{wholesaler_post.id}"
+      end
+      wholesaler_post.update!(
+        stock_quantity: wholesaler_post.stock_quantity - item.quantity
+      )
+    elsif item.dealer_product_id.present?
+      dealer_product = DealerProduct.lock.find(item.dealer_product_id)
+      if dealer_product.stock_quantity.to_i < item.quantity.to_i
+        raise StandardError, "Insufficient stock for dealer product #{dealer_product.id}"
+      end
+      dealer_product.update!(
+        stock_quantity: dealer_product.stock_quantity - item.quantity
+      )
+    else
+      raise StandardError, "Cannot deduct stock: no source found for item #{item.id}"
+    end
+  end
 end
