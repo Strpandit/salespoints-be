@@ -17,7 +17,7 @@ class B2bDirectOrderService
     validate!
 
     dealer_product = DealerProduct.live.includes(:product_variant, :dealer).find_by(id: @dealer_product_id)
-    raise StandardError, "Product not available" unless dealer_product&.sellable?
+    raise StandardError, "Product not available for B2B sale" unless dealer_product&.sellable_in_b2b?
     raise StandardError, "Cannot buy your own product" if dealer_product.dealer_id == @buyer.id
     raise StandardError, "Insufficient stock" if dealer_product.stock_quantity.to_i < @quantity
 

@@ -9,6 +9,7 @@ module Api
 
       result = DirectBuyNowService.new(
         buyer: current_buyer,
+        dealer_product_id: params[:dealer_product_id],
         product_variant_id: params[:product_variant_id],
         quantity: params[:quantity] || 1,
         payment_method: payment_method,

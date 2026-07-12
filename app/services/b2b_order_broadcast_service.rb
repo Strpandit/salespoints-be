@@ -103,7 +103,7 @@ class B2bOrderBroadcastService
 
       matched_items = items.select do |item|
         dealer.dealer_products.any? do |dp|
-          dp.approved? && dp.is_active && dp.stock_quantity.to_i >= item.quantity.to_i && dp.product_variant_id == item.product_variant_id
+          dp.sellable_in_b2b? && dp.stock_quantity.to_i >= item.quantity.to_i && dp.product_variant_id == item.product_variant_id
         end
       end
 

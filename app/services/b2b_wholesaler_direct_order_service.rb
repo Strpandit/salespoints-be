@@ -25,6 +25,7 @@ class B2bWholesalerDirectOrderService
 
     dealer_product = @wholesaler_post.dealer_product
     raise StandardError, "Dealer product mapping not found" unless dealer_product
+    raise StandardError, "Product not available for B2B sale" unless dealer_product.sellable_in_b2b?
 
     variant = dealer_product.product_variant
     raise StandardError, "Product variant not found" unless variant

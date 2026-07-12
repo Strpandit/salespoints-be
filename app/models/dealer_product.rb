@@ -10,11 +10,16 @@ class DealerProduct < ApplicationRecord
 
   validates :stock_quantity, numericality: { greater_than_or_equal_to: 0 }
   validates :product_variant_id, uniqueness: { scope: :dealer_id }
+  validates :sell_in_b2b, inclusion: { in: [true, false] }
+  validates :sell_in_b2c, inclusion: { in: [true, false] }
+  validate :at_least_one_sales_channel_enabled
 
   scope :with_active_dealer, -> { 
     joins(:dealer).where(dealers: { deleted_at: nil, status: 'active' })
   }
   scope :live, -> { with_active_dealer.where(is_active: true, approve_status: 1).where("dealer_products.stock_quantity > 0 OR dealer_products.stock_quantity IS NULL") }
+  scope :for_b2b, -> { where(sell_in_b2b: true) }
+  scope :for_b2c, -> { where(sell_in_b2c: true) }
   
   def ranking_score
     variant = product_variant
@@ -33,6 +38,14 @@ class DealerProduct < ApplicationRecord
   def sellable?
     is_active && approve_status == "approved" && stock_quantity.to_i > 0
   end
+
+  def sellable_in_b2b?
+    sellable? && sell_in_b2b?
+  end
+
+  def sellable_in_b2c?
+    sellable? && sell_in_b2c?
+  end
   
   def owner?(buyer)
     dealer_id == buyer.id
@@ -40,5 +53,13 @@ class DealerProduct < ApplicationRecord
 
   def display_media_attachments
     product_variant&.display_media_attachments || product&.media || []
+  end
+
+  private
+
+  def at_least_one_sales_channel_enabled
+    return if sell_in_b2b? || sell_in_b2c?
+
+    errors.add(:base, "Select at least one sales channel: B2B or B2C")
   end
 end

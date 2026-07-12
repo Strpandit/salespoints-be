@@ -1,7 +1,7 @@
 module Api
   class DealerProductsController < ApplicationController
     skip_before_action :authenticate_request!, only: [:shop_index, :similar]
-    before_action :set_dealer_product, only: [:show, :update_stock, :approve, :reject, :revert_to_pending, :destroy, :toggle_active]
+    before_action :set_dealer_product, only: [:show, :update, :update_stock, :approve, :reject, :revert_to_pending, :destroy, :toggle_active]
 
     def index
       if current_dealer
@@ -32,7 +32,7 @@ module Api
 
     # Public listing for customers: only approved, active, in-stock dealer products.
     def shop_index
-      items = DealerProduct.live.where("dealer_products.stock_quantity > 0").includes(:dealer, :product, :product_variant)
+      items = DealerProduct.live.for_b2c.where("dealer_products.stock_quantity > 0").includes(:dealer, :product, :product_variant)
 
       if params[:category_id].present?
         items = items.joins(:product).where(products: { category_id: params[:category_id] })
@@ -89,6 +89,7 @@ module Api
       radius = 5.0 if radius <= 0
 
       items = DealerProduct.live
+                           .for_b2b
                            .where("dealer_products.stock_quantity > 0")
                            .where.not(dealer_id: current_dealer.id)
                            .includes(dealer: :dealer_location, product: {}, product_variant: {})
@@ -188,11 +189,24 @@ module Api
       render json: serialize_resource(@dealer_product, DealerProductSerializer, base_url: request.base_url)
     end
 
+    def update
+      return unauthorized("Unauthorized") unless authorized_dealer_product_action?
+
+      if @dealer_product.update(update_dealer_product_params)
+        render json: serialize_resource(@dealer_product, DealerProductSerializer, base_url: request.base_url).merge(
+          message: "Dealer product updated successfully"
+        ), status: :ok
+      else
+        render json: { error: @dealer_product.errors.full_messages }, status: :unprocessable_entity
+      end
+    end
+
     # Dealer-only B2B product detail.
     def b2b_show
       return unauthorized("Dealers only") unless current_dealer
 
       item = DealerProduct.live
+                          .for_b2b
                           .where("dealer_products.stock_quantity > 0")
                           .where.not(dealer_id: current_dealer.id)
                           .includes(:dealer, :product, :product_variant)
@@ -299,7 +313,7 @@ module Api
 
     # Public similar products for customers.
     def similar
-      base_scope = DealerProduct.live.where("dealer_products.stock_quantity > 0").includes(:product, :product_variant)
+      base_scope = DealerProduct.live.for_b2c.where("dealer_products.stock_quantity > 0").includes(:product, :product_variant)
 
       if params[:dealer_product_id].present?
         current = DealerProduct.live.includes(:product).find_by(id: params[:dealer_product_id])
@@ -325,6 +339,7 @@ module Api
       return unauthorized("Dealers only") unless current_dealer
 
       base_scope = DealerProduct.live
+                                .for_b2b
                                 .where("dealer_products.stock_quantity > 0")
                                 .where.not(dealer_id: current_dealer.id)
                                 .includes(:product, :product_variant)
@@ -356,6 +371,8 @@ module Api
         :product_id,
         :product_variant_id,
         :stock_quantity,
+        :sell_in_b2b,
+        :sell_in_b2c,
         product_attributes: [
           :name, :slug, :sku, :desc, :material, :brand_id, :category_id,
           :is_featured, :is_new, :tax_rate, :price, :selling_price, :dealer_price,
@@ -387,6 +404,8 @@ module Api
           product: product,
           product_variant: variant,
           stock_quantity: dealer_product_params[:stock_quantity],
+          sell_in_b2b: sales_channel_param(:sell_in_b2b),
+          sell_in_b2c: sales_channel_param(:sell_in_b2c),
           approve_status: status[:approve_status],
           is_active: status[:is_active]
         )
@@ -483,6 +502,19 @@ module Api
       return "SKU-#{SecureRandom.hex(4).upcase}" if sku.blank?
 
       "#{sku}-DEFAULT"
+    end
+
+    def update_dealer_product_params
+      attrs = dealer_product_params.slice(:stock_quantity, :sell_in_b2b, :sell_in_b2c).to_h
+      attrs["sell_in_b2b"] = sales_channel_param(:sell_in_b2b) if dealer_product_params.key?(:sell_in_b2b)
+      attrs["sell_in_b2c"] = sales_channel_param(:sell_in_b2c) if dealer_product_params.key?(:sell_in_b2c)
+      attrs
+    end
+
+    def sales_channel_param(key)
+      return true unless dealer_product_params.key?(key)
+
+      ActiveModel::Type::Boolean.new.cast(dealer_product_params[key])
     end
 
     def set_dealer_product

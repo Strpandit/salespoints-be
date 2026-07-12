@@ -1,8 +1,9 @@
 class DirectBuyNowService
   Result = Struct.new(:orders, :payment_data, keyword_init: true)
 
-  def initialize(buyer:, product_variant_id:, quantity:, payment_method:, billing_address:, shipping_address:)
+  def initialize(buyer:, dealer_product_id: nil, product_variant_id:, quantity:, payment_method:, billing_address:, shipping_address:)
     @buyer = buyer
+    @dealer_product_id = dealer_product_id
     @product_variant_id = product_variant_id
     @quantity = quantity.to_i.positive? ? quantity.to_i : 1
     @payment_method = payment_method.to_s.presence || "cod"
@@ -17,6 +18,10 @@ class DirectBuyNowService
     raise StandardError, "Product variant not found" unless variant
     raise StandardError, "Product not available" unless variant.product&.is_active
     raise StandardError, "Variant is not active" unless variant.is_active
+
+    dealer_product = resolve_dealer_product_for_b2c!(variant)
+    raise StandardError, "Product not available for B2C sale" unless dealer_product&.sellable_in_b2c?
+    raise StandardError, "Insufficient stock" if dealer_product.stock_quantity.to_i < @quantity
 
     pricing = Pricing::PriceCalculator.new(
       variant: variant,
@@ -37,7 +42,7 @@ class DirectBuyNowService
     ActiveRecord::Base.transaction do
       order = Order.create!(
         buyer: @buyer,
-        seller_dealer_id: nil,
+        seller_dealer_id: dealer_product.dealer_id,
         status: @payment_method == "cod" ? "processing" : "pending",
         subtotal_amount: subtotal,
         tax_amount: tax,
@@ -86,6 +91,20 @@ class DirectBuyNowService
   end
 
   private
+
+  def resolve_dealer_product_for_b2c!(variant)
+    scope = DealerProduct.live.for_b2c.includes(:dealer)
+
+    if @dealer_product_id.present?
+      dealer_product = scope.find_by(id: @dealer_product_id)
+      raise StandardError, "Dealer product not found" unless dealer_product
+      raise StandardError, "Selected dealer product does not match this variant" unless dealer_product.product_variant_id == variant.id
+
+      return dealer_product
+    end
+
+    scope.find_by(product_variant_id: variant.id)
+  end
 
   def create_cashfree_payment!(order)
     service = CashfreeService.new

@@ -165,6 +165,12 @@ class B2bOrderDealerResponseService
     items_scope.each do |item|
       if item.wholesaler_post_id.present?
         wholesaler_post = WholesalerPost.lock.find(item.wholesaler_post_id)
+        dealer_product = wholesaler_post.dealer_product
+
+        unless dealer_product&.sellable_in_b2b?
+          Rails.logger.warn "Dealer product #{wholesaler_post.dealer_product_id} is not enabled for B2B sale"
+          return nil
+        end
 
         unless wholesaler_post.stock_quantity.to_i >= item.quantity.to_i
           Rails.logger.warn "Wholesaler post #{wholesaler_post.id} has insufficient stock"
@@ -172,14 +178,14 @@ class B2bOrderDealerResponseService
         end
 
         pricing = Pricing::PriceCalculator.new(
-          variant: wholesaler_post.dealer_product.product_variant,
+          variant: dealer_product.product_variant,
           quantity: item.quantity,
           user_type: :dealer
         ).call
 
         resolved << [item, wholesaler_post, pricing]
       else
-        dealer_product = @dealer.dealer_products.live.find_by(
+        dealer_product = @dealer.dealer_products.live.for_b2b.find_by(
           product_variant_id: item.product_variant_id
         )
 

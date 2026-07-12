@@ -11,7 +11,11 @@ class B2bOrderCreationService
 
     ActiveRecord::Base.transaction do
       request_order = B2bOrder.lock.find(@request_order.id)
-      existing_order = B2bOrder.find_by(source_type: "B2bOrder", source_id: request_order.id, request_status: nil)
+      existing_order = if request_order.is_direct_buy?
+                       B2bOrder.find_by(source_type: "B2bOrder", source_id: request_order.id, request_status: "pending_request")
+                     else
+                       B2bOrder.find_by(source_type: "B2bOrder", source_id: request_order.id, request_status: nil)
+                     end
       return existing_order if existing_order.present?
 
       ensure_request_ready!(request_order)

@@ -346,7 +346,7 @@ module Api
     def invalid_dealer_product?(dealer_product_id)
       return false if dealer_product_id.blank?
 
-      current_dealer.dealer_products.find_by(id: dealer_product_id).blank?
+      current_dealer.dealer_products.for_b2b.find_by(id: dealer_product_id).blank?
     end
 
     def current_dealer_rating_for(post)
