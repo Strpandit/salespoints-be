@@ -18,6 +18,7 @@ class B2bOrderItemSerializer < ApplicationSerializer
         gst_amount: 0,
         total: object.total_price.to_f
       }
+    end
   end
 
   def unit_price
