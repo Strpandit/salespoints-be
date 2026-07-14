@@ -4,11 +4,20 @@ class B2bOrderItemSerializer < ApplicationSerializer
              :media, :product_media, :variant_media
 
   def pricing
-    @pricing ||= Pricing::PriceCalculator.new(
-      variant: object.product_variant,
-      quantity: object.quantity,
-      user_type: :dealer
-    ).call
+    if object.product_variant.present?
+      @pricing ||= Pricing::PriceCalculator.new(
+        variant: object.product_variant,
+        quantity: object.quantity,
+        user_type: :dealer
+      ).call
+    else
+      {
+        unit_price: object.unit_price.to_f,
+        taxable_amount: object.unit_price.to_f * object.quantity,
+        gst_percentage: 18.0,
+        gst_amount: 0,
+        total: object.total_price.to_f
+      }
   end
 
   def unit_price
@@ -32,28 +41,54 @@ class B2bOrderItemSerializer < ApplicationSerializer
   end
 
   def product_name
-    object.product_variant&.product&.name
+    return object.wholesaler_post&.title if object.wholesaler_post_id.present?
+
+    return object.product_variant&.product&.name if object.product_variant_id.present?
+
+    return object.dealer_product&.product&.name if object.dealer_product_id.present?
   end
 
   def variant_sku
-    object.product_variant&.variant_sku
+    return object.wholesaler_post&.modal_no if object.wholesaler_post_id.present?
+    
+    return object.product_variant&.variant_sku if object.product_variant_id.present?
+    
+    nil
   end
 
   def assigned_dealer_name
-    object.dealer_product&.dealer&.dealer_code
+    return object.dealer_product&.dealer&.dealer_code if object.dealer_product_id.present?
+
+    return object.wholesaler_post&.dealer&.dealer_code if object.wholesaler_post_id.present?
+    
+    nil
   end
 
   def media
+    if object.wholesaler_post_id.present?
+      return object.wholesaler_post&.media&.map { |file| file_payload(file) } || []
+    end
+
     return [] unless object.dealer_product
 
     object.dealer_product.display_media_attachments.map { |file| file_payload(file) }
   end
 
   def product_media
+    if object.wholesaler_post_id.present?
+      return object.wholesaler_post&.media&.map { |file| file_payload(file) } || []
+    end
+
+    return [] unless object.product_variant_id.present?
     object.product_variant&.product&.media&.map { |file| file_payload(file) } || []
   end
 
   def variant_media
+    if object.wholesaler_post_id.present?
+      return object.wholesaler_post&.media&.map { |file| file_payload(file) } || []
+    end
+    
+    return [] unless object.product_variant_id.present?
     object.product_variant&.media&.map { |file| file_payload(file) } || []
   end
 
