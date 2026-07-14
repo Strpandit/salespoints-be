@@ -235,6 +235,7 @@ class B2bOrderPaymentService
     buyer = order.buyer_dealer
     variant = item.product_variant
     product = variant&.product
+    wholesaler_post = item.wholesaler_post
 
     buyer_location = buyer&.dealer_location
     seller_location = seller&.dealer_location
@@ -256,7 +257,7 @@ class B2bOrderPaymentService
     base_url = ENV["FRONTEND_URL"] || "https://salespoints.in"
     accept_url = "#{base_url}/b2b/accept/#{offer.accept_token}"
     reject_url = "#{base_url}/b2b/reject/#{offer.reject_token}"
-    image_url = get_product_image(product, variant)
+    image_url = get_product_image(product, variant, wholesaler_post)
 
     accept_token = offer.accept_token
     reject_token = offer.reject_token
@@ -324,7 +325,15 @@ class B2bOrderPaymentService
     "Location not available"
   end
 
-  def get_product_image(product, variant)
+  def get_product_image(product, variant, wholesaler_post = nil)
+    if wholesaler_post.present? && wholesaler_post.media.attached?
+      attachment = wholesaler_post.media.first
+      if attachment.present?
+        url = rails_blob_url(attachment, only_path: false)
+        return url
+      end
+    end
+
     if variant.present? && variant.media.attached?
       attachment = variant.media.first
       return rails_blob_url(attachment, only_path: false) if attachment.present?
