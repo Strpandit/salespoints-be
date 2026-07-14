@@ -12,7 +12,7 @@ class B2bOrderCreationService
     ActiveRecord::Base.transaction do
       request_order = B2bOrder.lock.find(@request_order.id)
       existing_order = if request_order.is_direct_buy?
-                       B2bOrder.find_by(source_type: "B2bOrder", source_id: request_order.id, request_status: "pending_request")
+                       B2bOrder.find_by(source_type: "WholesalerPost", source_id: request_order.source_id, request_status: "pending_request")
                      else
                        B2bOrder.find_by(source_type: "B2bOrder", source_id: request_order.id, request_status: nil)
                      end
@@ -47,8 +47,8 @@ class B2bOrderCreationService
         payment_status: @payment_status,
         buyer_payment_attempt: @buyer_payment_attempt,
         is_direct_buy: request_order.is_direct_buy,
-        source_type: "B2bOrder",
-        source_id: request_order.id,
+        source_type: request_order.source_type,
+        source_id: request_order.source_id,
         payment_confirmed_at: @payment_status == "paid" ? Time.current : nil,
         confirmed_at: Time.current
       )
