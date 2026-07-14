@@ -83,3 +83,4 @@ gem 'prawn'
 # gem "sidekiq-scheduler", "~> 6.0"
 gem 'caxlsx'
 gem "matrix", "~> 0.4.3"
+gem 'geocoder'

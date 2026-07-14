@@ -8,7 +8,7 @@ class BroadcastB2bOrderJob < ApplicationJob
     return if order.accepted?
     return unless order.pending_request?
 
-    service = B2bOrderBroadcastService.new(order: order, actor: order.buyer_dealer)
+    service = B2bOrderBroadcastService.new(order: order, actor: order.buyer_dealer, is_b2c: false)
     service.incremental_broadcast!
   end
 end

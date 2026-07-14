@@ -35,11 +35,13 @@ class Order < ApplicationRecord
   validates :payment_status, inclusion: { in: PAYMENT_STATUSES }
   validates :settlement_status, inclusion: { in: SETTLEMENT_STATUSES }, allow_blank: false
   validates :refund_status, inclusion: { in: REFUND_STATUSES }, allow_blank: false
+  validates :expires_at, presence: true, if: -> { status == "pending" && seller_dealer_id.nil? }
 
   before_validation :assign_order_number, on: :create
   before_validation :set_placed_at, on: :create
 
   scope :recent, -> { order(created_at: :desc) }
+  scope :pending_b2c, -> { where(status: "pending", seller_dealer_id: nil) }
 
   def total_items
     order_items.sum(:quantity)

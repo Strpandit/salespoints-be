@@ -4,10 +4,11 @@ class B2bOrderBroadcastService
   MAX_RADIUS = 15
   INCREMENT_PER_MINUTE = 1
 
-  def initialize(order:, actor:, current_radius: nil)
+  def initialize(order:, actor:, current_radius: nil, is_b2c: false)
     @order = order
     @actor = actor
     @current_radius = current_radius || order.current_broadcast_radius || DEFAULT_RADIUS
+    @is_b2c = is_b2c
   end
 
   def initial_broadcast!
@@ -15,16 +16,21 @@ class B2bOrderBroadcastService
   end
 
   def incremental_broadcast!
-    return if @order.expired?
-    return if @order.accepted?
+    return if @is_b2c
+
+    return if @order.expired? if @order.respond_to?(:expired?)
+    return if @order.accepted? if @order.respond_to?(:accepted?)
+    return if @order.status.in?(["processing", "cancelled", "delivered"]) if @order.is_a?(Order)
 
     @current_radius += INCREMENT_PER_MINUTE
 
-    @order.update!(
-      current_broadcast_radius: @current_radius,
-      last_broadcast_at: Time.current,
-      broadcast_attempts: @order.broadcast_attempts + 1
-    )
+    if @order.respond_to?(:update!)
+      @order.update!(
+        current_broadcast_radius: @current_radius,
+        last_broadcast_at: Time.current,
+        broadcast_attempts: @order.broadcast_attempts + 1
+      )
+    end
 
     broadcast!(is_initial: false)
 
@@ -34,11 +40,20 @@ class B2bOrderBroadcastService
   private
 
   def broadcast!(is_initial:)
-    open_items = @order.b2b_order_items.open_items.includes(product_variant: :product).to_a
-    return if open_items.empty?
+    items = if @order.is_a?(Order)
+      @order.order_items.includes(product_variant: :product).to_a
+    else
+      @order.b2b_order_items.open_items.includes(product_variant: :product).to_a
+    end
 
-    eligible_dealers = eligible_nearby_dealers(items: open_items, radius: @current_radius)
-    
+    return if items.empty?
+
+    eligible_dealers = if @order.is_a?(Order)
+      find_eligible_dealers_for_b2c(items)
+    else
+      find_eligible_dealers_for_b2b(items)
+    end
+
     already_broadcasted = DealerBroadcastTracker.for_order(@order.id).pluck(:dealer_id)
     new_dealers = eligible_dealers.reject { |dealer, _| already_broadcasted.include?(dealer.id) }
 
@@ -55,10 +70,7 @@ class B2bOrderBroadcastService
           status: "pending"
         )
 
-        offer = B2bOrderOffer.find_or_initialize_by(
-          b2b_order: @order,
-          dealer: dealer
-        )
+        offer = B2bOrderOffer.find_or_initialize_by(b2b_order: @order, dealer: dealer)
 
         if offer.new_record?
           offer.assign_attributes(
@@ -69,7 +81,7 @@ class B2bOrderBroadcastService
             accept_token: "b2b_accept_#{SecureRandom.hex(8)}",
             reject_token: "b2b_reject_#{SecureRandom.hex(8)}",
             recipient_phone: formatted_phone_for(dealer),
-            expires_at: @order.expires_at,
+            expires_at: @order.respond_to?(:expires_at) ? @order.expires_at : 4.hours.from_now,
             whatsapp_status: "pending",
             rebroadcast_count: 0
           )
@@ -80,11 +92,45 @@ class B2bOrderBroadcastService
         create_in_app_notification_for_seller(dealer, offer, matched_items)
         notify_admin_new_b2b_request(dealer, matched_items)
       end
-
     end
   end
 
-  def eligible_nearby_dealers(items:, radius:)
+  def find_eligible_dealers_for_b2c(items)
+    pincode = if @order.is_a?(Order)
+      @order.shipping_address["postal_code"] || @order.billing_address["postal_code"]
+    else
+      nil
+    end
+
+    return {} if pincode.blank?
+
+    variant_ids = items.map(&:product_variant_id)
+
+    Dealer.active
+          .includes(:dealer_location, dealer_products: [:product_variant])
+          .where(dealer_products: {
+            product_variant_id: variant_ids,
+            sell_in_b2c: true,
+            is_active: true,
+            approve_status: "approved"
+          })
+          .where("dealer_products.stock_quantity > 0")
+          .where(pincode: pincode)
+          .each_with_object({}) do |dealer, matches|
+      next unless dealer.pincode == pincode
+      matched_items = items.select do |item|
+        dealer.dealer_products.any? do |dp|
+          dp.sellable_in_b2c? && 
+          dp.stock_quantity.to_i >= item.quantity.to_i && 
+          dp.product_variant_id == item.product_variant_id
+        end
+      end
+
+      matches[dealer] = matched_items if matched_items.any?
+    end
+  end
+
+  def find_eligible_dealers_for_b2b(items)
     buyer_lat = @order.latitude
     buyer_lng = @order.longitude
 
@@ -96,7 +142,7 @@ class B2bOrderBroadcastService
       next unless loc&.is_active && loc.latitude.present? && loc.longitude.present?
 
       distance = DealerLocation.distance_km(buyer_lat, buyer_lng, loc.latitude, loc.longitude)
-      next if distance > radius
+      next if distance > @current_radius
 
       dealer_radius = loc.service_radius_km.to_f
       next if dealer_radius.positive? && distance > dealer_radius
@@ -112,6 +158,7 @@ class B2bOrderBroadcastService
   end
 
   def schedule_next_broadcast
+    return if @is_b2c
     return if @current_radius >= MAX_RADIUS
     
     BroadcastB2bOrderJob.set(wait: 1.minute).perform_later(@order.id)
@@ -182,7 +229,7 @@ class B2bOrderBroadcastService
       title: "📦 New Order Request",
       message: "#{@actor.dealer_code} wants to buy #{total_items} unit(s) of #{product_name}. Total: ₹#{total_amount}",
       visible_in_app: true,
-      delivery_channels: { push: true, whatsapp: false, sms: false, email: false, in_app: true },
+      delivery_channels: { push: true, whatsapp: false, sms: false, email: true, in_app: true },
       payload: {
         offer_id: offer.id,
         order_id: @order.reference_number,
@@ -213,7 +260,7 @@ class B2bOrderBroadcastService
         title: "📢 New B2B Order Request Created",
         message: "#{@actor.dealer_code} created B2B request for #{product_name} (Qty: #{total_items}). Amount: ₹#{total_amount}",
         visible_in_app: true,
-        delivery_channels: { push: true, whatsapp: false, sms: false, email: false, in_app: true },
+        delivery_channels: { push: true, whatsapp: false, sms: false, email: true, in_app: true },
         payload: {
           order_id: @order.reference_number,
           buyer_dealer_id: @order.buyer_dealer_id,

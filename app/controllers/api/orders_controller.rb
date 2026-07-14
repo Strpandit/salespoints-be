@@ -6,23 +6,27 @@ module Api
       billing_address = params[:billing_address].presence || checkout_address_payload
       shipping_address = params[:shipping_address].presence || checkout_address_payload
       payment_method = params[:payment_method].to_s.presence || "cod"
+      pincode = params[:pincode].presence || shipping_address["postal_code"] || billing_address["postal_code"]
+
+      if pincode.blank?
+        return render json: { error: "Pincode is required for delivery" }, status: :unprocessable_entity
+      end
 
       result = DirectBuyNowService.new(
         buyer: current_buyer,
-        dealer_product_id: params[:dealer_product_id],
         product_variant_id: params[:product_variant_id],
         quantity: params[:quantity] || 1,
         payment_method: payment_method,
         billing_address: billing_address,
-        shipping_address: shipping_address
+        shipping_address: shipping_address,
+        pincode: pincode
       ).call
 
-      primary_order = result.orders.first
       render json: {
-        data: serialize_data(primary_order, OrderSerializer),
-        order: serialize_data(primary_order, OrderSerializer),
+        data: serialize_data(result.order, OrderSerializer),
+        order: serialize_data(result.order, OrderSerializer),
         payment: result.payment_data,
-        message: "Order placed successfully"
+        message: "Order placed successfully. Waiting for seller to accept."
       }, status: :created
     rescue StandardError => e
       render json: { error: e.message }, status: :unprocessable_entity

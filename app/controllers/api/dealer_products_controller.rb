@@ -363,6 +363,45 @@ module Api
       ), status: :ok
     end
 
+    def check_pincode
+      pincode = params[:pincode]
+      product_variant_id = params[:product_variant_id]
+
+      if pincode.blank?
+        return render json: { error: "Pincode is required" }, status: :unprocessable_entity
+      end
+
+      if product_variant_id.blank?
+        return render json: { error: "Product variant ID is required" }, status: :unprocessable_entity
+      end
+
+      eligible_dealers = Dealer.active
+                              .includes(:dealer_products)
+                              .where(dealer_products: {
+                                product_variant_id: product_variant_id,
+                                sell_in_b2c: true,
+                                is_active: true,
+                                approve_status: "approved"
+                              })
+                              .where("dealer_products.stock_quantity > 0")
+                              .where(pincode: pincode)
+                              .distinct
+
+      render json: {
+        deliverable: eligible_dealers.any?,
+        message: eligible_dealers.any? ? "Product is available in your pincode" : "No sellers available for delivery in your pincode",
+        sellers_count: eligible_dealers.count,
+        sellers: eligible_dealers.map do |dealer|
+          {
+            id: dealer.id,
+            dealer_code: dealer.dealer_code,
+            business_name: dealer.dealer_profile&.business_name,
+            stock_quantity: dealer.dealer_products.find_by(product_variant_id: product_variant_id)&.stock_quantity || 0
+          }
+        end
+      }, status: :ok
+    end
+
     private
 
     def dealer_product_params

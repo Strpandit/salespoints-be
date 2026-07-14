@@ -42,7 +42,7 @@ class B2bWholesalerDirectOrderService
         buyer_dealer_id: @buyer.id,
         seller_dealer_id: @seller.id,
         request_status: "pending_request",
-        status: "pending_payment",
+        status: "pending_request",
         requested_at: Time.current,
         requested_radius_km: @requested_radius_km,
         latitude: @latitude,
@@ -51,7 +51,7 @@ class B2bWholesalerDirectOrderService
         tax_amount: pricing[:gst_amount],
         discount_amount: 0,
         total_amount: pricing[:total],
-        expires_at: 30.minutes.from_now,
+        expires_at: 4.hours.from_now,
         payment_method: @payment_method || "cod",
         payment_status: @payment_status,
         buyer_payment_attempt: @buyer_payment_attempt,
@@ -95,8 +95,6 @@ class B2bWholesalerDirectOrderService
         rebroadcast_count: 0,
         whatsapp_status: "pending"
       )
-      
-      create_wholesaler_in_app_notification(order, item, offer)
     end
 
     order
@@ -123,49 +121,6 @@ class B2bWholesalerDirectOrderService
     if @payment_method == "cod" && total > COD_LIMIT
       raise StandardError, "COD is allowed only up to Rs 50,000"
     end
-  end
-
-  def create_wholesaler_in_app_notification(order, item, offer)
-    variant = item.product_variant
-    product = variant&.product
-
-    if @wholesaler_post.present?
-      product_name = @wholesaler_post.title || "Product"
-    else
-      product_name = product&.name || "Product"
-    end
-
-    quantity = item.quantity
-    total_amount = item.total_price || 0
-
-    NotificationService.deliver(
-      recipient: @seller,
-      actor: @buyer,
-      notifiable: order,
-      kind: "b2b_wholesaler_direct_buy",
-      title: "📦 New Bulk Buy Request",
-      message: "#{@buyer.dealer_code} wants to buy #{quantity} unit(s) of #{product_name} from your post. Total: ₹#{total_amount}",
-      visible_in_app: true,
-      delivery_channels: { push: true, whatsapp: false, sms: false, email: false, in_app: true },
-      payload: {
-        offer_id: offer.id,
-        order_id: order.reference_number,
-        buyer_dealer_id: @buyer.id,
-        seller_dealer_id: @seller.id,
-        wholesaler_post_id: @wholesaler_post.id,
-        post_title: @wholesaler_post.title,
-        item_ids: [item.id],
-        direct_buy: true,
-        source: "wholesaler_post",
-        product_name: product_name,
-        quantity: quantity,
-        total_amount: total_amount.to_f,
-        buyer_name: @buyer.dealer_code,
-        buyer_phone: formatted_phone_for(@buyer),
-        payment_method: @payment_method,
-        payment_status: @payment_status
-      }
-    )
   end
 
   def formatted_phone_for(dealer)

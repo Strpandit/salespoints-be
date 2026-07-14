@@ -150,6 +150,7 @@ Rails.application.routes.draw do
         get :similar
         get :b2b_shop_index
         get :b2b_similar
+        get :check_pincode
       end
       resources :reviews, only: [:index, :create]
     end

@@ -111,7 +111,7 @@ class B2bOrderCreationService
 
   def ensure_request_ready!(request_order)
     if request_order.is_direct_buy?
-      raise StandardError, "Order is not in pending_payment state" unless request_order.status == "pending_payment" && request_order.request_status == "pending_request"
+      raise StandardError, "Order is not in pending_payment state" unless request_order.status == "pending_request" && request_order.request_status == "pending_request"
       raise StandardError, "Payment window has expired" if request_order.expires_at.present? && request_order.expires_at < Time.current
     else
       raise StandardError, "Accepted request not found" unless request_order.request_status == "accepted_request"

@@ -1,7 +1,6 @@
 require 'csv'
 module Api
   class DealerBulkUploadsController < ApplicationController
-    # Dealers must be authenticated by Api::ApplicationController
 
     def create
       return render json: { error: 'Only dealers can bulk upload' }, status: :forbidden unless current_dealer

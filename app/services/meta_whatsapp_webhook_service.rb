@@ -68,6 +68,11 @@ class MetaWhatsappWebhookService
       return
     end
 
+    unless can_respond?(offer)
+      send_text_acknowledgement(to: from, message: "This request is no longer available for response.")
+      return
+    end
+
     handle_accept(offer, offer.b2b_order, offer.dealer, from)
   end
 
@@ -76,6 +81,11 @@ class MetaWhatsappWebhookService
     
     if offer.nil?
       send_text_acknowledgement(to: from, message: "No pending request found to reject.")
+      return
+    end
+
+    unless can_respond?(offer)
+      send_text_acknowledgement(to: from, message: "This request is no longer available for response.")
       return
     end
 
@@ -119,6 +129,11 @@ class MetaWhatsappWebhookService
       return
     end
 
+    unless can_respond?(offer)
+      send_text_acknowledgement(to: from, message: "This request is no longer available for response.")
+      return
+    end
+
     action = offer.accept_token == button_id ? "accept" : "reject"
 
     create_webhook_event(offer, from, action)
@@ -133,6 +148,28 @@ class MetaWhatsappWebhookService
   rescue StandardError => e
     send_text_acknowledgement(to: from, message: "Error: #{e.message}")
   end
+  
+  def can_respond?(offer)
+    return false if offer.nil?
+    return false unless offer.open?
+    return false if offer.expired?
+    return false if offer.b2b_order.accepted? if offer.b2b_order.respond_to?(:accepted?)
+    
+    order = offer.b2b_order
+
+    if order.is_a?(Order)
+      return false unless order.status == "pending"
+      return false if order.seller_dealer_id.present?
+      return false if order.expires_at.present? && Time.current > order.expires_at
+      return true
+    end
+
+    return false if order.expired? if order.respond_to?(:expired?)
+    return false unless order.request_status == "pending_request"
+    return false unless order.status.in?(["pending_request", "pending_payment"])
+    
+    true
+  end
 
   def handle_accept(offer, order, dealer, from)
     service = B2bOrderDealerResponseService.new(
@@ -143,7 +180,15 @@ class MetaWhatsappWebhookService
 
     service.accept!
 
-    send_text_acknowledgement(to: from, message: "✅ Request accepted! Payment link sent to buyer.")
+     message = if order.is_a?(Order)
+      "✅ Order accepted! Customer has been notified."
+    elsif order.is_direct_buy? && order.source_type == "WholesalerPost"
+      "✅ Order accepted! Buyer has been notified."
+    else
+      "✅ Request accepted! Payment link sent to buyer."
+    end
+
+    send_text_acknowledgement(to: from, message: message)
     offer.update!(whatsapp_status: "replied")
   rescue StandardError => e
     send_text_acknowledgement(to: from, message: "❌ Failed to accept request: #{e.message}")
@@ -158,7 +203,7 @@ class MetaWhatsappWebhookService
 
     service.reject!
 
-    send_text_acknowledgement(to: from, message: "❌ Request rejected.")
+    send_text_acknowledgement(to: from, message: "❌ Order rejected.")
     offer.update!(whatsapp_status: "replied")
   rescue StandardError => e
     send_text_acknowledgement(to: from, message: "❌ Failed to reject request: #{e.message}")
@@ -189,11 +234,9 @@ class MetaWhatsappWebhookService
         event.update!(b2b_order_offer: offer)
         update_offer_status(offer, status_entry["status"])
       rescue ActiveRecord::RecordNotUnique
-        # Skip duplicate events
         Rails.logger.debug "Duplicate status event for message_id: #{message_id}"
       rescue StandardError => e
         Rails.logger.error "Failed to process status: #{e.message}"
-        # Continue processing other statuses
         next
       end
     end
@@ -228,11 +271,11 @@ class MetaWhatsappWebhookService
         from: from,
         action: action,
         order_id: offer.b2b_order&.reference_number,
-        dealer_id: offer.dealer&.id
+        dealer_id: offer.dealer&.id,
+        order_type: offer.b2b_order&.source_type,
+        is_wholesaler: offer.b2b_order&.is_direct_buy? && offer.b2b_order&.source_type == "WholesalerPost"
       }
     )
-  rescue StandardError => e
-    Rails.logger.error "Failed to create webhook event: #{e.message}"
   end
 
   def send_text_acknowledgement(to:, message:)
@@ -240,8 +283,6 @@ class MetaWhatsappWebhookService
       to: normalized_e164_from_wa_id(to),
       body: message
     )
-  rescue StandardError => e
-    Rails.logger.error "WhatsApp acknowledgement failed: #{e.message}"
   end
 
   def normalized_e164_from_wa_id(wa_id)

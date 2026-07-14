@@ -23,14 +23,18 @@ class B2bOrderPaymentService
         payment_status: "pending"
       ).call
 
-      send_order_accept_to_seller(final_order)
-      unless final_order.is_direct_buy?
+      is_wholesaler = @order.is_direct_buy? && @order.source_type == "WholesalerPost"
+      if is_wholesaler
+        send_order_request_to_seller(@order)
+        return { order: final_order, payment_method: "cod", status: "pending_request", message: "Order created. Waiting for seller acceptance." }
+      else
+        send_order_accept_to_seller(final_order)
         send_payment_success_to_buyer(final_order)
         create_buyer_payment_success_notification(final_order)
+        create_seller_payment_success_notification(final_order)
+        notify_admin_order_confirmed(final_order)
+        return { order: final_order, payment_method: "cod", status: "confirmed", message: "Order confirmed with COD." }
       end
-      create_seller_payment_success_notification(final_order)
-      notify_admin_order_confirmed(final_order)
-      return { order: final_order, payment_method: "cod", status: "confirmed", message: "Order confirmed with COD" }
     else
       result = create_online_payment_attempt(@order)
       return { 
@@ -79,7 +83,7 @@ class B2bOrderPaymentService
       title: "✅ Payment Successful!",
       message: "Your order ##{order.reference_number} has been confirmed with #{order.payment_method.to_s.upcase}.",
       visible_in_app: true,
-      delivery_channels: { push: true, whatsapp: false, sms: false, email: false, in_app: true },
+      delivery_channels: { push: true, whatsapp: false, sms: false, email: true, in_app: true },
       payload: {
         order_id: order.reference_number,
         total_amount: order.total_amount.to_f,
@@ -97,7 +101,7 @@ class B2bOrderPaymentService
       title: "💰 Payment Confirmed!",
       message: "Buyer #{order.buyer_dealer.dealer_code} has confirmed #{order.payment_method.to_s.upcase} for order ##{order.reference_number}.",
       visible_in_app: true,
-      delivery_channels: { push: true, whatsapp: false, sms: false, email: false, in_app: true },
+      delivery_channels: { push: true, whatsapp: false, sms: false, email: true, in_app: true },
       payload: {
         order_id: order.reference_number,
         buyer_dealer_id: order.buyer_dealer_id,
@@ -117,7 +121,7 @@ class B2bOrderPaymentService
         title: "📦 New B2B Order Confirmed",
         message: "B2B Order ##{order.reference_number} confirmed by #{order.buyer_dealer.dealer_code}. Amount: ₹#{order.total_amount}",
         visible_in_app: true,
-        delivery_channels: { push: true, whatsapp: false, sms: false, email: false, in_app: true },
+        delivery_channels: { push: true, whatsapp: false, sms: false, email: true, in_app: true },
         payload: {
           order_id: order.reference_number,
           buyer_dealer_id: order.buyer_dealer_id,
@@ -217,6 +221,119 @@ class B2bOrderPaymentService
       longitude: longitude,
       location_name: location_name
     )
+  end
+
+  def send_order_request_to_seller(order)
+    return unless order.is_direct_buy? && order.source_type == "WholesalerPost"
+    offer = order.b2b_order_offers.find_by(dealer: order.seller_dealer, status: "open")
+    return unless offer
+    
+    item = order.b2b_order_items.first
+    return unless item
+
+    seller = order.seller_dealer
+    buyer = order.buyer_dealer
+    variant = item.product_variant
+    product = variant&.product
+
+    buyer_location = buyer&.dealer_location
+    seller_location = seller&.dealer_location
+
+    delivery_location = get_location(seller)
+    approx_distance = if buyer_location.present? && seller_location.present? &&
+                      buyer_location.latitude.present? && buyer_location.longitude.present? &&
+                      seller_location.latitude.present? && seller_location.longitude.present?
+    DealerLocation.distance_km(
+      buyer_location.latitude.to_f,
+      buyer_location.longitude.to_f,
+      seller_location.latitude.to_f,
+      seller_location.longitude.to_f
+    ).round(2).to_s
+    else
+      "0"
+    end
+
+    base_url = ENV["FRONTEND_URL"] || "https://salespoints.in"
+    accept_url = "#{base_url}/b2b/accept/#{offer.accept_token}"
+    reject_url = "#{base_url}/b2b/reject/#{offer.reject_token}"
+    image_url = get_product_image(product, variant)
+
+    accept_token = offer.accept_token
+    reject_token = offer.reject_token
+
+    MetaWhatsappCloudService.new.send_dealer_order_request(
+      to: formatted_phone_for(seller),
+      product: product&.name || "Product",
+      variant: variant&.variant_sku || "Standard",
+      sku: product&.sku || "N/A",
+      price: item.unit_price.to_f.round(2).to_s,
+      quantity: item.quantity.to_s,
+      total_amount: item.total_price.to_f.round(2).to_s,
+      delivery_location: delivery_location,
+      approx_distance: approx_distance,
+      accept_token: accept_token,
+      reject_token: reject_token,
+      image_url: image_url
+    )
+
+    offer.update!(whatsapp_status: "sent", sent_at: Time.current)
+    create_seller_request_notification(order, item)
+  rescue StandardError => e
+    offer.update!(whatsapp_status: "failed", failed_at: Time.current, failure_reason: e.message)
+  end
+
+  def create_seller_request_notification(order, item)
+    variant = item.product_variant
+    product = variant&.product
+
+    product_name = product&.name || "Product"
+    
+    NotificationService.deliver(
+      recipient: order.seller_dealer,
+      actor: order.buyer_dealer,
+      notifiable: order,
+      kind: "b2b_wholesaler_request",
+      title: "📦 New Order Request",
+      message: "#{order.buyer_dealer.dealer_code} wants to buy #{item.quantity} unit(s) of #{product_name}. Total: ₹#{item.total_price}",
+      visible_in_app: true,
+      delivery_channels: { push: true, whatsapp: false, sms: false, email: true, in_app: true },
+      payload: {
+        order_id: order.reference_number,
+        buyer_dealer_id: order.buyer_dealer_id,
+        seller_dealer_id: order.seller_dealer_id,
+        total_amount: item.total_price.to_f,
+        product_name: product_name,
+        quantity: item.quantity
+      }
+    )
+  end
+
+  def get_location(dealer)
+    return "Location not available" if dealer.blank?
+    address = dealer.dealer_profile&.business_address
+    return "Location not available" if address.blank?
+    cleaned = address.to_s.strip
+    if cleaned.include?(',')
+      parts = cleaned.split(',').map(&:strip).reject(&:blank?)
+      return parts.last(3).join(', ') if parts.size >= 3
+      return parts.first if parts.size == 1
+    end
+    words = cleaned.split(/\s+/)
+    return words.last(3).join(' ') if words.size >= 3
+    return words.first if words.size == 1
+    "Location not available"
+  end
+
+  def get_product_image(product, variant)
+    if variant.present? && variant.media.attached?
+      attachment = variant.media.first
+      return rails_blob_url(attachment, only_path: false) if attachment.present?
+    end
+    if product.present? && product.media.attached?
+      attachment = product.media.first
+      return rails_blob_url(attachment, only_path: false) if attachment.present?
+    end
+    "#{ENV['FRONTEND_URL']}/images/ac.png"
   end
 
   def get_buyer_location(dealer)

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_07_10_120000) do
+ActiveRecord::Schema[8.0].define(version: 2026_07_14_065921) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -431,6 +431,8 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_10_120000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.integer "approve_status", default: 0
+    t.boolean "sell_in_b2b", default: true, null: false
+    t.boolean "sell_in_b2c", default: true, null: false
     t.index ["approve_status"], name: "index_dealer_products_on_approve_status"
     t.index ["dealer_id"], name: "index_dealer_products_on_dealer_id"
     t.index ["product_id"], name: "index_dealer_products_on_product_id"
@@ -605,7 +607,9 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_10_120000) do
     t.datetime "refunded_at"
     t.text "refund_reason"
     t.datetime "return_window_closes_at"
+    t.datetime "expires_at"
     t.index ["buyer_type", "buyer_id"], name: "index_orders_on_buyer_type_and_buyer_id"
+    t.index ["expires_at"], name: "index_orders_on_expires_at"
     t.index ["gateway_order_reference"], name: "index_orders_on_gateway_order_reference"
     t.index ["order_number"], name: "index_orders_on_order_number", unique: true
     t.index ["payment_reference"], name: "index_orders_on_payment_reference"
