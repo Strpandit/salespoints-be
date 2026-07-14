@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_07_14_065921) do
+ActiveRecord::Schema[8.0].define(version: 2026_07_14_122159) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -147,7 +147,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_14_065921) do
   create_table "b2b_order_items", force: :cascade do |t|
     t.bigint "b2b_order_id", null: false
     t.bigint "dealer_product_id"
-    t.bigint "product_variant_id", null: false
+    t.bigint "product_variant_id"
     t.integer "quantity", default: 1, null: false
     t.decimal "unit_price", precision: 12, scale: 2, default: "0.0", null: false
     t.decimal "total_price", precision: 12, scale: 2, default: "0.0", null: false

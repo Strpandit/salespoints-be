@@ -1,6 +1,7 @@
 class B2bWholesalerDirectOrderService
   include Rails.application.routes.url_helpers
   COD_LIMIT = 50_000.to_d
+  GST_PERCENTAGE = 18.0
 
   def initialize(buyer:, seller:, wholesaler_post:, quantity:, latitude:, longitude:, requested_radius_km: nil, payment_method: nil, payment_status: "pending", buyer_payment_attempt: nil)
     @buyer = buyer
@@ -17,22 +18,25 @@ class B2bWholesalerDirectOrderService
 
   def call
     validate!
+
+    unit_price = @wholesaler_post.price.to_f
+
+    if unit_price <= 0
+      raise StandardError, "Product price is not set or invalid"
+    end
+
     if @requested_radius_km <= 0
       raise "Requested radius km must be greater than 0"
     end
     
     raise StandardError, "Insufficient stock" if @wholesaler_post.stock_quantity.to_i < @quantity
 
-    dealer_product = @wholesaler_post.dealer_product
-    raise StandardError, "Dealer product mapping not found" unless dealer_product
-    raise StandardError, "Product not available for B2B sale" unless dealer_product.sellable_in_b2b?
+    subtotal = unit_price * @quantity
+    gst_amount = calculate_gst(unit_price, @quantity)
+    total_amount = subtotal
 
-    variant = dealer_product.product_variant
-    raise StandardError, "Product variant not found" unless variant
-
-    pricing = calculate_pricing(variant)
     if @payment_method.present? && @payment_method == "cod"
-      check_cod_limit(pricing[:total])
+      check_cod_limit(total_amount)
     end
 
     order = nil
@@ -47,10 +51,10 @@ class B2bWholesalerDirectOrderService
         requested_radius_km: @requested_radius_km,
         latitude: @latitude,
         longitude: @longitude,
-        subtotal_amount: pricing[:subtotal],
-        tax_amount: pricing[:gst_amount],
+        subtotal_amount: subtotal,
+        tax_amount: gst_amount,
         discount_amount: 0,
-        total_amount: pricing[:total],
+        total_amount: total_amount,
         expires_at: 4.hours.from_now,
         payment_method: @payment_method || "cod",
         payment_status: @payment_status,
@@ -62,11 +66,11 @@ class B2bWholesalerDirectOrderService
 
       item = B2bOrderItem.create!(
         b2b_order: order,
-        product_variant_id: variant.id,
+        product_variant_id: nil,
         quantity: @quantity,
-        unit_price: pricing[:unit_price],
-        total_price: pricing[:subtotal],
-        dealer_product_id: dealer_product.id,
+        unit_price: unit_price,
+        total_price: subtotal,
+        dealer_product_id: @wholesaler_post.dealer_product_id || nil,
         wholesaler_post_id: @wholesaler_post.id,
         status: "open"
       )
@@ -81,7 +85,7 @@ class B2bWholesalerDirectOrderService
           request_id: order.id,
           wholesaler_post_id: @wholesaler_post.id,
           post_title: @wholesaler_post.title,
-          product_name: item.product_variant&.product&.name,
+          product_name: @wholesaler_post.title,
           quantity: item.quantity,
           unit_price: item.unit_price.to_f,
           total_price: item.total_price.to_f,
@@ -109,12 +113,8 @@ class B2bWholesalerDirectOrderService
     end
   end
 
-  def calculate_pricing(variant)
-    Pricing::PriceCalculator.new(
-      variant: variant,
-      quantity: @quantity,
-      user_type: :dealer
-    ).call
+  def calculate_gst(unit_price, quantity)
+    (unit_price * GST_PERCENTAGE / (100 + GST_PERCENTAGE)) * quantity
   end
 
   def check_cod_limit(total)
