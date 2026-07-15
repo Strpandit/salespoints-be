@@ -27,7 +27,7 @@ class B2bOrderBroadcastService
     if @order.respond_to?(:update!)
       @order.update!(
         current_broadcast_radius: @current_radius,
-        last_broadcast_at: Time.current,
+        last_rebroadcast_at: Time.current,
         broadcast_attempts: @order.broadcast_attempts + 1
       )
     end
@@ -131,30 +131,47 @@ class B2bOrderBroadcastService
   end
 
   def find_eligible_dealers_for_b2b(items)
-    buyer_lat = @order.latitude
-    buyer_lng = @order.longitude
+    buyer_lat = @order.latitude.to_f
+    buyer_lng = @order.longitude.to_f
 
-    Dealer.active
-          .includes(:dealer_location, dealer_products: [:product_variant, :product])
-          .where.not(id: @order.buyer_dealer_id)
-          .each_with_object({}) do |dealer, matches|
-      loc = dealer.dealer_location
-      next unless loc&.is_active && loc.latitude.present? && loc.longitude.present?
+    matches = {}
 
-      distance = DealerLocation.distance_km(buyer_lat, buyer_lng, loc.latitude, loc.longitude)
-      next if distance > @current_radius
+    items.each do |item|
+      next if item.product_variant_id.blank?
 
-      dealer_radius = loc.service_radius_km.to_f
-      next if dealer_radius.positive? && distance > dealer_radius
+      DealerProduct.live
+                  .for_b2b
+                  .includes(:dealer, :dealer_location, :product_variant)
+                  .where(product_variant_id: item.product_variant_id)
+                  .find_each do |dealer_product|
 
-      matched_items = items.select do |item|
-        dealer.dealer_products.any? do |dp|
-          dp.sellable_in_b2b? && dp.stock_quantity.to_i >= item.quantity.to_i && dp.product_variant_id == item.product_variant_id
-        end
+        dealer = dealer_product.dealer
+        next if dealer.id == @order.buyer_dealer_id
+
+        location = dealer.dealer_location
+        next unless location&.is_active?
+        next if location.latitude.blank? || location.longitude.blank?
+
+        distance = DealerLocation.distance_km(
+          buyer_lat,
+          buyer_lng,
+          location.latitude,
+          location.longitude
+        )
+
+        next if distance > @current_radius
+
+        seller_radius = location.service_radius_km.to_f
+        next if seller_radius.positive? && distance > seller_radius
+
+        next unless dealer_product.stock_quantity.to_i >= item.quantity.to_i
+
+        matches[dealer] ||= []
+        matches[dealer] << item unless matches[dealer].include?(item)
       end
-
-      matches[dealer] = matched_items if matched_items.any?
     end
+
+    matches
   end
 
   def schedule_next_broadcast
