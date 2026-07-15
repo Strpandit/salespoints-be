@@ -23,7 +23,7 @@ class B2bOrder < ApplicationRecord
   validates :requested_radius_km, numericality: { greater_than: 0 }
   # validates :reference_number, presence: true, uniqueness: true
 
-  scope :pending_requests, -> { where(request_status: "pending_request", status: "pending_request") }
+  scope :pending_requests, -> { where(request_status: "pending_request", status: ["pending_request", "pending_payment"]) }
   scope :accepted_requests, -> { where(request_status: "accepted_request") }
   scope :pending_payments, -> { where(status: "pending_payment") }
   scope :from_wholesaler_post, -> { where(source_type: 'WholesalerPost') }

@@ -1,6 +1,11 @@
 class B2bOrderPaymentService
+  include Rails.application.routes.url_helpers
   COD_LIMIT = 50_000.to_d
   
+  def default_url_options
+    { host: ENV.fetch("APP_URL", "https://api.salespoints.in") }
+  end
+
   def initialize(order_id:, payment_method:)
     @order_id = order_id
     @payment_method = payment_method.to_s.presence || "cod"
@@ -273,9 +278,9 @@ class B2bOrderPaymentService
 
     MetaWhatsappCloudService.new.send_dealer_order_request(
       to: formatted_phone_for(seller),
-      product: product&.name || "Product",
-      variant: variant&.variant_sku || "Standard",
-      sku: product&.sku || "N/A",
+      product: product&.name || wholesaler_post&.title || "Product",
+      variant: variant&.variant_sku || wholesaler_post&.title || "Standard",
+      sku: product&.sku || wholesaler_post&.modal_no || "N/A",
       price: item.unit_price.to_f.round(2).to_s,
       quantity: item.quantity.to_s,
       total_amount: item.total_price.to_f.round(2).to_s,
