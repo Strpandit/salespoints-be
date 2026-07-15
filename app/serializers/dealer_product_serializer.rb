@@ -23,14 +23,6 @@ class DealerProductSerializer < ApplicationSerializer
     object.display_media_attachments.map { |file| file_payload(file) }
   end
 
-  def product_media
-    object.product.media.map { |file| file_payload(file) }
-  end
-
-  def variant_media
-    object.product_variant.media.map { |file| file_payload(file) }
-  end
-
   private
 
   def file_payload(file)

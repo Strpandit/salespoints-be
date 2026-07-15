@@ -11,11 +11,8 @@ class B2bOrderCreationService
 
     ActiveRecord::Base.transaction do
       request_order = B2bOrder.lock.find(@request_order.id)
-      existing_order = if request_order.is_direct_buy?
-                       B2bOrder.find_by(source_type: "WholesalerPost", source_id: request_order.source_id, request_status: "pending_request")
-                     else
-                       B2bOrder.find_by(source_type: "B2bOrder", source_id: request_order.id, request_status: nil)
-                     end
+      existing_order = B2bOrder.find_by(parent_request_order_id: request_order.id)
+
       return existing_order if existing_order.present?
 
       ensure_request_ready!(request_order)
@@ -29,6 +26,7 @@ class B2bOrderCreationService
       end
 
       final_order = B2bOrder.create!(
+        parent_request_order_id: request_order.id,
         buyer_dealer_id: request_order.buyer_dealer_id,
         seller_dealer_id: request_order.seller_dealer_id,
         request_status: final_order_request_status,

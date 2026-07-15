@@ -3,6 +3,8 @@ class B2bOrder < ApplicationRecord
   belongs_to :seller_dealer, class_name: "Dealer", optional: true
   belongs_to :buyer_payment_attempt, class_name: "PaymentAttempt", optional: true
   belongs_to :source, polymorphic: true, optional: true
+  belongs_to :parent_request_order, class_name: "B2bOrder", optional: true
+  has_one :final_order, class_name: "B2bOrder", foreign_key: :parent_request_order_id, dependent: nil
   has_many :b2b_order_items, dependent: :destroy
   has_many :notifications, as: :notifiable, dependent: :destroy
   has_many :b2b_order_offers, dependent: :destroy

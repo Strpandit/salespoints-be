@@ -52,7 +52,10 @@ class DealerProduct < ApplicationRecord
   end
 
   def display_media_attachments
-    product_variant&.display_media_attachments || product&.media || []
+    return product_variant.display_media_attachments if product_variant.present?
+    return product.ordered_media_attachments.map(&:blob) if product&.media&.attached?
+
+    []
   end
 
   private

@@ -43,10 +43,8 @@ class B2bOrderItemSerializer < ApplicationSerializer
 
   def product_name
     return object.wholesaler_post&.title if object.wholesaler_post_id.present?
-
-    return object.product_variant&.product&.name if object.product_variant_id.present?
-
     return object.dealer_product&.product&.name if object.dealer_product_id.present?
+    return object.product_variant&.product&.name if object.product_variant_id.present?
   end
 
   def variant_sku
@@ -59,7 +57,6 @@ class B2bOrderItemSerializer < ApplicationSerializer
 
   def assigned_dealer_name
     return object.dealer_product&.dealer&.dealer_code if object.dealer_product_id.present?
-
     return object.wholesaler_post&.dealer&.dealer_code if object.wholesaler_post_id.present?
     
     nil

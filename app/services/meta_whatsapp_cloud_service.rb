@@ -9,6 +9,8 @@ class MetaWhatsappCloudService
   TEMPLATE_PAYMENT_REQUEST = "b2b_payment_request"
   TEMPLATE_ORDER_ACCEPT = "order_accept"
   TEMPLATE_PAYMENT_SUCCESS = "payment_success_order_details"
+  TEMPLATE_DELIVERY_FORM_LINK = "delivery_form_link"
+  TEMPLATE_DELIVERY_VERIFICATION_OTP = "delivery_verification_otp"
 
   def send_dealer_order_request(to:, product:, variant:, sku:, price:, quantity:, total_amount:, delivery_location:, approx_distance:, accept_token:, reject_token:, image_url: nil)
     components = []
@@ -151,6 +153,42 @@ class MetaWhatsappCloudService
     )
   end
 
+  def send_delivery_form_link(to:, order_reference:, buyer_name:, form_url:)
+    components = [
+      {
+        type: "body",
+        parameters: [
+          { type: "text", text: order_reference.to_s },
+          { type: "text", text: buyer_name.to_s },
+          { type: "text", text: form_url.to_s }
+        ]
+      }
+    ]
+
+    send_template_message(
+      to: to,
+      template_name: TEMPLATE_DELIVERY_FORM_LINK,
+      components: components
+    )
+  end
+
+  def send_delivery_otp(to:, otp:)
+    components = [
+      {
+        type: "body",
+        parameters: [
+          { type: "text", text: otp.to_s }
+        ]
+      }
+    ]
+
+    send_template_message(
+      to: to,
+      template_name: TEMPLATE_DELIVERY_VERIFICATION_OTP,
+      components: components
+    )
+  end
+
   def send_template_message(to:, template_name:, components: [], language: "en")
     return unless configured?
     return if to.blank?
@@ -180,26 +218,6 @@ class MetaWhatsappCloudService
         body: body.to_s.truncate(4_000)
       }
     )
-  end
-
-  def send_delivery_form_link(to:, order_reference:, buyer_name:, form_url:)
-    body = <<~TEXT.squish
-      SalesPoints delivery verification is required for order #{order_reference}.
-      Recipient: #{buyer_name}.
-      Please open the secure form below, upload the required proof images, confirm the declarations, and complete OTP verification:
-      #{form_url}
-    TEXT
-
-    send_text_message(to: to, body: body)
-  end
-
-  def send_delivery_otp(to:, otp:, order_reference:, recipient_label:)
-    body = <<~TEXT.squish
-      SalesPoints #{recipient_label} verification code for order #{order_reference}: #{otp}.
-      This code is valid for 10 minutes. Please share it only for the on-site delivery verification process.
-    TEXT
-
-    send_text_message(to: to, body: body)
   end
 
   def configured?

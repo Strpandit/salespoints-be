@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_07_14_122159) do
+ActiveRecord::Schema[8.0].define(version: 2026_07_15_140904) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -234,11 +234,14 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_14_122159) do
     t.datetime "shipped_at"
     t.datetime "delivered_at"
     t.text "status_note"
+    t.bigint "parent_request_order_id"
     t.index ["broadcast_attempts"], name: "index_b2b_orders_on_broadcast_attempts"
     t.index ["buyer_dealer_id"], name: "index_b2b_orders_on_buyer_dealer_id"
     t.index ["buyer_payment_attempt_id"], name: "index_b2b_orders_on_buyer_payment_attempt_id"
     t.index ["current_broadcast_radius"], name: "index_b2b_orders_on_current_broadcast_radius"
     t.index ["is_direct_buy"], name: "index_b2b_orders_on_is_direct_buy"
+    t.index ["parent_request_order_id"], name: "idx_unique_parent_request_order", unique: true, where: "(parent_request_order_id IS NOT NULL)"
+    t.index ["parent_request_order_id"], name: "index_b2b_orders_on_parent_request_order_id"
     t.index ["payment_method"], name: "index_b2b_orders_on_payment_method"
     t.index ["payment_status"], name: "index_b2b_orders_on_payment_status"
     t.index ["payment_token"], name: "index_b2b_orders_on_payment_token", unique: true
@@ -721,7 +724,6 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_14_122159) do
     t.decimal "dealer_selling_price", precision: 15, scale: 2
     t.integer "discount_percentage", default: 0
     t.bigint "primary_media_blob_id"
-    t.integer "stock_quantity", default: 1
     t.index ["brand_id"], name: "index_products_on_brand_id"
     t.index ["category_id"], name: "index_products_on_category_id"
     t.index ["is_featured"], name: "index_products_on_is_featured"
@@ -912,6 +914,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_14_122159) do
   add_foreign_key "b2b_order_offers", "b2b_orders"
   add_foreign_key "b2b_order_offers", "dealers"
   add_foreign_key "b2b_order_offers", "notifications"
+  add_foreign_key "b2b_orders", "b2b_orders", column: "parent_request_order_id"
   add_foreign_key "b2b_orders", "dealers", column: "buyer_dealer_id"
   add_foreign_key "b2b_orders", "dealers", column: "seller_dealer_id"
   add_foreign_key "b2b_orders", "payment_attempts", column: "buyer_payment_attempt_id"

@@ -46,8 +46,8 @@ class DeliveryConfirmationService
       buyer_otp_sent_at: Time.current
     )
 
-    send_otp_message(phone: confirmation.seller_phone, otp: confirmation.seller_otp, recipient_label: "Seller")
-    send_otp_message(phone: confirmation.buyer_phone, otp: confirmation.buyer_otp, recipient_label: buyer_label)
+    send_otp_message(phone: confirmation.seller_phone, otp: confirmation.seller_otp)
+    send_otp_message(phone: confirmation.buyer_phone, otp: confirmation.buyer_otp)
   end
 
   def verify_otps!(confirmation:, seller_otp:, buyer_otp:)
@@ -181,14 +181,12 @@ class DeliveryConfirmationService
     )
   end
 
-  def send_otp_message(phone:, otp:, recipient_label:)
+  def send_otp_message(phone:, otp:)
     return if phone.blank?
 
     MetaWhatsappCloudService.new.send_delivery_otp(
       to: phone,
-      otp: otp,
-      order_reference: deliverable_reference,
-      recipient_label: recipient_label
+      otp: otp
     )
   end
 

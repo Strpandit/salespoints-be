@@ -52,7 +52,7 @@ class B2bDirectOrderService
         payment_method: @payment_method || "cod",
         payment_status: "pending",
         buyer_payment_attempt: @buyer_payment_attempt,
-        is_direct_buy: true,
+        is_direct_buy: false,
         source_type: "DealerProduct",
         source_id: dealer_product.id
       )
