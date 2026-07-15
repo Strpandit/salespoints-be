@@ -71,13 +71,15 @@ class B2bOrderCreationService
 
       final_order.recalculate_totals!
 
-      request_order.update!(
-        status: "confirmed",
-        payment_status: @payment_status,
-        payment_method: @payment_method,
-        payment_confirmed_at: @payment_status == "paid" ? Time.current : request_order.payment_confirmed_at,
-        confirmed_at: Time.current
-      )
+      unless request_order.is_direct_buy?
+        request_order.update!(
+          status: "confirmed",
+          payment_status: @payment_status,
+          payment_method: @payment_method,
+          payment_confirmed_at: @payment_status == "paid" ? Time.current : request_order.payment_confirmed_at,
+          confirmed_at: Time.current
+        )
+      end
 
       final_order
     end

@@ -141,7 +141,7 @@ class B2bOrderBroadcastService
 
       DealerProduct.live
                   .for_b2b
-                  .includes(:dealer, :dealer_location, :product_variant)
+                  .includes(:product_variant, dealer: :dealer_location)
                   .where(product_variant_id: item.product_variant_id)
                   .find_each do |dealer_product|
 
