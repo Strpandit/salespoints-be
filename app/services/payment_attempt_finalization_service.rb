@@ -89,6 +89,28 @@ class PaymentAttemptFinalizationService
       request_order = B2bOrder.find_by(id: metadata["request_order_id"])
       raise StandardError, "Accepted B2B request not found for payment finalization" if request_order.blank?
 
+      if request_order.is_direct_buy? && request_order.source_type == "WholesalerPost"
+        request_order.update!(
+          payment_method: "online",
+          payment_status: "paid",
+          payment_confirmed_at: Time.current,
+          buyer_payment_attempt: attempt
+        )
+
+        send_order_request_to_seller(request_order)
+
+        attempt.update!(
+          status: "processed",
+          processed_at: Time.current,
+          result_payload: attempt.result_payload.merge(
+            "b2b_order_id" => request_order.id,
+            "b2b_order_status" => request_order.status
+          )
+        )
+
+        return Result.new(orders: [], b2b_order: request_order)
+      end
+
       order = B2bOrderCreationService.new(
         request_order: request_order,
         payment_method: "online",
@@ -96,17 +118,11 @@ class PaymentAttemptFinalizationService
         buyer_payment_attempt: attempt
       ).call
 
-      is_wholesaler = request_order.is_direct_buy? && request_order.source_type == "WholesalerPost"
-      
-      if is_wholesaler
-        send_order_request_to_seller(request_order)
-      else
-        send_order_accept_to_seller(order)
-        send_payment_success_to_buyer(order)
-        create_buyer_online_payment_notification(order)
-        create_seller_online_payment_notification(order)
-        notify_admin_online_payment(order)
-      end
+      send_order_accept_to_seller(order)
+      send_payment_success_to_buyer(order)
+      create_buyer_online_payment_notification(order)
+      create_seller_online_payment_notification(order)
+      notify_admin_online_payment(order)
 
       attempt.update!(
         status: "processed",
