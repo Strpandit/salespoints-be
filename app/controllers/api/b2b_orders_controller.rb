@@ -207,11 +207,12 @@ module Api
     end
 
     def acceptable_order?(order)
-      return true if order.request_status == "pending_request" && 
-                 (order.status == "pending_request" || 
-                  (order.is_direct_buy? && order.source_type == "WholesalerPost" && order.status == "pending_request"))
-  
-      false
+      return false unless order.request_status == "pending_request"
+      if order.is_direct_buy? && order.source_type == "WholesalerPost"
+        order.status.in?(%w[pending_request pending_payment])
+      else
+        order.status == "pending_request"
+      end
     end
 
     def matching_open_offer(order:)

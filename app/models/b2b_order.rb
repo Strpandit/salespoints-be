@@ -45,7 +45,7 @@ class B2bOrder < ApplicationRecord
   end
 
   def pending_request?
-    request_status == "pending_request" && status == "pending_request"
+    request_status == "pending_request" && (status == "pending_request" || status == "pending_payment")
   end
 
   def accepted_request?
