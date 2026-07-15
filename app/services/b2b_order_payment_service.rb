@@ -17,24 +17,33 @@ class B2bOrderPaymentService
     end
 
     if @payment_method == "cod"
+      is_wholesaler = @order.is_direct_buy? && @order.source_type == "WholesalerPost"
+      if is_wholesaler
+        @order.update!(
+          payment_method: "cod",
+          payment_status: "pending"
+        )
+        send_order_request_to_seller(@order)
+        return {
+          order: @order,
+          payment_method: "cod",
+          status: "pending_request",
+          message: "Order request sent to seller."
+        }
+      end
+      
       final_order = B2bOrderCreationService.new(
         request_order: @order,
         payment_method: "cod",
         payment_status: "pending"
       ).call
 
-      is_wholesaler = @order.is_direct_buy? && @order.source_type == "WholesalerPost"
-      if is_wholesaler
-        send_order_request_to_seller(@order)
-        return { order: final_order, payment_method: "cod", status: "pending_request", message: "Order created. Waiting for seller acceptance." }
-      else
-        send_order_accept_to_seller(final_order)
-        send_payment_success_to_buyer(final_order)
-        create_buyer_payment_success_notification(final_order)
-        create_seller_payment_success_notification(final_order)
-        notify_admin_order_confirmed(final_order)
-        return { order: final_order, payment_method: "cod", status: "confirmed", message: "Order confirmed with COD." }
-      end
+      send_order_accept_to_seller(final_order)
+      send_payment_success_to_buyer(final_order)
+      create_buyer_payment_success_notification(final_order)
+      create_seller_payment_success_notification(final_order)
+      notify_admin_order_confirmed(final_order)
+      return { order: final_order, payment_method: "cod", status: "confirmed", message: "Order confirmed with COD." }
     else
       result = create_online_payment_attempt(@order)
       return { 
