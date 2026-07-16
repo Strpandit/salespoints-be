@@ -14,8 +14,10 @@ class B2bOrderPaymentService
 
   def call
     raise StandardError, "Order not found" unless @order
-    raise StandardError, "Order is not in pending_payment state" unless @order.pending_payment?
     raise StandardError, "Invalid payment method" unless B2bOrder::PAYMENT_METHODS.include?(@payment_method)
+    unless @order.pending_request? || @order.pending_payment?
+      raise StandardError, "Order is not in a processable state. Current status: #{@order.status}"
+    end
 
     if @payment_method == "cod" && @order.total_amount > COD_LIMIT
       raise StandardError, "COD is not allowed for orders above ₹#{COD_LIMIT}. Please choose online payment."

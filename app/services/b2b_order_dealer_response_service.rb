@@ -305,7 +305,7 @@ class B2bOrderDealerResponseService
 
     order.update!(
       status: "confirmed",
-      request_status: "accepted_request",
+      request_status: nil,
       confirmed_at: Time.current
     )
 
@@ -323,8 +323,8 @@ class B2bOrderDealerResponseService
     offer = lock_b2b_request_offer!(order: order)
     ensure_order_can_be_accepted!(order: order)
 
-    raise StandardError, "Order is not in pending_request state" unless order.pending_request?
-    order.update!(status: "cancelled", rejected_at: Time.current)
+    raise StandardError, "Order is not in pending request state" unless order.pending_request?
+    order.update!(status: "cancelled", request_status: "rejected_request", rejected_at: Time.current)
     offer.update!(status: "rejected", responded_at: Time.current, whatsapp_status: "replied")
 
     notify_buyer_of_rejection(order)

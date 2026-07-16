@@ -17,7 +17,6 @@ class CashfreeWebhookProcessingService
     event
   rescue StandardError => e
     if e.message.include?("already been taken") || e.message.include?("duplicate")
-      Rails.logger.warn "Duplicate webhook event, ignoring"
       return @event if @event.present?
     end
     @event&.update!(

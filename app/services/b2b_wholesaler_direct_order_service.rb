@@ -46,7 +46,7 @@ class B2bWholesalerDirectOrderService
         buyer_dealer_id: @buyer.id,
         seller_dealer_id: @seller.id,
         request_status: "pending_request",
-        status: "pending_payment",
+        status: "pending_request",
         requested_at: Time.current,
         requested_radius_km: @requested_radius_km,
         latitude: @latitude,

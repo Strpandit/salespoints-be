@@ -1,5 +1,10 @@
 class PaymentAttemptFinalizationService
+  include Rails.application.routes.url_helpers
   Result = Struct.new(:orders, :b2b_order, keyword_init: true)
+
+  def default_url_options
+    { host: ENV.fetch("APP_URL", "https://api.salespoints.in") }
+  end
 
   def initialize(payment_attempt:)
     @payment_attempt = payment_attempt
@@ -9,136 +14,183 @@ class PaymentAttemptFinalizationService
     attempt = PaymentAttempt.find(@payment_attempt.id)
 
     if attempt.processed?
-      if checkout_context == "b2b_order"
-        order = B2bOrder.find_by(buyer_payment_attempt_id: attempt.id, request_status: nil)
-        return Result.new(orders: [], b2b_order: order) if order.present?
-      else
-        orders = load_orders(attempt)
-        return Result.new(orders: orders, b2b_order: nil) if orders.present?
-      end
-
-      return Result.new(orders: [], b2b_order: nil)
+      return handle_processed_attempt(attempt)
     end
 
-    return finalize_b2b_request! if checkout_context == "b2b_order"
+    raise StandardError, "Payment is not marked as paid" unless attempt.paid?
 
-    orders = []
-
-    ActiveRecord::Base.transaction do
-      attempt = PaymentAttempt.lock.find(@payment_attempt.id)
-      return Result.new(orders: load_orders(attempt), b2b_order: nil) if attempt.processed?
-      raise StandardError, "Payment is not marked as paid" unless attempt.paid?
-
-      order_ids = Array(attempt.result_payload["order_ids"])
-
-      Order.where(id: order_ids).find_each do |order|
-        order.update!(
-          payment_status: "paid",
-          status: "processing",
-          payment_reference: attempt.payment_reference,
-          payment_confirmed_at: Time.current,
-          paid_at: Time.current
-        )
-
-        OrderNotificationJob.perform_later(order.id, "placed", attempt.buyer_type, attempt.buyer_id)
-        OrderNotificationJob.perform_later(order.id, "payment_paid", attempt.buyer_type, attempt.buyer_id)
-
-        orders << order
-      end
-
-      consume_coupon!(attempt)
-
-      attempt.update!(
-        status: "processed",
-        processed_at: Time.current,
-        result_payload: attempt.result_payload.merge(
-          order_ids: orders.map(&:id),
-          order_numbers: orders.map(&:order_number)
-        )
-      )
+    if checkout_context == "b2b_order"
+      finalize_b2b_order!(attempt)
+    else
+      finalize_retail_orders!(attempt)
     end
-
-    Result.new(orders: orders, b2b_order: nil)
   end
 
   private
 
-  def finalize_b2b_request!
-    order = nil
+  def handle_processed_attempt(attempt)
+    if checkout_context == "b2b_order"
+      order = B2bOrder.find_by(buyer_payment_attempt_id: attempt.id, request_status: nil)
+      return Result.new(orders: [], b2b_order: order) if order.present?
+    else
+      orders = load_orders(attempt)
+      return Result.new(orders: orders, b2b_order: nil) if orders.present?
+    end
+    Result.new(orders: [], b2b_order: nil)
+  end
 
+  def finalize_b2b_order!(attempt)
     ActiveRecord::Base.transaction do
       attempt = PaymentAttempt.lock.find(@payment_attempt.id)
 
       if attempt.processed?
         existing_order = B2bOrder.find_by(buyer_payment_attempt_id: attempt.id, request_status: nil)
         return Result.new(orders: [], b2b_order: existing_order) if existing_order.present?
-
         return Result.new(orders: [], b2b_order: nil)
       end
 
-      raise StandardError, "Payment is not marked as paid" unless attempt.paid?
-
-      metadata = attempt.result_payload.fetch("request_metadata", {}).stringify_keys
-      existing_order = B2bOrder.find_by(buyer_payment_attempt_id: attempt.id, request_status: nil)
-
+      existing_order = find_existing_b2b_order(attempt)
       if existing_order.present?
-        attempt.update!(status: "processed", processed_at: Time.current)
+        mark_attempt_processed!(attempt, b2b_order: existing_order)
         return Result.new(orders: [], b2b_order: existing_order)
       end
 
-      request_order = B2bOrder.find_by(id: metadata["request_order_id"])
-      raise StandardError, "Accepted B2B request not found for payment finalization" if request_order.blank?
+      order = process_b2b_order!(attempt)
+      mark_attempt_processed!(attempt, b2b_order: order)
 
-      if request_order.is_direct_buy? && request_order.source_type == "WholesalerPost"
-        request_order.update!(
-          payment_method: "online",
-          payment_status: "paid",
-          payment_confirmed_at: Time.current,
-          buyer_payment_attempt: attempt
-        )
+      Result.new(orders: [], b2b_order: order)
+    end
+  end
 
-        send_order_request_to_seller(request_order)
+  def finalize_retail_orders!(attempt)
+    orders = []
 
-        attempt.update!(
-          status: "processed",
-          processed_at: Time.current,
-          result_payload: attempt.result_payload.merge(
-            "b2b_order_id" => request_order.id,
-            "b2b_order_status" => request_order.status
-          )
-        )
-
-        return Result.new(orders: [], b2b_order: request_order)
+    ActiveRecord::Base.transaction do
+      attempt = PaymentAttempt.lock.find(@payment_attempt.id)
+      if attempt.processed?
+        return Result.new(orders: load_orders(attempt), b2b_order: nil)
       end
 
-      order = B2bOrderCreationService.new(
-        request_order: request_order,
-        payment_method: "online",
-        payment_status: "paid",
-        buyer_payment_attempt: attempt
-      ).call
+      order_ids = Array(attempt.result_payload["order_ids"])
+      orders = process_retail_orders!(order_ids, attempt)
 
-      send_order_accept_to_seller(order)
-      send_payment_success_to_buyer(order)
-      create_buyer_online_payment_notification(order)
-      create_seller_online_payment_notification(order)
-      notify_admin_online_payment(order)
+      consume_coupon!(attempt)
+      mark_attempt_processed!(attempt, order_ids: orders.map(&:id), order_numbers: orders.map(&:order_number))
 
-      attempt.update!(
-        status: "processed",
-        processed_at: Time.current,
-        result_payload: attempt.result_payload.merge(
-          "b2b_order_id" => order.id,
-          "b2b_order_status" => order.status
-        )
-      )
+      Result.new(orders: orders, b2b_order: nil)
+    end
+  end
+
+  def process_b2b_order!(attempt)
+    metadata = attempt.result_payload.fetch("request_metadata", {}).stringify_keys
+    request_order = B2bOrder.find_by(id: metadata["request_order_id"])
+    
+    raise StandardError, "Accepted B2B request not found" if request_order.blank?
+
+    if request_order.is_direct_buy? && request_order.source_type == "WholesalerPost"
+      return process_wholesaler_direct_order!(request_order, attempt)
     end
 
-    Result.new(orders: [], b2b_order: order)
+    order = B2bOrderCreationService.new(
+      request_order: request_order,
+      payment_method: "online",
+      payment_status: "paid",
+      buyer_payment_attempt: attempt
+    ).call
+
+    send_b2b_notifications(order)
+
+    order
+  end
+
+  def process_wholesaler_direct_order!(order, attempt)
+    order.update!(
+      payment_method: "online",
+      payment_status: "paid",
+      payment_confirmed_at: Time.current,
+      buyer_payment_attempt: attempt
+    )
+
+    send_order_request_to_seller(order)
+    
+    order
+  end
+
+  def process_retail_orders!(order_ids, attempt)
+    orders = []
+
+    Order.where(id: order_ids).find_each do |order|
+      order.update!(
+        payment_status: "paid",
+        status: "processing",
+        payment_reference: attempt.payment_reference,
+        payment_confirmed_at: Time.current,
+        paid_at: Time.current
+      )
+
+      OrderNotificationJob.perform_later(order.id, "placed", attempt.buyer_type, attempt.buyer_id)
+      OrderNotificationJob.perform_later(order.id, "payment_paid", attempt.buyer_type, attempt.buyer_id)
+
+      orders << order
+    end
+
+    orders
+  end
+
+  def find_existing_b2b_order(attempt)
+    B2bOrder.find_by(buyer_payment_attempt_id: attempt.id, request_status: nil)
+  end
+
+  def find_attempt
+    @attempt ||= PaymentAttempt.lock.find(@payment_attempt.id)
+  end
+
+  def load_orders(attempt)
+    ids = Array(attempt.result_payload["order_ids"])
+    Order.where(id: ids).order(:id)
+  end
+
+  def checkout_context
+    @payment_attempt.result_payload.fetch("checkout_context", "retail_order")
+  end
+
+  def mark_attempt_processed!(attempt, b2b_order: nil, order_ids: [], order_numbers: [])
+    payload = attempt.result_payload.dup || {}
+
+    if b2b_order.present?
+      payload["b2b_order_id"] = b2b_order.id
+      payload["b2b_order_status"] = b2b_order.status
+    end
+
+    if order_ids.any?
+      payload["order_ids"] = order_ids
+      payload["order_numbers"] = order_numbers
+    end
+
+    attempt.update!(
+      status: "processed",
+      processed_at: Time.current,
+      result_payload: payload
+    )
+  end
+
+  def consume_coupon!(attempt)
+    return if attempt.coupon_code.blank?
+    coupon = Coupon.find_by(code: attempt.coupon_code)
+    coupon&.consume_for!(attempt.buyer)
+  end
+
+  def send_b2b_notifications(order)
+    send_order_accept_to_seller(order)
+    send_payment_success_to_buyer(order)
+    create_buyer_online_payment_notification(order)
+    create_seller_online_payment_notification(order)
+    notify_admin_online_payment(order)
   end
 
   def send_order_request_to_seller(order)
     return unless order.is_direct_buy? && order.source_type == "WholesalerPost"
+
     offer = order.b2b_order_offers.find_by(dealer: order.seller_dealer, status: "open")
     return unless offer
     
@@ -149,37 +201,24 @@ class PaymentAttemptFinalizationService
     buyer = order.buyer_dealer
     variant = item.product_variant
     product = variant&.product
-
-    buyer_location = buyer&.dealer_location
-    seller_location = seller&.dealer_location
+    wholesaler_post = item.wholesaler_post
 
     delivery_location = get_location(seller)
-    approx_distance = if buyer_location.present? && seller_location.present? &&
-                      buyer_location.latitude.present? && buyer_location.longitude.present? &&
-                      seller_location.latitude.present? && seller_location.longitude.present?
-    DealerLocation.distance_km(
-      buyer_location.latitude.to_f,
-      buyer_location.longitude.to_f,
-      seller_location.latitude.to_f,
-      seller_location.longitude.to_f
-    ).round(2).to_s
-    else
-      "0"
-    end
+    approx_distance = calculate_distance(buyer, seller)
 
     base_url = ENV["FRONTEND_URL"] || "https://salespoints.in"
     accept_url = "#{base_url}/b2b/accept/#{offer.accept_token}"
     reject_url = "#{base_url}/b2b/reject/#{offer.reject_token}"
-    image_url = get_product_image(product, variant)
+    image_url = get_product_image(product, variant, wholesaler_post)
 
     accept_token = offer.accept_token
     reject_token = offer.reject_token
 
     MetaWhatsappCloudService.new.send_dealer_order_request(
       to: formatted_phone_for(seller),
-      product: product&.name || "Product",
-      variant: variant&.variant_sku || "Standard",
-      sku: product&.sku || "N/A",
+      product: product&.name || wholesaler_post&.title || "Product",
+      variant: variant&.variant_sku || wholesaler_post&.title || "Standard",
+      sku: product&.sku || wholesaler_post&.modal_no || "N/A",
       price: item.unit_price.to_f.round(2).to_s,
       quantity: item.quantity.to_s,
       total_amount: item.total_price.to_f.round(2).to_s,
@@ -217,25 +256,18 @@ class PaymentAttemptFinalizationService
 
   def send_payment_success_to_buyer(order)
     buyer = order.buyer_dealer
-    seller = order.seller_dealer
     items = order.b2b_order_items.accepted_items
     first_item = items.first
     variant = first_item&.product_variant
     product = variant&.product
-    
-    product_name = product&.name || "Product"
-    variant_name = variant&.variant_sku || "Standard"
-    unit_price = first_item&.unit_price || 0
-    quantity = items.sum(&:quantity)
-    total_amount = order.total_amount
 
     MetaWhatsappCloudService.new.send_payment_success(
       to: formatted_phone_for(buyer),
-      product: product_name,
-      variant: variant_name,
-      quantity: quantity.to_s,
-      unit_price: unit_price.to_f.round(2).to_s,
-      total_paid: total_amount.to_f.round(2).to_s,
+      product: product&.name || "Product",
+      variant: variant&.variant_sku || "Standard",
+      quantity: items.sum(&:quantity),
+      unit_price: first_item&.unit_price.to_f.round(2).to_s || 0,
+      total_paid: order.total_amount.to_f.round(2).to_s,
       payment_id: order.payment_method.to_s.upcase,
       order_id: order.reference_number
     )
@@ -347,15 +379,6 @@ class PaymentAttemptFinalizationService
     end
   end
 
-  def get_address(dealer)
-    return "Address not available" if dealer.blank?
-
-    profile = dealer.dealer_profile
-    return "Address not available" if profile.blank?
-
-    profile.business_address.presence || "Address not available"
-  end
-
   def get_location(dealer)
     return "Location not available" if dealer.blank?
     address = dealer.dealer_profile&.business_address
@@ -372,7 +395,12 @@ class PaymentAttemptFinalizationService
     "Location not available"
   end
 
-  def get_product_image(product, variant)
+  def get_product_image(product, variant, wholesaler_post = nil)
+    if wholesaler_post.present? && wholesaler_post.media.attached?
+      attachment = wholesaler_post.media.first
+      return rails_blob_url(attachment, only_path: false) if attachment.present?
+    end
+
     if variant.present? && variant.media.attached?
       attachment = variant.media.first
       return rails_blob_url(attachment, only_path: false) if attachment.present?
@@ -384,26 +412,29 @@ class PaymentAttemptFinalizationService
     "#{ENV['FRONTEND_URL']}/images/ac.png"
   end
 
+  def calculate_distance(buyer, seller)
+    buyer_location = buyer&.dealer_location
+    seller_location = seller&.dealer_location
+
+    if buyer_location.present? && seller_location.present? &&
+       buyer_location.latitude.present? && buyer_location.longitude.present? &&
+       seller_location.latitude.present? && seller_location.longitude.present?
+      
+      DealerLocation.distance_km(
+        buyer_location.latitude.to_f,
+        buyer_location.longitude.to_f,
+        seller_location.latitude.to_f,
+        seller_location.longitude.to_f
+      ).round(2).to_s
+    else
+      "0"
+    end
+  end
+
   def formatted_phone_for(dealer)
     return nil if dealer.phone.blank?
 
     cc = dealer.country_code.presence || "+91"
     "#{cc}#{dealer.phone}".gsub(/\s+/, "")
-  end
-
-  def load_orders(attempt)
-    ids = Array(attempt.result_payload["order_ids"])
-    Order.where(id: ids).order(:id)
-  end
-
-  def consume_coupon!(attempt)
-    return if attempt.coupon_code.blank?
-
-    coupon = Coupon.find_by(code: attempt.coupon_code)
-    coupon&.consume_for!(attempt.buyer)
-  end
-
-  def checkout_context
-    @payment_attempt.result_payload.fetch("checkout_context", "retail_order")
   end
 end
