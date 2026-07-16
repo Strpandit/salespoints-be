@@ -211,7 +211,7 @@ module Api
       if order.is_direct_buy? && order.source_type == "WholesalerPost"
         order.status.in?(%w[pending_request pending_payment])
       else
-        order.status == "pending_request"
+        order.status.in?(%w[pending_request pending_payment])
       end
     end
 
