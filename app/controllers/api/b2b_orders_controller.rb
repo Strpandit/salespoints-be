@@ -119,7 +119,7 @@ module Api
         }, status: :ok
       end
 
-      unless order.pending_payment?
+      unless order.pending_request?
         return render json: { 
           error: "Order is not ready for payment. Current status: #{order.status}",
           current_status: order.status
