@@ -10,12 +10,10 @@ module Api
         when "incoming"
           incoming_order_scope
         when "accepted"
-          B2bOrder.joins(b2b_order_items: :dealer_product)
-                  .where(dealer_products: { dealer_id: current_dealer.id })
-                  .where("b2b_orders.request_status = ? OR (b2b_orders.request_status IS NULL AND b2b_orders.status IN (?))", "accepted_request", %w[paid confirmed shipped delivered])
-                  .includes(:buyer_dealer, :seller_dealer, b2b_order_items: { dealer_product: :dealer })
-                  .distinct
-                  .order(created_at: :desc)
+          current_dealer.seller_b2b_orders
+                        .where("request_status = ? OR (request_status IS NULL AND status IN (?))", "accepted_request", %w[paid confirmed shipped delivered])
+                        .includes(:buyer_dealer, :seller_dealer, b2b_order_items: { dealer_product: :dealer })
+                        .order(created_at: :desc)
         else
           current_dealer.buyer_b2b_orders
                         .where("request_status IS NULL OR status IN (?)", %w[pending_request pending_payment paid confirmed shipped delivered])
@@ -193,17 +191,17 @@ module Api
                              .includes(b2b_order: [:buyer_dealer, :seller_dealer, { b2b_order_items: { dealer_product: :dealer } }])
                              .order(created_at: :desc)
 
-      deduped = {}
+      orders = {}
 
       offers.each do |offer|
         order = offer.b2b_order
         visible_ids = offer.item_id_values
         visible_items = order.b2b_order_items.select { |item| visible_ids.include?(item.id) }
         order.define_singleton_method(:b2b_order_items) { visible_items }
-        deduped[order.id] ||= order
+        orders[order.id] ||= order
       end
 
-      deduped.values
+      orders.values.sort_by(&:created_at).reverse
     end
 
     def acceptable_order?(order)

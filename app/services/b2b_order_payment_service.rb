@@ -71,19 +71,18 @@ class B2bOrderPaymentService
     first_item = items.first
     variant = first_item&.product_variant
     product = variant&.product
+    wholesaler_post = first_item.wholesaler_post
     
-    product_name = product&.name || "Product"
-    variant_name = variant&.variant_sku || "Standard"
-    unit_price = first_item&.unit_price || 0
+    unit_price = first_item&.unit_price
     quantity = items.sum(&:quantity)
     total_amount = order.total_amount
 
     MetaWhatsappCloudService.new.send_payment_success(
       to: formatted_phone_for(buyer),
-      product: product_name,
-      variant: variant_name,
-      quantity: quantity.to_s,
-      unit_price: unit_price.to_f.round(2).to_s,
+      product: product&.name || wholesaler_post&.title || "Product",
+      variant: variant&.variant_sku || wholesaler_post&.modal_no || "Standard",
+      quantity: quantity.to_s || 1,
+      unit_price: unit_price.to_f.round(2).to_s || wholesaler_post&.price.to_f.round(2).to_s || 0,
       total_paid: total_amount.to_f.round(2).to_s,
       payment_id: order.payment_method.to_s.upcase,
       order_id: order.reference_number

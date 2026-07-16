@@ -404,7 +404,7 @@ module Api
         rejection_reason: post.rejection_reason,
         reviewed_at: post.reviewed_at,
         visible_until: post.visible_until,
-        is_expired: !post.visible_to_others?,
+        is_expired: post.is_expired?,
         is_owner: current_dealer.present? && post.dealer_id == current_dealer.id,
         can_reupload: post.can_reupload?,
         dealer_id: post.dealer_id,
