@@ -73,7 +73,8 @@ class MetaWhatsappWebhookService
       return
     end
 
-    handle_accept(offer, offer.b2b_order, offer.dealer, from)
+    order = get_order_from_offer(offer)
+    handle_accept(offer, order, offer.dealer, from)
   end
 
   def process_text_reject(from)
@@ -89,20 +90,33 @@ class MetaWhatsappWebhookService
       return
     end
 
-    handle_reject(offer, offer.b2b_order, offer.dealer, from)
+    order = get_order_from_offer(offer)
+    handle_reject(offer, order, offer.dealer, from)
   end
 
   def find_latest_open_offer_for_phone(from)
     dealer = find_dealer_by_phone(from)
     return nil if dealer.nil?
 
-    B2bOrderOffer
-      .includes(:b2b_order)
+    offer = OrderOffer
+      .includes(:order)
       .where(dealer_id: dealer.id, status: "open")
-      .where("b2b_orders.expires_at > ?", Time.current)
-      .references(:b2b_order)
+      .where("orders.expires_at > ?", Time.current)
+      .references(:order)
       .order(created_at: :desc)
       .first
+
+    if offer.nil?
+      offer = B2bOrderOffer
+        .includes(:b2b_order)
+        .where(dealer_id: dealer.id, status: "open")
+        .where("b2b_orders.expires_at > ?", Time.current)
+        .references(:b2b_order)
+        .order(created_at: :desc)
+        .first
+    end
+
+    offer
   end
 
   def find_dealer_by_phone(from)
@@ -113,8 +127,13 @@ class MetaWhatsappWebhookService
   end
 
   def process_button_reply(button_id:, from:)
-    offer = B2bOrderOffer.order(created_at: :desc).find_by(accept_token: button_id) ||
-            B2bOrderOffer.order(created_at: :desc).find_by(reject_token: button_id)
+    offer = OrderOffer.order(created_at: :desc).find_by(accept_token: button_id) ||
+            OrderOffer.order(created_at: :desc).find_by(reject_token: button_id)
+
+    if offer.nil?
+      offer = B2bOrderOffer.order(created_at: :desc).find_by(accept_token: button_id) ||
+              B2bOrderOffer.order(created_at: :desc).find_by(reject_token: button_id)
+    end
 
     unless offer
       send_text_acknowledgement(to: from, message: "This request is invalid or expired.")
@@ -122,7 +141,7 @@ class MetaWhatsappWebhookService
     end
 
     dealer = offer.dealer
-    order = offer.b2b_order
+    order = get_order_from_offer(offer)
 
     unless sender_matches_dealer?(from: from, dealer: dealer)
       send_text_acknowledgement(to: from, message: "Your WhatsApp number is not authorized.")
@@ -153,22 +172,27 @@ class MetaWhatsappWebhookService
     return false if offer.nil?
     return false unless offer.open?
     return false if offer.expired?
-    return false if offer.b2b_order.accepted? if offer.b2b_order.respond_to?(:accepted?)
     
-    order = offer.b2b_order
-
-    if order.is_a?(Order)
+    if offer.is_a?(OrderOffer)
+      order = offer.order
+      return false unless order.is_a?(Order)
       return false unless order.status == "pending"
       return false if order.seller_dealer_id.present?
       return false if order.expires_at.present? && Time.current > order.expires_at
+      return false unless order.payment_status == "paid"
       return true
     end
 
-    return false if order.expired? if order.respond_to?(:expired?)
-    return false unless order.request_status == "pending_request"
-    return false unless order.status.in?(["pending_request", "pending_payment"])
-    
-    true
+    if offer.is_a?(B2bOrderOffer)
+      order = offer.b2b_order
+      return false if order.expired? if order.respond_to?(:expired?)
+      return false if order.accepted? if order.respond_to?(:accepted?)
+      return false unless order.request_status == "pending_request"
+      return false unless order.status.in?(["pending_request", "pending_payment"])
+      return true
+    end
+
+    false
   end
 
   def handle_accept(offer, order, dealer, from)
@@ -228,7 +252,11 @@ class MetaWhatsappWebhookService
           payload: status_entry
         )
 
-        offer = B2bOrderOffer.find_by(whatsapp_message_id: message_id)
+        offer = OrderOffer.find_by(whatsapp_message_id: message_id)
+
+        if offer.nil?
+          offer = B2bOrderOffer.find_by(whatsapp_message_id: message_id)
+        end
         next unless offer
 
         event.update!(b2b_order_offer: offer)
@@ -256,12 +284,13 @@ class MetaWhatsappWebhookService
   end
 
   def create_webhook_event(offer, from, action)
+    order = get_order_from_offer(offer)
     WhatsappWebhookEvent.create!(
       provider: "meta",
       event_type: "button_reply",
       event_key: "reply:#{SecureRandom.uuid}",
       direction: "inbound",
-      b2b_order_offer: offer,
+      # b2b_order_offer: offer,
       notification: offer.notification,
       from_number: from,
       status: action,
@@ -272,8 +301,10 @@ class MetaWhatsappWebhookService
         action: action,
         order_id: offer.b2b_order&.reference_number,
         dealer_id: offer.dealer&.id,
-        order_type: offer.b2b_order&.source_type,
-        is_wholesaler: offer.b2b_order&.is_direct_buy? && offer.b2b_order&.source_type == "WholesalerPost"
+        order_type: order.is_a?(Order) ? "b2c" : (order.is_direct_buy? && order.source_type == "WholesalerPost" ? "wholesaler" : "b2b"),
+        order_id: order.is_a?(Order) ? order.order_number : order.reference_number,
+        offer_type: offer.class.name,
+        is_wholesaler: order.is_a?(B2bOrder) && order.is_direct_buy? && order.source_type == "WholesalerPost"
       }
     )
   end
@@ -283,6 +314,16 @@ class MetaWhatsappWebhookService
       to: normalized_e164_from_wa_id(to),
       body: message
     )
+  end
+
+  def get_order_from_offer(offer)
+    if offer.is_a?(OrderOffer)
+      offer.order
+    elsif offer.is_a?(B2bOrderOffer)
+      offer.b2b_order
+    else
+      raise StandardError, "Unknown offer type"
+    end
   end
 
   def normalized_e164_from_wa_id(wa_id)

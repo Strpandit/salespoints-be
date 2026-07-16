@@ -71,12 +71,10 @@ class DirectBuyNowService
         payment_data = create_online_payment(order)
       end
 
-      B2bOrderBroadcastService.new(
+      B2cOrderBroadcastService.new(
         order: order,
-        actor: @buyer,
-        current_radius: 10,
-        is_b2c: true
-      ).initial_broadcast!
+        actor: @buyer
+      ).broadcast!
 
       ExpireB2cOrderJob.set(wait: 4.hours).perform_later(order.id)
 

@@ -20,17 +20,14 @@ class B2bOrderBroadcastService
 
     return if @order.expired? if @order.respond_to?(:expired?)
     return if @order.accepted? if @order.respond_to?(:accepted?)
-    return if @order.status.in?(["processing", "cancelled", "delivered"]) if @order.is_a?(Order)
 
     @current_radius += INCREMENT_PER_MINUTE
 
-    if @order.respond_to?(:update!)
-      @order.update!(
-        current_broadcast_radius: @current_radius,
-        last_rebroadcast_at: Time.current,
-        broadcast_attempts: @order.broadcast_attempts + 1
-      )
-    end
+    @order.update!(
+      current_broadcast_radius: @current_radius,
+      last_rebroadcast_at: Time.current,
+      broadcast_attempts: @order.broadcast_attempts + 1
+    )
 
     broadcast!(is_initial: false)
 
@@ -40,20 +37,10 @@ class B2bOrderBroadcastService
   private
 
   def broadcast!(is_initial:)
-    items = if @order.is_a?(Order)
-      @order.order_items.includes(product_variant: :product).to_a
-    else
-      @order.b2b_order_items.open_items.includes(product_variant: :product).to_a
-    end
-
+    items = @order.b2b_order_items.open_items.includes(product_variant: :product).to_a
     return if items.empty?
 
-    eligible_dealers = if @order.is_a?(Order)
-      find_eligible_dealers_for_b2c(items)
-    else
-      find_eligible_dealers_for_b2b(items)
-    end
-
+    eligible_dealers = find_eligible_dealers(items)
     already_broadcasted = DealerBroadcastTracker.for_order(@order.id).pluck(:dealer_id)
     new_dealers = eligible_dealers.reject { |dealer, _| already_broadcasted.include?(dealer.id) }
 
@@ -95,42 +82,7 @@ class B2bOrderBroadcastService
     end
   end
 
-  def find_eligible_dealers_for_b2c(items)
-    pincode = if @order.is_a?(Order)
-      @order.shipping_address["postal_code"] || @order.billing_address["postal_code"]
-    else
-      nil
-    end
-
-    return {} if pincode.blank?
-
-    variant_ids = items.map(&:product_variant_id)
-
-    Dealer.active
-          .includes(:dealer_location, dealer_products: [:product_variant])
-          .where(dealer_products: {
-            product_variant_id: variant_ids,
-            sell_in_b2c: true,
-            is_active: true,
-            approve_status: "approved"
-          })
-          .where("dealer_products.stock_quantity > 0")
-          .where(pincode: pincode)
-          .each_with_object({}) do |dealer, matches|
-      next unless dealer.pincode == pincode
-      matched_items = items.select do |item|
-        dealer.dealer_products.any? do |dp|
-          dp.sellable_in_b2c? && 
-          dp.stock_quantity.to_i >= item.quantity.to_i && 
-          dp.product_variant_id == item.product_variant_id
-        end
-      end
-
-      matches[dealer] = matched_items if matched_items.any?
-    end
-  end
-
-  def find_eligible_dealers_for_b2b(items)
+  def find_eligible_dealers(items)
     buyer_lat = @order.latitude.to_f
     buyer_lng = @order.longitude.to_f
 
@@ -350,5 +302,4 @@ class B2bOrderBroadcastService
       }
     end
   end
-
 end

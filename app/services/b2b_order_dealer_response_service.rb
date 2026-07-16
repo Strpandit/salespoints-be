@@ -1,4 +1,6 @@
 class B2bOrderDealerResponseService
+  include Rails.application.routes.url_helpers
+
   def initialize(order:, dealer:, requested_ids: nil, offer: nil)
     @order = order
     @dealer = dealer
@@ -8,28 +10,36 @@ class B2bOrderDealerResponseService
 
   def accept!
     ActiveRecord::Base.transaction do
-      lock_order = @order.is_a?(Order) ? Order.lock.find(@order.id) : B2bOrder.lock.find(@order.id)
-
-      if lock_order.is_a?(Order)
+      if @order.is_a?(Order)
+        lock_order = Order.lock.find(@order.id)
         accept_b2c_order!(lock_order)
-      elsif  lock_order.is_direct_buy?
-        accept_direct_buy!(lock_order)
+      elsif @order.is_a?(B2bOrder)
+        lock_order = B2bOrder.lock.find(@order.id)
+        if lock_order.is_direct_buy?
+          accept_direct_buy!(lock_order)
+        else
+          accept_b2b_broadcast!(lock_order)
+        end
       else
-        accept_b2b_broadcast!(lock_order)
+        raise StandardError, "Invalid order type"
       end
     end
   end
 
   def reject!
     ActiveRecord::Base.transaction do
-      lock_order = @order.is_a?(Order) ? Order.lock.find(@order.id) : B2bOrder.lock.find(@order.id)
-
-      if lock_order.is_a?(Order)
+      if @order.is_a?(Order)
+        lock_order = Order.lock.find(@order.id)
         reject_b2c_order!(lock_order)
-      elsif lock_order.is_direct_buy?
-        reject_direct_buy!(lock_order)
+      elsif @order.is_a?(B2bOrder)
+        lock_order = B2bOrder.lock.find(@order.id)
+        if lock_order.is_direct_buy?
+          reject_direct_buy!(lock_order)
+        else
+          reject_b2b_broadcast!(lock_order)
+        end
       else
-        reject_b2b_broadcast!(lock_order)
+        raise StandardError, "Invalid order type"
       end
     end
   end
@@ -52,7 +62,7 @@ class B2bOrderDealerResponseService
     )
 
     offer.update!(status: "accepted", responded_at: Time.current, whatsapp_status: "replied")
-    close_other_offers!(order)
+    close_other_b2c_offers!(order)
 
     send_b2c_order_accept_to_seller(order)
     send_b2c_payment_success_to_buyer(order)
@@ -67,8 +77,11 @@ class B2bOrderDealerResponseService
 
     offer.update!(status: "rejected", responded_at: Time.current, whatsapp_status: "replied")
 
-    total_offers = order.b2b_order_offers.count
-    rejected_offers = order.b2b_order_offers.where(status: "rejected").count
+    tracker = OrderBroadcastTracker.find_by(order: order, dealer: @dealer)
+    tracker&.update!(status: "rejected")
+
+    total_offers = order.order_offers.count
+    rejected_offers = order.order_offers.where(status: "rejected").count
 
     if total_offers > 0 && total_offers == rejected_offers
       order.update!(
@@ -81,11 +94,13 @@ class B2bOrderDealerResponseService
   end
 
   def lock_b2c_request_offer!(order:)
-    offer = @offer.present? ? B2bOrderOffer.lock.find(@offer.id) :
-            B2bOrderOffer.lock.find_by(b2b_order: order, dealer: @dealer, status: "open")
+    offer = @offer.present? ? OrderOffer.lock.find(@offer.id) :
+            OrderOffer.lock.find_by(order: order, dealer: @dealer, status: "open")
+    
     raise StandardError, "You are not authorized to respond" unless offer
     raise StandardError, "This request has already been closed" unless offer.status == "open"
     raise StandardError, "This request has expired" if offer.expired?
+    
     offer
   end
 
@@ -103,6 +118,7 @@ class B2bOrderDealerResponseService
       approve_status: "approved",
       sell_in_b2c: true
     )
+    
     raise StandardError, "You don't have enough stock for this item" unless dealer_product
     raise StandardError, "Insufficient stock" if dealer_product.stock_quantity < item.quantity
 
@@ -110,6 +126,21 @@ class B2bOrderDealerResponseService
       stock_quantity: dealer_product.stock_quantity - item.quantity
     )
     item.update!(dealer_product_id: dealer_product.id)
+  end
+
+  def close_other_b2c_offers!(order)
+    order.order_offers
+         .where.not(id: @offer&.id || 0)
+         .where(status: "open")
+         .update_all(
+           status: "cancelled",
+           responded_at: Time.current
+         )
+    
+    order.order_broadcast_trackers
+         .where.not(dealer_id: @dealer.id)
+         .where(status: "pending")
+         .update_all(status: "expired")
   end
 
   def send_b2c_order_accept_to_seller(order)
@@ -142,7 +173,7 @@ class B2bOrderDealerResponseService
     MetaWhatsappCloudService.new.send_payment_success(
       to: formatted_phone_for(buyer),
       product: product&.name || "Product",
-      variant: variant&.variant_attributes || variant&.variant_sku || "Standard",
+      variant: variant&.variant_sku || "Standard",
       quantity: items.sum(&:quantity).to_s,
       unit_price: first_item&.unit_price.to_f.round(2).to_s,
       total_paid: order.total_amount.to_f.round(2).to_s,
@@ -246,7 +277,7 @@ class B2bOrderDealerResponseService
     order.recalculate_totals!
 
     DealerBroadcastTracker.for_order(order.id).update_all(status: "accepted")
-    close_other_offers!(order)
+    close_other_b2b_offers!(order)
 
     offer.update!(status: "accepted", responded_at: Time.current, whatsapp_status: "replied")
 
@@ -277,7 +308,7 @@ class B2bOrderDealerResponseService
     tracker = DealerBroadcastTracker.find_by(b2b_order: order, dealer: @dealer)
     tracker&.update!(status: "rejected")
 
-    close_other_offers!(order)
+    close_other_b2b_offers!(order)
 
     notify_buyer_of_rejection(order)
     create_buyer_notification(order, "rejected")
@@ -300,7 +331,7 @@ class B2bOrderDealerResponseService
     raise StandardError, "Order is not in pending request" unless order.pending_request?
 
     order.b2b_order_items.each do |item|
-      deduct_stock!(item)
+      deduct_b2b_stock!(item)
     end
 
     order.update!(
@@ -310,7 +341,7 @@ class B2bOrderDealerResponseService
     )
 
     offer.update!(status: "accepted", responded_at: Time.current, whatsapp_status: "replied")
-    close_other_offers!(order)
+    close_other_b2b_offers!(order)
 
     send_order_accept_to_seller(order)
     send_payment_success_to_buyer(order)
@@ -397,7 +428,7 @@ class B2bOrderDealerResponseService
     resolved
   end
 
-  def close_other_offers!(order)
+  def close_other_b2b_offers!(order)
     order.b2b_order_offers
          .where.not(id: @offer&.id || 0)
          .where(status: "open")
@@ -632,7 +663,7 @@ class B2bOrderDealerResponseService
     "#{cc}#{dealer.phone}".gsub(/\s+/, "")
   end
 
-  def deduct_stock!(item)
+  def deduct_b2b_stock!(item)
     if item.wholesaler_post_id.present?
       wholesaler_post = WholesalerPost.lock.find(item.wholesaler_post_id)
       if wholesaler_post.stock_quantity.to_i < item.quantity.to_i

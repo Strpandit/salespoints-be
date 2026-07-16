@@ -15,10 +15,14 @@ class ExpireB2cOrderJob < ApplicationJob
       cancelled_at: Time.current
     )
 
-    order.b2b_order_offers.open_state.update_all(
+    order.order_offers.open_state.update_all(
       status: "expired",
       responded_at: Time.current,
       whatsapp_status: "replied"
+    )
+
+    order.order_broadcast_trackers.pending.update_all(
+      status: "expired"
     )
 
     NotificationService.deliver(

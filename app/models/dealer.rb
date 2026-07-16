@@ -26,6 +26,10 @@ class Dealer < ApplicationRecord
   has_many :dealer_broadcast_trackers, dependent: :destroy
   belongs_to :deleted_by, class_name: "AdminUser", optional: true
 
+  has_many :order_broadcast_trackers, dependent: :destroy
+  has_many :order_offers, dependent: :destroy
+  has_many :sales_orders, class_name: "Order", foreign_key: :seller_dealer_id, dependent: :nullify
+
   accepts_nested_attributes_for :dealer_profile, reject_if: :all_blank
   accepts_nested_attributes_for :dealer_location, reject_if: :all_blank
 

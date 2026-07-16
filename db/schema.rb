@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_07_15_140904) do
+ActiveRecord::Schema[8.0].define(version: 2026_07_16_110252) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -556,6 +556,22 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_15_140904) do
     t.index ["receiver_type", "receiver_id"], name: "index_notifications_on_receiver"
   end
 
+  create_table "order_broadcast_trackers", force: :cascade do |t|
+    t.bigint "order_id", null: false
+    t.bigint "dealer_id", null: false
+    t.integer "broadcast_radius_km", default: 5
+    t.integer "attempt_count", default: 1
+    t.string "status", default: "pending"
+    t.datetime "last_broadcast_at"
+    t.datetime "expires_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["dealer_id"], name: "index_order_broadcast_trackers_on_dealer_id"
+    t.index ["order_id", "dealer_id"], name: "idx_order_broadcast_trackers_order_dealer", unique: true
+    t.index ["order_id", "status"], name: "idx_order_broadcast_trackers_order_status"
+    t.index ["order_id"], name: "index_order_broadcast_trackers_on_order_id"
+  end
+
   create_table "order_items", force: :cascade do |t|
     t.bigint "order_id", null: false
     t.bigint "product_variant_id", null: false
@@ -566,6 +582,41 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_15_140904) do
     t.datetime "updated_at", null: false
     t.index ["order_id"], name: "index_order_items_on_order_id"
     t.index ["product_variant_id"], name: "index_order_items_on_product_variant_id"
+  end
+
+  create_table "order_offers", force: :cascade do |t|
+    t.bigint "order_id", null: false
+    t.bigint "dealer_id", null: false
+    t.bigint "notification_id", null: false
+    t.string "status", default: "open", null: false
+    t.string "whatsapp_status", default: "pending", null: false
+    t.string "accept_token", null: false
+    t.string "reject_token", null: false
+    t.jsonb "item_ids", default: {}, null: false
+    t.string "delivery_channel", default: "whatsapp", null: false
+    t.jsonb "delivery_payload", default: {}, null: false
+    t.string "recipient_phone"
+    t.string "whatsapp_message_id"
+    t.string "whatsapp_status_reason"
+    t.datetime "whatsapp_status_updated_at"
+    t.datetime "sent_at"
+    t.datetime "delivered_at"
+    t.datetime "read_at"
+    t.datetime "failed_at"
+    t.datetime "responded_at"
+    t.datetime "expires_at"
+    t.integer "rebroadcast_count", default: 0, null: false
+    t.text "failure_reason"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["accept_token"], name: "index_order_offers_on_accept_token", unique: true
+    t.index ["dealer_id"], name: "index_order_offers_on_dealer_id"
+    t.index ["notification_id"], name: "index_order_offers_on_notification_id"
+    t.index ["order_id", "dealer_id"], name: "index_order_offers_on_order_id_and_dealer_id"
+    t.index ["order_id"], name: "index_order_offers_on_order_id"
+    t.index ["reject_token"], name: "index_order_offers_on_reject_token", unique: true
+    t.index ["status"], name: "index_order_offers_on_status"
+    t.index ["whatsapp_status"], name: "index_order_offers_on_whatsapp_status"
   end
 
   create_table "orders", force: :cascade do |t|
@@ -856,11 +907,13 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_15_140904) do
     t.text "error_message"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.bigint "order_offer_id"
     t.index ["b2b_order_offer_id"], name: "index_whatsapp_webhook_events_on_b2b_order_offer_id"
     t.index ["event_key"], name: "index_whatsapp_webhook_events_on_event_key", unique: true
     t.index ["event_type"], name: "index_whatsapp_webhook_events_on_event_type"
     t.index ["message_id"], name: "index_whatsapp_webhook_events_on_message_id"
     t.index ["notification_id"], name: "index_whatsapp_webhook_events_on_notification_id"
+    t.index ["order_offer_id"], name: "index_whatsapp_webhook_events_on_order_offer_id"
     t.index ["status"], name: "index_whatsapp_webhook_events_on_status"
   end
 
@@ -939,8 +992,13 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_15_140904) do
   add_foreign_key "dealer_profiles", "dealers"
   add_foreign_key "dealers", "admin_users", column: "deleted_by_id"
   add_foreign_key "deletion_requests", "admin_users", column: "reviewed_by_admin_id"
+  add_foreign_key "order_broadcast_trackers", "dealers"
+  add_foreign_key "order_broadcast_trackers", "orders"
   add_foreign_key "order_items", "orders"
   add_foreign_key "order_items", "product_variants"
+  add_foreign_key "order_offers", "dealers"
+  add_foreign_key "order_offers", "notifications"
+  add_foreign_key "order_offers", "orders"
   add_foreign_key "orders", "dealers", column: "seller_dealer_id"
   add_foreign_key "product_specifications", "products"
   add_foreign_key "product_variants", "products"
@@ -961,6 +1019,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_15_140904) do
   add_foreign_key "ticket_messages", "support_tickets"
   add_foreign_key "whatsapp_webhook_events", "b2b_order_offers"
   add_foreign_key "whatsapp_webhook_events", "notifications"
+  add_foreign_key "whatsapp_webhook_events", "order_offers"
   add_foreign_key "wholesaler_post_ratings", "dealers"
   add_foreign_key "wholesaler_post_ratings", "wholesaler_posts"
   add_foreign_key "wholesaler_posts", "admin_users", column: "reviewed_by_admin_id"

@@ -6,6 +6,8 @@ class Order < ApplicationRecord
   has_many :return_requests, dependent: :destroy
   has_many :dealer_ledger_entries, dependent: :nullify
   has_one :delivery_confirmation, as: :deliverable, dependent: :destroy
+  has_many :order_offers, dependent: :destroy
+  has_many :order_broadcast_trackers, dependent: :destroy
 
   enum :status, {
     pending: "pending",
@@ -120,6 +122,10 @@ class Order < ApplicationRecord
 
   def active_return_request?
     return_requests.where(status: ReturnRequest::ACTIVE_STATUSES).exists?
+  end
+
+  def expired?
+    expires_at.present? && expires_at <= Time.current
   end
 
   private
