@@ -185,7 +185,8 @@ class MetaWhatsappCloudService
     send_template_message(
       to: to,
       template_name: TEMPLATE_DELIVERY_VERIFICATION_OTP,
-      components: components
+      components: components,
+      language: "en_US"
     )
   end
 
