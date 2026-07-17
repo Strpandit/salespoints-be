@@ -179,6 +179,11 @@ class MetaWhatsappCloudService
         parameters: [
           { type: "text", text: otp.to_s }
         ]
+      },
+      {
+        type: "button",
+        sub_type: "copy_code",
+        index: 0
       }
     ]
 
