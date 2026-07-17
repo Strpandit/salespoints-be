@@ -41,6 +41,7 @@ class Order < ApplicationRecord
 
   before_validation :assign_order_number, on: :create
   before_validation :set_placed_at, on: :create
+  after_create :broadcast_order_to_dealers
 
   scope :recent, -> { order(created_at: :desc) }
   scope :pending_b2c, -> { where(status: "pending", seller_dealer_id: nil) }
@@ -152,6 +153,12 @@ class Order < ApplicationRecord
                end
       
       "SPIN#{date_prefix}#{serial.to_s.rjust(6, '0')}"
+    end
+  end
+
+  def broadcast_order_to_dealers
+    if status == "pending" && seller_dealer_id.nil?
+      B2cOrderBroadcastService.new(order: self, actor: buyer).broadcast!
     end
   end
 

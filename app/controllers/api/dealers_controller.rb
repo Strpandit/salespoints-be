@@ -290,6 +290,30 @@ module Api
       }
     end
 
+    def nearby
+      lat = params[:lat].to_f
+      lng = params[:lng].to_f
+      radius = params[:radius].to_f || 10
+      limit = params[:limit].to_i || 20
+
+      if lat.zero? || lng.zero?
+        return render json: { error: "Latitude and longitude are required" }, status: :unprocessable_entity
+      end
+
+      results = Dealer.nearby(lat, lng, radius_km: radius, limit: limit)
+
+      render json: {
+        data: results,
+        meta: {
+          count: results.count,
+          radius: radius,
+          center: { latitude: lat, longitude: lng }
+        }
+      }, status: :ok
+    rescue => e
+      render json: { error: e.message }, status: :unprocessable_entity
+    end
+    
     private
 
     def dealer_params

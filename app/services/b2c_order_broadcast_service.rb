@@ -69,6 +69,11 @@ class B2cOrderBroadcastService
                               .where(pincode: pincode)
                               .distinct
 
+    return {} if potential_dealers.empty?
+
+    buyer_location = get_buyer_location
+    return {} if buyer_location.blank?
+
     matches = {}
 
     potential_dealers.each do |dealer|
@@ -76,24 +81,30 @@ class B2cOrderBroadcastService
       next unless location&.is_active?
       
       service_radius = location.service_radius_km.to_f
+
+      distance_info = location.driving_distance_to(
+        buyer_location[:latitude],
+        buyer_location[:longitude]
+      )
       
-      if service_radius > 0
-        buyer_location = get_buyer_location
-        next if buyer_location.blank?
-        
+      if distance_info.blank?
         distance = DealerLocation.distance_km(
           buyer_location[:latitude].to_f,
           buyer_location[:longitude].to_f,
           location.latitude.to_f,
           location.longitude.to_f
         )
+      else
+        distance = distance_info[:distance_km]
+      end
         
-        next if distance > service_radius
+      if service_radius > 0 && distance > service_radius
+        next
       end
 
       matched_items = items.select do |item|
         dealer.dealer_products.any? do |dp|
-          dp.sellable_in_b2c? && 
+          dp.sell_in_b2c? && 
           dp.stock_quantity.to_i >= item.quantity.to_i && 
           dp.product_variant_id == item.product_variant_id
         end

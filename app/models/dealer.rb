@@ -72,6 +72,44 @@ class Dealer < ApplicationRecord
     update!(otp_pin: nil, otp_sent_at: nil)
   end
 
+  def update_location_from_address!
+    return false if dealer_profile.blank? || dealer_profile.business_address.blank?
+
+    service = GoogleMapsService.instance
+    result = service.geocode(dealer_profile.business_address)
+    return false if result.blank?
+
+    if dealer_location.present?
+      dealer_location.update!(
+        latitude: result[:latitude],
+        longitude: result[:longitude]
+      )
+    else
+      create_dealer_location!(
+        latitude: result[:latitude],
+        longitude: result[:longitude],
+        service_radius_km: 5,
+        is_active: true
+      )
+    end
+    true
+  end
+
+  def driving_distance_from(lat, lng)
+    return nil if dealer_location.blank?
+    return nil if dealer_location.latitude.blank? || dealer_location.longitude.blank?
+
+    dealer_location.driving_distance_to(lat, lng)
+  end
+
+  def serves_location?(lat, lng)
+    return false if dealer_location.blank?
+    dealer_location.serves_location?(lat, lng)
+  end
+
+  def self.nearby(lat, lng, radius_km: 10, limit: 20)
+    DealerLocation.nearby_dealers(lat, lng, radius_km: radius_km, limit: limit)
+  end
   private
 
   def normalize_phone

@@ -70,12 +70,7 @@ class DirectBuyNowService
       if @payment_method == "online"
         payment_data = create_online_payment(order)
       end
-
-      B2cOrderBroadcastService.new(
-        order: order,
-        actor: @buyer
-      ).broadcast!
-
+      
       ExpireB2cOrderJob.set(wait: 4.hours).perform_later(order.id)
 
       create_buyer_waiting_notification(order)

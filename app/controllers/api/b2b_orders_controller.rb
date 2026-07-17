@@ -11,7 +11,7 @@ module Api
           incoming_order_scope
         when "accepted"
           current_dealer.seller_b2b_orders
-                        .final_orders
+                        .child_orders
                         .where("request_status = ? OR (request_status IS NULL AND status IN (?))", "accepted_request", %w[paid confirmed shipped delivered])
                         .includes(:buyer_dealer, :seller_dealer, b2b_order_items: { dealer_product: :dealer })
                         .order(created_at: :desc)
@@ -204,6 +204,7 @@ module Api
         order = offer.b2b_order
 
         next if order.request_status.present?
+        next if order.parent_request_order_id.present?
         
         visible_ids = offer.item_id_values
         visible_items = order.b2b_order_items.select { |item| visible_ids.include?(item.id) }

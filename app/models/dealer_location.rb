@@ -4,17 +4,52 @@ class DealerLocation < ApplicationRecord
   validates :latitude, :longitude, presence: true
   validates :service_radius_km, numericality: { greater_than: 0 }
 
-  def self.distance_km(lat1, lon1, lat2, lon2)
-    r = 6371.0
-    dlat = to_rad(lat2.to_f - lat1.to_f)
-    dlon = to_rad(lon2.to_f - lon1.to_f)
-    a = Math.sin(dlat / 2)**2 +
-        Math.cos(to_rad(lat1)) * Math.cos(to_rad(lat2)) * Math.sin(dlon / 2)**2
-    c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-    r * c
+  def self.distance_km(lat1, lng1, lat2, lng2)
+    Geocoder::Calculations.distance_between(
+      [lat1, lng1],
+      [lat2, lng2],
+      units: :km
+    )
   end
 
-  def self.to_rad(deg)
-    deg.to_f * Math::PI / 180.0
+  def driving_distance_to(lat, lng)
+    return nil if latitude.blank? || longitude.blank?
+
+    service = GoogleMapsService.instance
+    service.driving_distance(
+      latitude.to_f,
+      longitude.to_f,
+      lat.to_f,
+      lng.to_f
+    )
+  end
+
+  def serves_location?(lat, lng)
+    return false if latitude.blank? || longitude.blank?
+    return false if service_radius_km.blank? || service_radius_km <= 0
+
+    distance_info = driving_distance_to(lat, lng)
+    return false if distance_info.blank?
+
+    distance_info[:distance_km] <= service_radius_km.to_f
+  end
+
+  def self.nearby_dealers(lat, lng, radius_km: 10, limit: 20)
+    service = GoogleMapsService.instance
+    service.nearby_dealers(lat, lng, radius_km: radius_km, limit: limit)
+  end
+
+  def update_from_address(address)
+    return false if address.blank?
+
+    service = GoogleMapsService.instance
+    result = service.geocode(address)
+    return false if result.blank?
+
+    update!(
+      latitude: result[:latitude],
+      longitude: result[:longitude]
+    )
+    true
   end
 end
