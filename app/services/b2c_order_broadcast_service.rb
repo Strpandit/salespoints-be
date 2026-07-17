@@ -110,7 +110,6 @@ class B2cOrderBroadcastService
     
     if address.present?
       full_address = [
-        address["address_line1"],
         address["city"],
         address["state"],
         address["postal_code"]
@@ -132,7 +131,6 @@ class B2cOrderBroadcastService
       default_address = buyer.addresses.find_by(is_default: true)
       if default_address.present?
         full_address = [
-          default_address.address_line1,
           default_address.city,
           default_address.state,
           default_address.postal_code
@@ -233,7 +231,6 @@ class B2cOrderBroadcastService
   def get_location_from_address(address, buyer)
     if address.present?
       full_address = [
-        address["address_line1"],
         address["city"],
         address["state"],
         address["postal_code"]
@@ -255,7 +252,6 @@ class B2cOrderBroadcastService
       default_address = buyer.addresses.find_by(is_default: true)
       if default_address.present?
         full_address = [
-          default_address.address_line1,
           default_address.city,
           default_address.state,
           default_address.postal_code
