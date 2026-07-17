@@ -79,7 +79,7 @@ class B2bDirectOrderService
 
   def validate!
     raise StandardError, "Current location is required" if @latitude.zero? || @longitude.zero?
-    raise StandardError, "Invalid payment method" unless B2bOrder::PAYMENT_METHODS.include?(@payment_method)
+    # raise StandardError, "Invalid payment method" unless B2bOrder::PAYMENT_METHODS.include?(@payment_method)
   end
 
   def calculate_pricing(variant)

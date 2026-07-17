@@ -8,22 +8,27 @@ module Api
       orders =
         case view
         when "incoming"
-          incoming_order_scope.where(parent_request_order_id: nil)
+          incoming_order_scope
         when "accepted"
           current_dealer.seller_b2b_orders
-                        .where(parent_request_order_id: nil)
+                        .final_orders
                         .where("request_status = ? OR (request_status IS NULL AND status IN (?))", "accepted_request", %w[paid confirmed shipped delivered])
                         .includes(:buyer_dealer, :seller_dealer, b2b_order_items: { dealer_product: :dealer })
                         .order(created_at: :desc)
         else
           current_dealer.buyer_b2b_orders
-                        .where(parent_request_order_id: nil)
+                        .final_orders
                         .where("request_status IS NULL OR status IN (?)", %w[pending_request pending_payment paid confirmed shipped delivered])
                         .includes(:buyer_dealer, :seller_dealer, b2b_order_items: { dealer_product: :dealer })
                         .order(created_at: :desc)
         end
 
-      paginated = orders.respond_to?(:page) ? orders.page(params[:page]).per(params[:per_page] || 20) : Kaminari.paginate_array(orders).page(params[:page]).per(params[:per_page] || 20)
+      if orders.is_a?(Array)
+        paginated = Kaminari.paginate_array(orders).page(params[:page]).per(params[:per_page] || 20)
+      else
+        paginated = orders.page(params[:page]).per(params[:per_page] || 20)
+      end
+      
       render json: serialize_resource(paginated, B2bOrderSerializer, base_url: request.base_url).merge(
         meta: {
           current_page: paginated.current_page,
@@ -198,8 +203,8 @@ module Api
       offers.each do |offer|
         order = offer.b2b_order
 
-        next if order.parent_request_order_id.present?
-
+        next if order.request_status.present?
+        
         visible_ids = offer.item_id_values
         visible_items = order.b2b_order_items.select { |item| visible_ids.include?(item.id) }
         order.define_singleton_method(:b2b_order_items) { visible_items }

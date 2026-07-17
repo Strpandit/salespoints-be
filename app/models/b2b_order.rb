@@ -28,6 +28,7 @@ class B2bOrder < ApplicationRecord
   scope :pending_payments, -> { where(status: "pending_payment") }
   scope :from_wholesaler_post, -> { where(source_type: 'WholesalerPost') }
   scope :direct_buy, -> { where(is_direct_buy: true) }
+  scope :final_orders, -> { where(parent_request_order_id: nil).where(request_status: nil) }
 
   before_validation :assign_payment_token, on: :create
   before_validation :set_reference_number, on: :create
