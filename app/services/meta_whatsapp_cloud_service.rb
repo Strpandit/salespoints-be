@@ -10,7 +10,7 @@ class MetaWhatsappCloudService
   TEMPLATE_ORDER_ACCEPT = "order_accept"
   TEMPLATE_PAYMENT_SUCCESS = "payment_success_order_details"
   TEMPLATE_DELIVERY_FORM_LINK = "delivery_form_link"
-  TEMPLATE_DELIVERY_VERIFICATION_OTP = "delivery_verification_otp"
+  TEMPLATE_DELIVERY_VERIFICATION_OTP = "delivery_code"
 
   def send_dealer_order_request(to:, product:, variant:, sku:, price:, quantity:, total_amount:, delivery_location:, approx_distance:, accept_token:, reject_token:, image_url: nil)
     components = []
@@ -179,19 +179,13 @@ class MetaWhatsappCloudService
         parameters: [
           { type: "text", text: otp.to_s }
         ]
-      },
-      {
-        type: "button",
-        sub_type: "copy_code",
-        index: 0
       }
     ]
 
     send_template_message(
       to: to,
       template_name: TEMPLATE_DELIVERY_VERIFICATION_OTP,
-      components: components,
-      language: "en_US"
+      components: components
     )
   end
 
