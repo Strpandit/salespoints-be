@@ -8,14 +8,16 @@ module Api
       orders =
         case view
         when "incoming"
-          incoming_order_scope
+          incoming_order_scope.where(parent_request_order_id: nil)
         when "accepted"
           current_dealer.seller_b2b_orders
+                        .where(parent_request_order_id: nil)
                         .where("request_status = ? OR (request_status IS NULL AND status IN (?))", "accepted_request", %w[paid confirmed shipped delivered])
                         .includes(:buyer_dealer, :seller_dealer, b2b_order_items: { dealer_product: :dealer })
                         .order(created_at: :desc)
         else
           current_dealer.buyer_b2b_orders
+                        .where(parent_request_order_id: nil)
                         .where("request_status IS NULL OR status IN (?)", %w[pending_request pending_payment paid confirmed shipped delivered])
                         .includes(:buyer_dealer, :seller_dealer, b2b_order_items: { dealer_product: :dealer })
                         .order(created_at: :desc)
@@ -43,7 +45,8 @@ module Api
 
       radius = params[:radius_km].to_i
       radius = 5 if radius <= 0
-      payment_method = params[:payment_method].to_s.presence || "cod"
+      payment_method = nil
+      payment_status = nil
 
       order = B2bDirectOrderService.new(
         buyer: current_dealer,
@@ -53,7 +56,7 @@ module Api
         longitude: buyer_longitude,
         radius_km: radius,
         payment_method: payment_method,
-        payment_status: payment_method == "cod" ? "pending" : "paid"
+        payment_status: payment_status
       ).call
 
       render json: serialize_resource(order, B2bOrderSerializer, base_url: request.base_url).merge(
@@ -194,6 +197,9 @@ module Api
 
       offers.each do |offer|
         order = offer.b2b_order
+
+        next if order.parent_request_order_id.present?
+
         visible_ids = offer.item_id_values
         visible_items = order.b2b_order_items.select { |item| visible_ids.include?(item.id) }
         order.define_singleton_method(:b2b_order_items) { visible_items }
