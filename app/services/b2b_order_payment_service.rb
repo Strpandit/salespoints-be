@@ -69,9 +69,10 @@ class B2bOrderPaymentService
     seller = order.seller_dealer
     items = order.b2b_order_items.accepted_items
     first_item = items.first
+
+    wholesaler_post = first_item&.wholesaler_post
     variant = first_item&.product_variant
-    product = variant&.product
-    wholesaler_post = first_item.wholesaler_post
+    product = variant&.product || wholesaler_post&.dealer_product
     
     unit_price = first_item&.unit_price
     quantity = items.sum(&:quantity)
@@ -248,9 +249,15 @@ class B2bOrderPaymentService
 
     seller = order.seller_dealer
     buyer = order.buyer_dealer
-    variant = item.product_variant
-    product = variant&.product
+
     wholesaler_post = item.wholesaler_post
+    variant = item.product_variant
+
+    if wholesaler_post.present? && wholesaler_post&.dealer_product&.product_variant.present?
+      variant = wholesaler_post&.dealer_product&.product_variant
+    end
+
+    product = variant&.product
 
     buyer_location = buyer&.dealer_location
     seller_location = seller&.dealer_location

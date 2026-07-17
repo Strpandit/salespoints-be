@@ -330,6 +330,8 @@ class B2bOrderDealerResponseService
     ensure_order_can_be_accepted!(order: order)
     raise StandardError, "Order is not in pending request" unless order.pending_request?
 
+    order = B2bOrder.lock.find(order.id)
+
     order.b2b_order_items.each do |item|
       deduct_b2b_stock!(item)
     end
@@ -337,17 +339,22 @@ class B2bOrderDealerResponseService
     order.update!(
       status: "confirmed",
       request_status: nil,
-      confirmed_at: Time.current
+      confirmed_at: Time.current,
+      accepted_at: Time.current
     )
 
+    offer.reload
     offer.update!(status: "accepted", responded_at: Time.current, whatsapp_status: "replied")
     close_other_b2b_offers!(order)
 
+    order.reload
     send_order_accept_to_seller(order)
     send_payment_success_to_buyer(order)
     create_seller_acceptance_notification(order)
     create_buyer_acceptance_notification(order)
     notify_admin_order_confirmed(order)
+
+    order
   end
 
   def reject_direct_buy!(order)

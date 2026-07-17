@@ -214,7 +214,11 @@ class MetaWhatsappWebhookService
 
     send_text_acknowledgement(to: from, message: message)
     offer.update!(whatsapp_status: "replied")
+
+    order.reload
   rescue StandardError => e
+    Rails.logger.error "Accept failed: #{e.message}"
+    Rails.logger.error e.backtrace.join("\n")
     send_text_acknowledgement(to: from, message: "❌ Failed to accept request: #{e.message}")
   end
 
