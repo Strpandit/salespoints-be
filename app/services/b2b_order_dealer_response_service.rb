@@ -334,6 +334,11 @@ class B2bOrderDealerResponseService
 
     order.b2b_order_items.each do |item|
       deduct_b2b_stock!(item)
+
+      item.update!(
+        status: "accepted",
+        responded_at: Time.current
+      )
     end
 
     order.update!(
@@ -690,5 +695,7 @@ class B2bOrderDealerResponseService
     else
       raise StandardError, "Cannot deduct stock: no source found for item #{item.id}"
     end
+    
+    item
   end
 end

@@ -117,10 +117,9 @@ module Api
         }, status: :ok
       end
 
-      unless order.pending_request?
+      unless order.pending_request? || order.pending_payment?
         return render json: { 
           error: "Order is not ready for payment. Current status: #{order.status}",
-          current_status: order.status
         }, status: :unprocessable_entity
       end
 
