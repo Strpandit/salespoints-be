@@ -1,3 +1,6 @@
+require 'prawn'
+require 'prawn/table'
+
 class InvoicePdf
   attr_reader :order
 
@@ -300,7 +303,18 @@ class InvoicePdf
   end
 
   def add_items_table(pdf)
-    table_data = [["Product", "Title", "Qty", "Gross Amount £", "Discounts/Coupons £", "Taxable Value £", tax_label, "Total £"]]
+    page_width = pdf.bounds.width
+    margin = 10
+
+    col_widths = [45, 110, 28, 55, 55, 55, 55, 55]
+
+    total_col_width = col_widths.sum
+    if total_col_width > page_width - margin
+      scale = (page_width - margin) / total_col_width
+      col_widths = col_widths.map { |w| (w * scale).floor }
+    end
+
+    table_data = [["Product", "Title", "Qty", "Gross Amount ₹", "Discounts/Coupons ₹", "Taxable Value ₹", tax_label, "Total ₹"]]
     
     order_items.each do |item|
       product_name = item.product_variant&.product&.name || "Product"
@@ -309,8 +323,8 @@ class InvoicePdf
       
       table_data << [
         "Handsets",
-        product_name,
-        item.quantity,
+        product_name.truncate(40),
+        item.quantity.to_s,
         "%.2f" % item.total_price,
         "0.00",
         "%.2f" % item.total_price,
@@ -321,33 +335,30 @@ class InvoicePdf
     
     pdf.table(table_data, 
       header: true,
-      width: pdf.bounds.width,
+      width: page_width - margin,
       row_colors: ["F8FAFC", "FFFFFF"],
-      cell_style: { 
-        borders: [:top, :bottom], 
-        border_color: "E2E8F0", 
-        padding: 6,
-        size: 8
+      cell_style: {
+        size: 6.5,
+        padding: 3,
+        borders: [:bottom],
+        border_color: "E2E8F0",
+        align: :center
       }
     ) do
-      row(0).style(background: "0F766E", text_color: "FFFFFF", font_style: :bold, size: 8)
-      column(0).width = 60
-      column(1).width = 140
-      column(2).width = 40
-      column(3).width = 80
-      column(4).width = 80
-      column(5).width = 80
-      column(6).width = 80
-      column(7).width = 80
+      row(0).style(background: "0F766E", text_color: "FFFFFF", font_style: :bold, size: 7)
+      col_widths.each_with_index do |width, idx|
+        columns(idx).width = width
+      end
+      columns(1).style(align: :left)
     end
     
-    pdf.move_down 5
+    pdf.move_down 8
     
     order_items.each_with_index do |item, index|
-      pdf.text "#{index + 1}. [IMEI/Serial No: #{SecureRandom.alphanumeric(15).upcase}]", size: 8, color: "666666"
-      pdf.text "Warranty: 1 Year Warranty on Handset and 6 Months Warranty on Accessories", size: 8, color: "666666"
-      pdf.text "HSN/SAC: #{item.product_variant&.product&.hsn_code || '85171300'}", size: 8, color: "666666"
-      pdf.text "#{tax_label}: 18.0 %", size: 8, color: "666666"
+      pdf.text "#{index + 1}. [IMEI/Serial No: #{SecureRandom.alphanumeric(15).upcase}]", size: 7, color: "666666"
+      pdf.text "Warranty: 1 Year Warranty on Handset and 6 Months Warranty on Accessories", size: 7, color: "666666"
+      pdf.text "HSN/SAC: #{item.product_variant&.product&.hsn_code || '85171300'}", size: 7, color: "666666"
+      pdf.text "#{tax_label}: 18.0 %", size: 7, color: "666666"
       pdf.move_down 2
     end
   end
@@ -356,19 +367,19 @@ class InvoicePdf
     pdf.move_down 8
     
     pdf.bounding_box([pdf.bounds.width * 0.5, pdf.cursor], width: pdf.bounds.width * 0.5) do
-      pdf.text "Subtotal: £%.2f" % subtotal, align: :right, size: 10
-      pdf.text "Discount: £%.2f" % discount, align: :right, size: 10
-      pdf.text "Taxable Value: £%.2f" % taxable_value, align: :right, size: 10
+      pdf.text "Subtotal: ₹%.2f" % subtotal, align: :right, size: 10
+      pdf.text "Discount: ₹%.2f" % discount, align: :right, size: 10
+      pdf.text "Taxable Value: ₹%.2f" % taxable_value, align: :right, size: 10
       
       if tax_type == "IGST"
-        pdf.text "IGST (#{igst_rate}%): £%.2f" % igst_amount, align: :right, size: 10
+        pdf.text "IGST (#{igst_rate}%): ₹%.2f" % igst_amount, align: :right, size: 10
       else
-        pdf.text "CGST (#{cgst_rate}%): £%.2f" % cgst_amount, align: :right, size: 10
-        pdf.text "SGST (#{sgst_rate}%): £%.2f" % sgst_amount, align: :right, size: 10
+        pdf.text "CGST (#{cgst_rate}%): ₹%.2f" % cgst_amount, align: :right, size: 10
+        pdf.text "SGST (#{sgst_rate}%): ₹%.2f" % sgst_amount, align: :right, size: 10
       end
       
       pdf.move_down 4
-      pdf.text "Grand Total £%.2f" % total_amount, 
+      pdf.text "Grand Total ₹%.2f" % total_amount, 
                align: :right, size: 14, style: :bold, color: "0F766E"
     end
     
