@@ -41,6 +41,17 @@ module Api
       ), status: :ok
     end
 
+    def show
+      order = current_dealer.buyer_b2b_orders.find_by(id: params[:id]) ||
+              current_dealer.seller_b2b_orders.find_by(id: params[:id])
+      
+      return render json: { error: "Order not found" }, status: :not_found unless order
+      
+      render json: serialize_resource(order, B2bOrderSerializer, include: [:b2b_order_items, :delivery_confirmation], base_url: request.base_url).merge(
+        message: "B2B order fetched successfully"
+      ), status: :ok
+    end
+
     def place_direct
       buyer_latitude = params[:latitude].presence&.to_f
       buyer_longitude = params[:longitude].presence&.to_f
