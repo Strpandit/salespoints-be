@@ -193,11 +193,9 @@ class DeliveryConfirmationService
   def send_delivery_emails
     case @deliverable
     when Order
-      OrderMailer.delivery_invoice(@deliverable.id, "buyer").deliver_later if @deliverable.buyer&.email.present?
-      OrderMailer.delivery_invoice(@deliverable.id, "seller").deliver_later if @deliverable.seller_dealer&.email.present?
+      EmailDispatcherService.retail_order_delivered(@deliverable)
     when B2bOrder
-      B2bOrderMailer.delivery_invoice(@deliverable.id, "buyer").deliver_later if @deliverable.buyer_dealer&.email.present?
-      B2bOrderMailer.delivery_invoice(@deliverable.id, "seller").deliver_later if @deliverable.seller_dealer&.email.present?
+      EmailDispatcherService.b2b_order_delivered(@deliverable)
     end
   end
 

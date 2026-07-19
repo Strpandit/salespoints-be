@@ -29,6 +29,13 @@ class OrderLifecycleService
 
     @order.update!(attrs.compact)
     OrderSettlementService.process_if_due!(@order.reload)
+
+    if @order.status == "shipped"
+      EmailDispatcherService.retail_order_shipped(@order)
+    elsif @order.status == "delivered"
+      EmailDispatcherService.retail_order_delivered(@order)
+    end
+
     @order
   end
 end

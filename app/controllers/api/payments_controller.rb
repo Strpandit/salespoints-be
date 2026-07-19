@@ -23,9 +23,10 @@ module Api
             actor: current_user,
             status_note: "Online payment confirmed successfully."
           ).transition!(next_status: "processing")
-          OrderNotificationJob.perform_later(order.id, "placed", current_user.class.name, current_user.id) if current_user.present?
+          OrderMailer.customer_order_confirmation(order.id).deliver_later if order.buyer&.email.present?
+          OrderMailer.dealer_new_order(order.id).deliver_later if order.seller_dealer&.email.present?
+          OrderMailer.admin_order_alert(order.id).deliver_later
         end
-        OrderNotificationJob.perform_later(order.id, "payment_paid", current_user.class.name, current_user.id) if current_user.present?
       when "ACTIVE"
         order.update!(payment_gateway_payload: order.payment_gateway_payload.merge(payload))
       else
@@ -126,9 +127,12 @@ module Api
             message: "B2B request broadcasted after successful payment"
           }, status: :ok
         else
-          finalization.orders.each do |order|
-            OrderNotificationJob.perform_later(order.id, "placed", attempt.buyer_type, attempt.buyer_id)
-            OrderNotificationJob.perform_later(order.id, "payment_paid", attempt.buyer_type, attempt.buyer_id)
+          if finalization.b2b_order.present?
+            EmailDispatcherService.b2b_payment_done(finalization.b2b_order)
+          else
+            finalization.orders.each do |order|
+              EmailDispatcherService.retail_order_placed(order)
+            end
           end
 
           render json: {

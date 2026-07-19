@@ -1,0 +1,51 @@
+<% if @view_type == "buyer" %>
+  <div style="background:#F3F6FB;padding:32px 16px;font-family:Arial,sans-serif;color:#111827;line-height:1.6;">
+    <div style="max-width:700px;margin:0 auto;background:#fff;border:1px solid #E5E7EB;border-radius:16px;overflow:hidden;box-shadow:0 8px 24px rgba(15,23,42,0.06);">
+      <div style="background:linear-gradient(135deg,#DC2626,#991B1B);padding:28px 32px;color:#fff;">
+        <h1 style="margin:0;font-size:24px;">❌ Order <%= @reason %></h1>
+        <p style="margin:8px 0 0;opacity:0.95;">Order #<%= @order.order_number %></p>
+      </div>
+      
+      <div style="padding:28px 32px;">
+        <p style="font-size:16px;">Hello <strong><%= @buyer&.full_name || 'Customer' %></strong>,</p>
+        <p>Your order <strong><%= @order.order_number %></strong> has been <strong><%= @reason.downcase %></strong>.</p>
+        
+        <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:12px;padding:16px 18px;margin:18px 0;">
+          <p style="margin:4px 0;"><strong>Order Number:</strong> <%= @order.order_number %></p>
+          <p style="margin:4px 0;"><strong>Total:</strong> ₹<%= @order.total_amount.to_f.round(2) %></p>
+        </div>
+        
+        <p style="color:#64748B;font-size:14px;">If you have any questions, please contact our support team.</p>
+      </div>
+    </div>
+  </div>
+  
+<% elsif @view_type == "admin" %>
+  <div style="background:#F3F6FB;padding:32px 16px;font-family:Arial,sans-serif;color:#111827;line-height:1.6;">
+    <div style="max-width:700px;margin:0 auto;background:#fff;border:1px solid #E5E7EB;border-radius:16px;overflow:hidden;box-shadow:0 8px 24px rgba(15,23,42,0.06);">
+      <div style="background:linear-gradient(135deg,#DC2626,#991B1B);padding:28px 32px;color:#fff;">
+        <h1 style="margin:0;font-size:24px;">❌ Order <%= @reason %></h1>
+        <p style="margin:8px 0 0;opacity:0.95;">Order #<%= @order.order_number %></p>
+      </div>
+      
+      <div style="padding:28px 32px;">
+        <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:12px;padding:16px 18px;margin-bottom:12px;">
+          <h3 style="margin:0 0 8px;font-size:14px;color:#0F766E;">BUYER</h3>
+          <p style="margin:2px 0;"><%= @buyer&.full_name || 'N/A' %> | <%= @buyer&.email || 'N/A' %> | <%= @buyer&.phone || 'N/A' %></p>
+        </div>
+        
+        <h3 style="margin:18px 0 12px;font-size:14px;color:#0F766E;">ORDER ITEMS</h3>
+        <% @order.order_items.each do |item| %>
+          <div style="border:1px solid #E5E7EB;border-radius:8px;padding:10px 12px;margin-bottom:6px;display:flex;justify-content:space-between;font-size:14px;">
+            <span><%= item.product_variant&.product&.name || 'Product' %> × <%= item.quantity %></span>
+            <span>₹<%= item.total_price.to_f.round(2) %></span>
+          </div>
+        <% end %>
+        
+        <div style="border-top:2px solid #E5E7EB;padding-top:12px;margin-top:12px;text-align:right;">
+          <p style="margin:2px 0;font-size:18px;font-weight:bold;color:#0F766E;">Total: ₹<%= @order.total_amount.to_f.round(2) %></p>
+        </div>
+      </div>
+    </div>
+  </div>
+<% end %>

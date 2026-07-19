@@ -1,0 +1,144 @@
+<% if @view_type == "buyer" %>
+  <!-- ========== BUYER VIEW ========== -->
+  <div style="background:#F3F6FB;padding:32px 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#111827;line-height:1.6;">
+    <div style="max-width:700px;margin:0 auto;background:#FFFFFF;border:1px solid #E5E7EB;border-radius:16px;overflow:hidden;box-shadow:0 8px 24px rgba(15,23,42,0.06);">
+      
+      <div style="background:linear-gradient(135deg,#F59E0B,#0F766E);padding:32px 40px;color:#FFFFFF;">
+        <div style="font-size:13px;letter-spacing:3px;text-transform:uppercase;opacity:0.8;font-weight:600;">SalesPoints B2B</div>
+        <h1 style="margin:8px 0 4px;font-size:26px;font-weight:700;line-height:1.2;">✅ Request Accepted</h1>
+        <p style="margin:4px 0 0;font-size:16px;opacity:0.9;">Payment pending - Complete your payment</p>
+      </div>
+      
+      <div style="padding:32px 40px;">
+        <p style="font-size:16px;color:#1E293B;">Hello <strong><%= @buyer&.full_name || @buyer&.dealer_code || 'Dealer' %></strong>,</p>
+        <p style="font-size:15px;color:#334155;">Your B2B request <strong style="color:#0F766E;"><%= @order.reference_number %></strong> has been accepted by a seller.</p>
+        <p style="font-size:15px;color:#334155;"><strong>Please complete your payment to confirm the order.</strong></p>
+        
+        <!-- Payment Button -->
+        <div style="text-align:center;margin:28px 0;">
+          <a href="<%= @payment_link %>" style="background:linear-gradient(135deg,#0F766E,#0D9488);color:#FFFFFF;padding:16px 48px;border-radius:10px;text-decoration:none;font-weight:700;font-size:18px;display:inline-block;box-shadow:0 4px 12px rgba(15,118,110,0.3);">
+            💳 Pay Now — ₹<%= @order.total_amount.to_f.round(2) %>
+          </a>
+          <p style="font-size:12px;color:#94A3B8;margin-top:8px;">Payment link expires in 24 hours</p>
+        </div>
+        
+        <!-- Order Items (No Seller Info) -->
+        <h3 style="margin:20px 0 12px;font-size:14px;font-weight:700;color:#0F766E;text-transform:uppercase;letter-spacing:0.5px;">Order Details</h3>
+        <% @order.b2b_order_items.each do |item| %>
+          <div style="border:1px solid #E5E7EB;border-radius:8px;padding:12px 16px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;background:#FFFFFF;">
+            <div>
+              <strong style="font-size:14px;"><%= item.product_variant&.product&.name || 'Product' %></strong>
+              <div style="font-size:13px;color:#64748B;">Qty: <%= item.quantity %></div>
+            </div>
+            <div style="font-weight:600;color:#0F766E;">₹<%= item.total_price.to_f.round(2) %></div>
+          </div>
+        <% end %>
+        
+        <div style="border-top:2px solid #E5E7EB;padding-top:16px;margin-top:16px;text-align:right;">
+          <div style="font-size:20px;font-weight:700;color:#0F766E;">Total: ₹<%= @order.total_amount.to_f.round(2) %></div>
+        </div>
+        
+        <div style="margin-top:24px;padding:14px 18px;background:#FEFCE8;border:1px solid #FDE68A;border-radius:8px;font-size:14px;color:#92400E;">
+          ⏳ <strong>Action Required:</strong> Complete payment within 24 hours to confirm your order.
+        </div>
+      </div>
+    </div>
+  </div>
+
+<% elsif @view_type == "seller" %>
+  <!-- ========== SELLER VIEW ========== -->
+  <div style="background:#F3F6FB;padding:32px 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#111827;line-height:1.6;">
+    <div style="max-width:700px;margin:0 auto;background:#FFFFFF;border:1px solid #E5E7EB;border-radius:16px;overflow:hidden;box-shadow:0 8px 24px rgba(15,23,42,0.06);">
+      
+      <div style="background:linear-gradient(135deg,#059669,#0F766E);padding:32px 40px;color:#FFFFFF;">
+        <div style="font-size:13px;letter-spacing:3px;text-transform:uppercase;opacity:0.8;font-weight:600;">SalesPoints B2B</div>
+        <h1 style="margin:8px 0 4px;font-size:26px;font-weight:700;line-height:1.2;">✅ You Accepted This Request</h1>
+        <p style="margin:4px 0 0;font-size:16px;opacity:0.9;">Request #<%= @order.reference_number %></p>
+      </div>
+      
+      <div style="padding:32px 40px;">
+        <p style="font-size:16px;color:#1E293B;">Hello <strong><%= @seller&.full_name || @seller&.dealer_code || 'Seller' %></strong>,</p>
+        <p style="font-size:15px;color:#334155;">You have accepted the B2B request <strong style="color:#0F766E;"><%= @order.reference_number %></strong>.</p>
+        <p style="font-size:15px;color:#334155;">Waiting for the buyer to complete the payment.</p>
+        
+        <!-- Buyer Information -->
+        <div style="background:#F8FAFC;border-left:4px solid #059669;border-radius:8px;padding:16px 18px;margin:18px 0;">
+          <h3 style="margin:0 0 10px;font-size:13px;font-weight:700;color:#059669;text-transform:uppercase;letter-spacing:0.5px;">Buyer Information</h3>
+          <table style="width:100%;border-collapse:collapse;font-size:14px;">
+            <tr><td style="padding:3px 0;color:#64748B;width:110px;">Dealer Code</td><td style="padding:3px 0;font-weight:500;"><%= @buyer&.dealer_code || 'N/A' %></td></tr>
+            <tr><td style="padding:3px 0;color:#64748B;">Phone</td><td style="padding:3px 0;font-weight:500;"><%= @buyer&.phone || 'N/A' %></td></tr>
+            <tr><td style="padding:3px 0;color:#64748B;">Address</td><td style="padding:3px 0;font-weight:500;"><%= @buyer&.dealer_profile&.business_address || 'N/A' %></td></tr>
+          </table>
+        </div>
+        
+        <!-- Order Items -->
+        <h3 style="margin:18px 0 12px;font-size:13px;font-weight:700;color:#059669;text-transform:uppercase;letter-spacing:0.5px;">Order Items</h3>
+        <% @order.b2b_order_items.each do |item| %>
+          <div style="border:1px solid #E5E7EB;border-radius:8px;padding:10px 14px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;background:#FFFFFF;font-size:14px;">
+            <div>
+              <strong><%= item.product_variant&.product&.name || 'Product' %></strong>
+              <span style="color:#64748B;font-size:13px;margin-left:8px;">× <%= item.quantity %></span>
+            </div>
+            <span style="font-weight:600;color:#0F766E;">₹<%= item.total_price.to_f.round(2) %></span>
+          </div>
+        <% end %>
+        
+        <div style="border-top:2px solid #E5E7EB;padding-top:14px;margin-top:12px;text-align:right;">
+          <div style="font-size:18px;font-weight:700;color:#0F766E;">Total: ₹<%= @order.total_amount.to_f.round(2) %></div>
+          <div style="font-size:13px;color:#94A3B8;margin-top:4px;">Payment Status: <span style="font-weight:600;color:#F59E0B;">Pending</span></div>
+        </div>
+        
+        <div style="margin-top:20px;padding:14px 18px;background:#ECFDF5;border:1px solid #A7F3D0;border-radius:8px;font-size:14px;color:#065F46;">
+          📦 Please prepare the order. You'll be notified once payment is confirmed.
+        </div>
+      </div>
+    </div>
+  </div>
+
+<% elsif @view_type == "admin" %>
+  <!-- ========== ADMIN VIEW ========== -->
+  <div style="background:#F3F6FB;padding:32px 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#111827;line-height:1.6;">
+    <div style="max-width:700px;margin:0 auto;background:#FFFFFF;border:1px solid #E5E7EB;border-radius:16px;overflow:hidden;box-shadow:0 8px 24px rgba(15,23,42,0.06);">
+      
+      <div style="background:linear-gradient(135deg,#1E40AF,#0F766E);padding:28px 40px;color:#FFFFFF;">
+        <div style="font-size:13px;letter-spacing:3px;text-transform:uppercase;opacity:0.8;font-weight:600;">Admin Alert</div>
+        <h1 style="margin:8px 0 4px;font-size:24px;font-weight:700;">✅ Request Accepted</h1>
+        <p style="margin:4px 0 0;font-size:16px;opacity:0.9;">Request #<%= @order.reference_number %></p>
+      </div>
+      
+      <div style="padding:28px 40px;">
+        <!-- Buyer -->
+        <div style="background:#F8FAFC;border-left:4px solid #0F766E;border-radius:8px;padding:14px 18px;margin-bottom:12px;">
+          <h3 style="margin:0 0 6px;font-size:13px;font-weight:700;color:#0F766E;text-transform:uppercase;letter-spacing:0.5px;">Buyer</h3>
+          <p style="margin:2px 0;font-size:14px;"><%= @buyer&.full_name || @buyer&.dealer_code || 'N/A' %></p>
+          <p style="margin:2px 0;font-size:13px;color:#64748B;"><%= @buyer&.email || 'N/A' %> | <%= @buyer&.phone || 'N/A' %></p>
+          <p style="margin:2px 0;font-size:13px;color:#64748B;">Code: <%= @buyer&.dealer_code || 'N/A' %></p>
+        </div>
+        
+        <!-- Seller -->
+        <div style="background:#F8FAFC;border-left:4px solid #059669;border-radius:8px;padding:14px 18px;margin-bottom:12px;">
+          <h3 style="margin:0 0 6px;font-size:13px;font-weight:700;color:#059669;text-transform:uppercase;letter-spacing:0.5px;">Seller</h3>
+          <p style="margin:2px 0;font-size:14px;"><%= @seller&.full_name || @seller&.dealer_code || 'N/A' %></p>
+          <p style="margin:2px 0;font-size:13px;color:#64748B;"><%= @seller&.email || 'N/A' %> | <%= @seller&.phone || 'N/A' %></p>
+          <p style="margin:2px 0;font-size:13px;color:#64748B;">Code: <%= @seller&.dealer_code || 'N/A' %></p>
+        </div>
+        
+        <!-- Items -->
+        <h3 style="margin:16px 0 10px;font-size:13px;font-weight:700;color:#0F766E;text-transform:uppercase;letter-spacing:0.5px;">Order Items</h3>
+        <% @order.b2b_order_items.each do |item| %>
+          <div style="border:1px solid #E5E7EB;border-radius:6px;padding:8px 12px;margin-bottom:4px;display:flex;justify-content:space-between;font-size:13px;background:#FFFFFF;">
+            <span><%= item.product_variant&.product&.name || 'Product' %> × <%= item.quantity %></span>
+            <span style="font-weight:600;">₹<%= item.total_price.to_f.round(2) %></span>
+          </div>
+        <% end %>
+        
+        <div style="border-top:2px solid #E5E7EB;padding-top:12px;margin-top:12px;text-align:right;">
+          <div style="font-size:14px;color:#64748B;">Subtotal: ₹<%= @order.subtotal_amount.to_f.round(2) %></div>
+          <div style="font-size:14px;color:#64748B;">Tax: ₹<%= @order.tax_amount.to_f.round(2) %></div>
+          <div style="font-size:20px;font-weight:700;color:#0F766E;">Total: ₹<%= @order.total_amount.to_f.round(2) %></div>
+          <div style="font-size:13px;color:#F59E0B;font-weight:600;">Payment: Pending</div>
+        </div>
+      </div>
+    </div>
+  </div>
+<% end %>

@@ -69,6 +69,8 @@ class B2bOrderDealerResponseService
     create_b2c_buyer_notification(order)
     create_b2c_seller_notification(order)
     notify_admin_b2c_order_confirmed(order)
+
+    EmailDispatcherService.retail_order_accepted(order)
   end
 
   def reject_b2c_order!(order)
@@ -91,6 +93,7 @@ class B2bOrderDealerResponseService
     end
 
     notify_b2c_buyer_of_rejection(order)
+    EmailDispatcherService.retail_order_terminated(order, "cancelled")
   end
 
   def lock_b2c_request_offer!(order:)
@@ -284,6 +287,7 @@ class B2bOrderDealerResponseService
     send_payment_request_template(order)
     create_buyer_notification(order, "accepted")
     create_seller_acceptance_notification(order)
+    EmailDispatcherService.b2b_request_accepted(order)
 
     updated_items.map(&:first)
   end
@@ -312,6 +316,7 @@ class B2bOrderDealerResponseService
 
     notify_buyer_of_rejection(order)
     create_buyer_notification(order, "rejected")
+    EmailDispatcherService.b2b_order_terminated(order, "rejected")
 
     total_dealers = DealerBroadcastTracker.for_order(order.id).count
     rejected_count = DealerBroadcastTracker.for_order(order.id).where(status: "rejected").count
@@ -358,6 +363,7 @@ class B2bOrderDealerResponseService
     create_seller_acceptance_notification(order)
     create_buyer_acceptance_notification(order)
     notify_admin_order_confirmed(order)
+    EmailDispatcherService.b2b_request_accepted(order)
 
     order
   end
@@ -372,6 +378,7 @@ class B2bOrderDealerResponseService
 
     notify_buyer_of_rejection(order)
     create_buyer_notification(order, "rejected")
+    EmailDispatcherService.b2b_order_terminated(order, "rejected")
     # refund code here
   end
 

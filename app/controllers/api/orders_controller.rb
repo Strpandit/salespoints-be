@@ -71,7 +71,6 @@ module Api
       if next_status == "shipped"
         delivery_confirmation = DeliveryConfirmationService.new(deliverable: order, actor: current_user).create_or_refresh!
       end
-      OrderNotificationJob.perform_later(order.id, "status_updated", current_user.class.name, current_user.id)
 
       render json: serialize_resource(order.reload, OrderSerializer, include: [:delivery_confirmation], base_url: request.base_url).merge(
         delivery_confirmation: delivery_confirmation ? DeliveryConfirmationSerializer.render(delivery_confirmation) : nil,

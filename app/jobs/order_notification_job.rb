@@ -50,10 +50,6 @@ class OrderNotificationJob < ApplicationJob
         message: "Order #{order.order_number} was placed for Rs #{order.total_amount.to_f.round(2)}."
       )
     end
-
-    OrderMailer.customer_order_confirmation(order.id).deliver_later
-    OrderMailer.dealer_new_order(order.id).deliver_later if order.seller_dealer&.email.present?
-    OrderMailer.admin_order_alert(order.id).deliver_later
   end
 
   def notify_payment_paid(order, actor)
@@ -97,7 +93,6 @@ class OrderNotificationJob < ApplicationJob
       )
     end
 
-    OrderMailer.order_status_update(order.id).deliver_later
   end
 
   def create_notification(recipient:, actor:, order:, kind:, title:, message:)

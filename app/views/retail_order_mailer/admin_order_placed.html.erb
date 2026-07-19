@@ -1,0 +1,50 @@
+<!-- app/views/retail_order_mailer/admin_order_placed.html.erb -->
+<div style="background:#F3F6FB;padding:32px 16px;font-family:Arial,sans-serif;color:#111827;line-height:1.6;">
+  <div style="max-width:700px;margin:0 auto;background:#fff;border:1px solid #E5E7EB;border-radius:16px;overflow:hidden;box-shadow:0 8px 24px rgba(15,23,42,0.06);">
+    <div style="background:linear-gradient(135deg,#1D4ED8,#0F766E);padding:28px 32px;color:#fff;">
+      <h1 style="margin:0;font-size:24px;">🔔 New Order Placed</h1>
+      <p style="margin:8px 0 0;opacity:0.95;">Order #<%= @order.order_number %></p>
+    </div>
+    
+    <div style="padding:28px 32px;">
+      <!-- Buyer Information -->
+      <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:12px;padding:16px 18px;margin-bottom:18px;">
+        <h3 style="margin:0 0 12px;font-size:14px;color:#0F766E;">BUYER INFORMATION</h3>
+        <p style="margin:4px 0;"><strong>Name:</strong> <%= @buyer&.full_name || 'N/A' %></p>
+        <p style="margin:4px 0;"><strong>Email:</strong> <%= @buyer&.email || 'N/A' %></p>
+        <p style="margin:4px 0;"><strong>Phone:</strong> <%= @buyer&.phone || 'N/A' %></p>
+        <p style="margin:4px 0;"><strong>Address:</strong> <%= @order.shipping_address.present? ? format_address(@order.shipping_address) : 'N/A' %></p>
+      </div>
+      
+      <!-- Seller Information -->
+      <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:12px;padding:16px 18px;margin-bottom:18px;">
+        <h3 style="margin:0 0 12px;font-size:14px;color:#0F766E;">SELLER INFORMATION</h3>
+        <p style="margin:4px 0;"><strong>Name:</strong> <%= @seller&.full_name || @seller&.dealer_code || 'N/A' %></p>
+        <p style="margin:4px 0;"><strong>Dealer Code:</strong> <%= @seller&.dealer_code || 'N/A' %></p>
+        <p style="margin:4px 0;"><strong>Email:</strong> <%= @seller&.email || 'N/A' %></p>
+        <p style="margin:4px 0;"><strong>Phone:</strong> <%= @seller&.phone || 'N/A' %></p>
+      </div>
+      
+      <!-- Order Items -->
+      <h3 style="margin:18px 0 12px;font-size:14px;color:#0F766E;">ORDER ITEMS</h3>
+      <% @order.order_items.each do |item| %>
+        <div style="border:1px solid #E5E7EB;border-radius:8px;padding:12px 14px;margin-bottom:8px;display:flex;justify-content:space-between;">
+          <div>
+            <strong><%= item.product_variant&.product&.name || 'Product' %></strong>
+            <div style="font-size:13px;color:#64748B;">Qty: <%= item.quantity %></div>
+          </div>
+          <div style="font-weight:600;">₹<%= item.total_price.to_f.round(2) %></div>
+        </div>
+      <% end %>
+      
+      <!-- Totals -->
+      <div style="border-top:2px solid #E5E7EB;padding-top:16px;margin-top:16px;text-align:right;">
+        <p style="margin:4px 0;">Subtotal: ₹<%= @order.subtotal_amount.to_f.round(2) %></p>
+        <p style="margin:4px 0;">Tax: ₹<%= @order.tax_amount.to_f.round(2) %></p>
+        <p style="margin:4px 0;font-size:18px;font-weight:bold;color:#0F766E;">Total: ₹<%= @order.total_amount.to_f.round(2) %></p>
+        <p style="margin:4px 0;font-size:13px;color:#64748B;">Payment: <%= payment_method_label(@order.payment_method) %></p>
+        <p style="margin:4px 0;font-size:13px;color:#64748B;">Status: <%= @order.payment_status.to_s.upcase %></p>
+      </div>
+    </div>
+  </div>
+</div>

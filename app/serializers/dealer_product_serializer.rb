@@ -12,11 +12,11 @@ class DealerProductSerializer < ApplicationSerializer
   end
 
   def consumer_discount_percentage
-    object.product_variant.calculate_discount_percentage(:account)
+    object.product_variant&.calculate_discount_percentage(:account)
   end
 
   def dealer_discount_percentage
-    object.product_variant.calculate_discount_percentage(:dealer)
+    object.product_variant&.calculate_discount_percentage(:dealer)
   end
   
   def media
@@ -32,6 +32,7 @@ class DealerProductSerializer < ApplicationSerializer
       url: Rails.application.routes.url_helpers.rails_blob_url(file, host: host),
       filename: file.filename.to_s,
       content_type: file.content_type.to_s
+      is_primary: object.primary_media_blob_id == file.blob.id
     }
   end
 end

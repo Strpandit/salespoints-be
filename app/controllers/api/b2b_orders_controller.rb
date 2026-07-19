@@ -172,6 +172,7 @@ module Api
       case next_status
       when "shipped"
         order.mark_shipped!(note: params[:status_note])
+        EmailDispatcherService.b2b_order_shipped(order.id)
         delivery_confirmation = DeliveryConfirmationService.new(deliverable: order, actor: current_dealer).create_or_refresh!
       else
         return render json: { error: "Unsupported status update" }, status: :unprocessable_entity

@@ -97,7 +97,6 @@ class EnhancedPaymentWebhookProcessor
     case refund_status
     when "SUCCESS"
       order.update!(refund_status: "completed", refunded_at: Time.current)
-      OrderNotificationJob.perform_later(order.id, "refunded", order.buyer_type, order.buyer_id)
     when "FAILED"
       order.update!(refund_status: "none")
       AdminNotificationService.notify_refund_failure(order, payload)
@@ -160,14 +159,12 @@ class EnhancedPaymentWebhookProcessor
         status: "processing",
         payment_gateway_payload: order.payment_gateway_payload.merge(payload)
       )
-      OrderNotificationJob.perform_later(order.id, "payment_paid", order.buyer_type, order.buyer_id)
     when :payment_failed
       order.update!(
         payment_status: "failed",
         status: "cancelled",
         payment_gateway_payload: order.payment_gateway_payload.merge(payload)
       )
-      OrderNotificationJob.perform_later(order.id, "payment_failed", order.buyer_type, order.buyer_id)
     end
   end
 
@@ -180,9 +177,13 @@ class EnhancedPaymentWebhookProcessor
     )
 
     finalization = PaymentAttemptFinalizationService.new(payment_attempt: attempt).call
-    finalization.orders.each do |order|
-      OrderNotificationJob.perform_later(order.id, "placed", attempt.buyer_type, attempt.buyer_id)
-      OrderNotificationJob.perform_later(order.id, "payment_paid", attempt.buyer_type, attempt.buyer_id)
+    if finalization.b2b_order.present?
+      EmailDispatcherService.b2b_payment_done(finalization.b2b_order)
+    else
+      finalization.orders.each do |order|
+        EmailDispatcherService.retail_order_placed(order)
+        EmailDispatcherService.retail_order_accepted(order)
+      end
     end
   end
 

@@ -1,0 +1,114 @@
+<% if @view_type == "buyer" %>
+  <div style="background:#F3F6FB;padding:32px 16px;font-family:Arial,sans-serif;color:#111827;line-height:1.6;">
+    <div style="max-width:700px;margin:0 auto;background:#fff;border:1px solid #E5E7EB;border-radius:16px;overflow:hidden;box-shadow:0 8px 24px rgba(15,23,42,0.06);">
+      <div style="background:linear-gradient(135deg,#15803D,#0F766E);padding:28px 32px;color:#fff;">
+        <h1 style="margin:0;font-size:24px;">✅ Order Accepted</h1>
+        <p style="margin:8px 0 0;opacity:0.95;">Your order will be delivered within 48 hours</p>
+      </div>
+      
+      <div style="padding:28px 32px;">
+        <p style="font-size:16px;">Hello <strong><%= @buyer&.full_name || 'Customer' %></strong>,</p>
+        <p>Your order <strong><%= @order.order_number %></strong> has been accepted and will be delivered within <strong>48 hours</strong>.</p>
+        
+        <!-- Order Items (No Seller Info) -->
+        <h3 style="margin:18px 0 12px;font-size:14px;color:#0F766E;">Your Order</h3>
+        <% @order.order_items.each do |item| %>
+          <div style="border:1px solid #E5E7EB;border-radius:8px;padding:12px 14px;margin-bottom:8px;display:flex;justify-content:space-between;">
+            <div>
+              <strong><%= item.product_variant&.product&.name || 'Product' %></strong>
+              <div style="font-size:13px;color:#64748B;">Qty: <%= item.quantity %></div>
+            </div>
+            <div style="font-weight:600;">₹<%= item.total_price.to_f.round(2) %></div>
+          </div>
+        <% end %>
+        
+        <div style="border-top:2px solid #E5E7EB;padding-top:16px;margin-top:16px;text-align:right;">
+          <p style="margin:4px 0;font-size:18px;font-weight:bold;color:#0F766E;">Total: ₹<%= @order.total_amount.to_f.round(2) %></p>
+          <p style="margin:4px 0;font-size:13px;color:#64748B;">Payment: <%= payment_method_label(@order.payment_method) %></p>
+        </div>
+        
+        <p style="margin-top:20px;color:#64748B;font-size:14px;">You can track your order status in your SalesPoints dashboard.</p>
+      </div>
+    </div>
+  </div>
+<% elsif @view_type == "seller" %>
+  <!-- Seller View - Contains Buyer Info -->
+  <div style="background:#F3F6FB;padding:32px 16px;font-family:Arial,sans-serif;color:#111827;line-height:1.6;">
+    <div style="max-width:700px;margin:0 auto;background:#fff;border:1px solid #E5E7EB;border-radius:16px;overflow:hidden;box-shadow:0 8px 24px rgba(15,23,42,0.06);">
+      <div style="background:linear-gradient(135deg,#15803D,#0F766E);padding:28px 32px;color:#fff;">
+        <h1 style="margin:0;font-size:24px;">✅ Order Accepted</h1>
+        <p style="margin:8px 0 0;opacity:0.95;">Order #<%= @order.order_number %></p>
+      </div>
+      
+      <div style="padding:28px 32px;">
+        <!-- Buyer Information (For Seller) -->
+        <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:12px;padding:16px 18px;margin-bottom:18px;">
+          <h3 style="margin:0 0 12px;font-size:14px;color:#0F766E;">BUYER INFORMATION</h3>
+          <p style="margin:4px 0;"><strong>Name:</strong> <%= @buyer&.full_name || 'N/A' %></p>
+          <p style="margin:4px 0;"><strong>Phone:</strong> <%= @buyer&.phone || 'N/A' %></p>
+          <p style="margin:4px 0;"><strong>Address:</strong> <%= @order.shipping_address.present? ? format_address(@order.shipping_address) : 'N/A' %></p>
+        </div>
+        
+        <!-- Order Items -->
+        <h3 style="margin:18px 0 12px;font-size:14px;color:#0F766E;">ORDER ITEMS</h3>
+        <% @order.order_items.each do |item| %>
+          <div style="border:1px solid #E5E7EB;border-radius:8px;padding:12px 14px;margin-bottom:8px;display:flex;justify-content:space-between;">
+            <div>
+              <strong><%= item.product_variant&.product&.name || 'Product' %></strong>
+              <div style="font-size:13px;color:#64748B;">Qty: <%= item.quantity %></div>
+            </div>
+            <div style="font-weight:600;">₹<%= item.total_price.to_f.round(2) %></div>
+          </div>
+        <% end %>
+        
+        <div style="border-top:2px solid #E5E7EB;padding-top:16px;margin-top:16px;text-align:right;">
+          <p style="margin:4px 0;font-size:18px;font-weight:bold;color:#0F766E;">Total: ₹<%= @order.total_amount.to_f.round(2) %></p>
+          <p style="margin:4px 0;font-size:13px;color:#64748B;">Payment: <%= payment_method_label(@order.payment_method) %></p>
+        </div>
+        
+        <p style="margin-top:20px;color:#64748B;font-size:14px;">Please prepare this order for dispatch within 48 hours.</p>
+      </div>
+    </div>
+  </div>
+<% elsif @view_type == "admin" %>
+  <!-- Admin View - Full Details -->
+  <div style="background:#F3F6FB;padding:32px 16px;font-family:Arial,sans-serif;color:#111827;line-height:1.6;">
+    <div style="max-width:700px;margin:0 auto;background:#fff;border:1px solid #E5E7EB;border-radius:16px;overflow:hidden;box-shadow:0 8px 24px rgba(15,23,42,0.06);">
+      <div style="background:linear-gradient(135deg,#15803D,#0F766E);padding:28px 32px;color:#fff;">
+        <h1 style="margin:0;font-size:24px;">✅ Order Accepted</h1>
+        <p style="margin:8px 0 0;opacity:0.95;">Order #<%= @order.order_number %></p>
+      </div>
+      
+      <div style="padding:28px 32px;">
+        <!-- Buyer Information -->
+        <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:12px;padding:16px 18px;margin-bottom:12px;">
+          <h3 style="margin:0 0 8px;font-size:14px;color:#0F766E;">BUYER</h3>
+          <p style="margin:2px 0;"><%= @buyer&.full_name || 'N/A' %> | <%= @buyer&.email || 'N/A' %> | <%= @buyer&.phone || 'N/A' %></p>
+          <p style="margin:2px 0;font-size:13px;color:#64748B;"><%= @order.shipping_address.present? ? format_address(@order.shipping_address) : 'N/A' %></p>
+        </div>
+        
+        <!-- Seller Information -->
+        <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:12px;padding:16px 18px;margin-bottom:12px;">
+          <h3 style="margin:0 0 8px;font-size:14px;color:#0F766E;">SELLER</h3>
+          <p style="margin:2px 0;"><%= @seller&.full_name || @seller&.dealer_code || 'N/A' %> | <%= @seller&.email || 'N/A' %> | <%= @seller&.phone || 'N/A' %></p>
+        </div>
+        
+        <!-- Items & Totals -->
+        <h3 style="margin:18px 0 12px;font-size:14px;color:#0F766E;">ORDER ITEMS</h3>
+        <% @order.order_items.each do |item| %>
+          <div style="border:1px solid #E5E7EB;border-radius:8px;padding:10px 12px;margin-bottom:6px;display:flex;justify-content:space-between;font-size:14px;">
+            <span><%= item.product_variant&.product&.name || 'Product' %> × <%= item.quantity %></span>
+            <span>₹<%= item.total_price.to_f.round(2) %></span>
+          </div>
+        <% end %>
+        
+        <div style="border-top:2px solid #E5E7EB;padding-top:12px;margin-top:12px;text-align:right;">
+          <p style="margin:2px 0;font-size:14px;">Subtotal: ₹<%= @order.subtotal_amount.to_f.round(2) %></p>
+          <p style="margin:2px 0;font-size:14px;">Tax: ₹<%= @order.tax_amount.to_f.round(2) %></p>
+          <p style="margin:2px 0;font-size:18px;font-weight:bold;color:#0F766E;">Total: ₹<%= @order.total_amount.to_f.round(2) %></p>
+          <p style="margin:2px 0;font-size:13px;color:#64748B;">Payment: <%= payment_method_label(@order.payment_method) %> | Status: <%= @order.payment_status.to_s.upcase %></p>
+        </div>
+      </div>
+    </div>
+  </div>
+<% end %>

@@ -1,0 +1,30 @@
+<div style="background:#F3F6FB;padding:32px 16px;font-family:Arial,sans-serif;color:#111827;line-height:1.6;">
+  <div style="max-width:700px;margin:0 auto;background:#fff;border:1px solid #E5E7EB;border-radius:16px;overflow:hidden;box-shadow:0 8px 24px rgba(15,23,42,0.06);">
+    <div style="background:linear-gradient(135deg,#2563EB,#0F766E);padding:28px 32px;color:#fff;">
+      <h1 style="margin:0;font-size:24px;">🚚 Order Shipped</h1>
+      <p style="margin:8px 0 0;opacity:0.95;">Order #<%= @order.order_number %></p>
+    </div>
+    
+    <div style="padding:28px 32px;">
+      <p style="font-size:16px;">Hello <strong><%= @buyer&.full_name || 'Customer' %></strong>,</p>
+      <p>Your order <strong><%= @order.order_number %></strong> has been shipped and is on its way to you.</p>
+      
+      <h3 style="margin:18px 0 12px;font-size:14px;color:#0F766E;">Order Summary</h3>
+      <% @order.order_items.each do |item| %>
+        <div style="border:1px solid #E5E7EB;border-radius:8px;padding:12px 14px;margin-bottom:8px;display:flex;justify-content:space-between;">
+          <div>
+            <strong><%= item.product_variant&.product&.name || 'Product' %></strong>
+            <div style="font-size:13px;color:#64748B;">Qty: <%= item.quantity %></div>
+          </div>
+          <div style="font-weight:600;">₹<%= item.total_price.to_f.round(2) %></div>
+        </div>
+      <% end %>
+      
+      <div style="border-top:2px solid #E5E7EB;padding-top:16px;margin-top:16px;text-align:right;">
+        <p style="margin:4px 0;font-size:18px;font-weight:bold;color:#0F766E;">Total: ₹<%= @order.total_amount.to_f.round(2) %></p>
+      </div>
+      
+      <p style="margin-top:20px;color:#64748B;font-size:14px;">You will receive a confirmation once the order is delivered.</p>
+    </div>
+  </div>
+</div>

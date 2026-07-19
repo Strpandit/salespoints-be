@@ -99,6 +99,7 @@ class PaymentAttemptFinalizationService
     ).call
 
     send_b2b_notifications(order)
+    EmailDispatcherService.b2b_payment_done(order)
 
     order
   end
@@ -128,8 +129,7 @@ class PaymentAttemptFinalizationService
         paid_at: Time.current
       )
 
-      OrderNotificationJob.perform_later(order.id, "placed", attempt.buyer_type, attempt.buyer_id)
-      OrderNotificationJob.perform_later(order.id, "payment_paid", attempt.buyer_type, attempt.buyer_id)
+      EmailDispatcherService.retail_order_placed(order)
 
       orders << order
     end
