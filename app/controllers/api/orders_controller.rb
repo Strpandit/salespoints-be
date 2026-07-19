@@ -1,6 +1,7 @@
 module Api
   class OrdersController < ApplicationController
     before_action :require_buyer!, only: [:buy_now]
+    skip_before_action :authenticate_request!, only: [:download_invoice]
 
     def buy_now
       billing_address = params[:billing_address].presence || checkout_address_payload

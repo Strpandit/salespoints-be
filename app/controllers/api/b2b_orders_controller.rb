@@ -1,6 +1,7 @@
 module Api
   class B2bOrdersController < ApplicationController
     before_action :require_dealer!
+    skip_before_action :authenticate_request!, only: [:download_invoice]
 
     def index
       view = params[:view].to_s

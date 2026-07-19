@@ -2,6 +2,7 @@ module Api
   module Admin
     class OrdersController < ApplicationController
       before_action :require_admin!
+      skip_before_action :authenticate_request!, only: [:download_invoice]
 
       def index
         # Start with base queries
