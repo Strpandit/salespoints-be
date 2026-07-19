@@ -139,10 +139,12 @@ module Api
         if order.present?
           pdf = ::InvoicePdf.new(order).generate
 
-          return send_data pdf,
+          send_data pdf,
             filename: "Invoice_#{order.order_number}.pdf",
             type: "application/pdf",
-            disposition: "attachment"
+            disposition: "attachment",
+            status: :ok
+          return
         end
 
         b2b_order = B2bOrder.includes(:buyer_dealer, :seller_dealer, b2b_order_items: { product_variant: :product }).find_by(id: params[:id])
@@ -150,10 +152,12 @@ module Api
         if b2b_order.present?
             pdf = ::InvoicePdf.new(b2b_order).generate
 
-            return send_data pdf,
+            send_data pdf,
               filename: "Invoice_#{b2b_order.reference_number}.pdf",
               type: "application/pdf",
-              disposition: "attachment"
+              disposition: "attachment",
+              status: :ok
+            return
         end
 
         render json: { error: "Order not found" }, status: :not_found

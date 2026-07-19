@@ -135,7 +135,9 @@ module Api
       send_data pdf,
         filename: "Invoice_#{order.reference_number}.pdf",
         type: "application/pdf",
-        disposition: "attachment"
+        disposition: "attachment",
+        status: :ok
+      return
     end
 
     def payment
