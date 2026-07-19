@@ -303,27 +303,14 @@ class InvoicePdf
   end
 
   def add_items_table(pdf)
-    page_width = pdf.bounds.width
-    margin = 10
-
-    col_widths = [45, 110, 28, 55, 55, 55, 55, 55]
-
-    total_col_width = col_widths.sum
-    if total_col_width > page_width - margin
-      scale = (page_width - margin) / total_col_width
-      col_widths = col_widths.map { |w| (w * scale).floor }
-    end
-
     table_data = [["Product", "Title", "Qty", "Gross Amount ₹", "Discounts/Coupons ₹", "Taxable Value ₹", tax_label, "Total ₹"]]
     
     order_items.each do |item|
       product_name = item.product_variant&.product&.name || "Product"
-      sku = item.product_variant&.product&.sku || "N/A"
-      hsn = item.product_variant&.product&.hsn_code || "85171300"
       
       table_data << [
         "Handsets",
-        product_name.truncate(40),
+        product_name.truncate(35),
         item.quantity.to_s,
         "%.2f" % item.total_price,
         "0.00",
@@ -333,23 +320,26 @@ class InvoicePdf
       ]
     end
     
-    pdf.table(table_data, 
+    pdf.table(table_data,
       header: true,
-      width: page_width - margin,
-      row_colors: ["F8FAFC", "FFFFFF"],
+      position: :center,
       cell_style: {
-        size: 6.5,
-        padding: 3,
+        size: 7,
+        padding: [4, 4, 4, 4],
         borders: [:bottom],
         border_color: "E2E8F0",
         align: :center
       }
     ) do
-      row(0).style(background: "0F766E", text_color: "FFFFFF", font_style: :bold, size: 7)
-      col_widths.each_with_index do |width, idx|
-        columns(idx).width = width
-      end
+      row(0).style(background: "0F766E", text_color: "FFFFFF", font_style: :bold, size: 7.5)
       columns(1).style(align: :left)
+      columns(0).width = 50
+      columns(2).width = 30
+      columns(3).width = 60
+      columns(4).width = 60
+      columns(5).width = 60
+      columns(6).width = 65
+      columns(7).width = 65
     end
     
     pdf.move_down 8
@@ -380,7 +370,7 @@ class InvoicePdf
       
       pdf.move_down 4
       pdf.text "Grand Total ₹%.2f" % total_amount, 
-               align: :right, size: 14, style: :bold, color: "0F766E"
+              align: :right, size: 14, style: :bold, color: "0F766E"
     end
     
     pdf.move_down 20
