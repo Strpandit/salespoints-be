@@ -78,6 +78,7 @@ gem 'phonelib'
 gem 'country_select'
 gem 'cloudinary'
 gem 'prawn'
+gem 'prawn-table'
 
 # gem "sidekiq", "~> 8.1"
 # gem "sidekiq-scheduler", "~> 6.0"
