@@ -45,6 +45,18 @@ module Api
       ), status: :ok
     end
 
+    def download_invoice
+      order = scoped_orders.find_by(id: params[:id])
+      return render json: { error: "Order not found" }, status: :not_found unless order
+      
+      pdf = InvoicePdfGenerator.new(order).generate
+      
+      send_data pdf,
+        filename: "Invoice_#{order.order_number}.pdf",
+        type: "application/pdf",
+        disposition: "attachment"
+    end
+
     def show
       order = scoped_orders.includes(order_items: :product_variant).find_by(id: params[:id])
       return render json: { error: "Order not found" }, status: :not_found unless order

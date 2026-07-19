@@ -113,6 +113,20 @@ module Api
       render json: { error: e.message }, status: :unprocessable_entity
     end
 
+    def download_invoice
+      order = current_dealer.buyer_b2b_orders.find_by(id: params[:id]) ||
+              current_dealer.seller_b2b_orders.find_by(id: params[:id])
+      
+      return render json: { error: "Order not found" }, status: :not_found unless order
+      
+      pdf = InvoicePdfGenerator.new(order).generate
+      
+      send_data pdf,
+        filename: "Invoice_#{order.reference_number}.pdf",
+        type: "application/pdf",
+        disposition: "attachment"
+    end
+
     def payment
       order = current_dealer.buyer_b2b_orders.find_by(id: params[:id])
       return render json: { error: "Order not found" }, status: :not_found unless order
@@ -172,7 +186,7 @@ module Api
       case next_status
       when "shipped"
         order.mark_shipped!(note: params[:status_note])
-        EmailDispatcherService.b2b_order_shipped(order.id)
+        EmailDispatcherService.b2b_order_shipped(order)
         delivery_confirmation = DeliveryConfirmationService.new(deliverable: order, actor: current_dealer).create_or_refresh!
       else
         return render json: { error: "Unsupported status update" }, status: :unprocessable_entity

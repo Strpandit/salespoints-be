@@ -11,6 +11,9 @@ Rails.application.routes.draw do
 
   # Defines the root path route ("/")
   namespace :api do
+    namespace :admin do
+      resources :orders, only: [:index, :show]
+    end
     resources :accounts do
       put :change_password, on: :member
       patch :block, on: :member
@@ -32,6 +35,7 @@ Rails.application.routes.draw do
       member do
         post :refund
         post :release_settlement
+        get :download_invoice
       end
 
       resources :return_requests, only: [:index, :create, :update]
@@ -164,6 +168,7 @@ Rails.application.routes.draw do
         post :reject
         post :payment
         patch :update_status
+        get :download_invoice
       end
     end
     resources :dealer_notifications, only: [:index] do
