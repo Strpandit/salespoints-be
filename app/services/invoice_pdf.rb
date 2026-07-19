@@ -79,7 +79,7 @@ class InvoicePdf
 
   def seller_cin
     return "N/A" if seller.blank?
-    seller.dealer_profile&.cin_number || "N/A"
+    "N/A"
   end
 
   def seller_address
@@ -87,11 +87,11 @@ class InvoicePdf
   end
 
   def seller_state
-    seller&.state || "GUJARAT"
+    "DELHI"
   end
 
   def seller_state_code
-    seller&.state_code || "IN-GJ"
+    "IN-DL"
   end
 
   # ============ BUYER DETAILS ============
@@ -139,11 +139,11 @@ class InvoicePdf
   end
 
   def buyer_state
-    buyer&.state || "Delhi"
+    "Delhi"
   end
 
   def buyer_state_code
-    buyer&.state_code || "IN-DL"
+    "IN-DL"
   end
 
   def format_address(address)
