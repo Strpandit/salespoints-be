@@ -357,19 +357,19 @@ class InvoicePdf
     pdf.move_down 8
     
     pdf.bounding_box([pdf.bounds.width * 0.5, pdf.cursor], width: pdf.bounds.width * 0.5) do
-      pdf.text "Subtotal: INR%.2f" % subtotal, align: :right, size: 10
-      pdf.text "Discount: INR%.2f" % discount, align: :right, size: 10
-      pdf.text "Taxable Value: INR%.2f" % taxable_value, align: :right, size: 10
+      pdf.text "Subtotal: INR #{'%.2f' % subtotal}", align: :right, size: 10
+      pdf.text "Discount: INR #{'%.2f' % discount}", align: :right, size: 10
+      pdf.text "Taxable Value: INR #{'%.2f' % taxable_value}", align: :right, size: 10
       
       if tax_type == "IGST"
-        pdf.text "IGST (#{igst_rate}%): INR%.2f" % igst_amount, align: :right, size: 10
+        pdf.text "IGST (#{igst_rate}%): INR #{'%.2f' % igst_amount}", align: :right, size: 10
       else
-        pdf.text "CGST (#{cgst_rate}%): INR%.2f" % cgst_amount, align: :right, size: 10
-        pdf.text "SGST (#{sgst_rate}%): INR%.2f" % sgst_amount, align: :right, size: 10
+        pdf.text "CGST (#{cgst_rate}%): INR #{'%.2f' % cgst_amount}", align: :right, size: 10
+        pdf.text "SGST (#{sgst_rate}%): INR #{'%.2f' % sgst_amount}", align: :right, size: 10
       end
       
       pdf.move_down 4
-      pdf.text "Grand Total INR%.2f" % total_amount, 
+      pdf.text "Grand Total INR #{'%.2f' % total_amount}", 
               align: :right, size: 14, style: :bold, color: "0F766E"
     end
     
