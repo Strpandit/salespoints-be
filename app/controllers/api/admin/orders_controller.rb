@@ -132,6 +132,33 @@ module Api
         render json: { error: "Order not found" }, status: :not_found
       end
 
+      def download_invoice
+        order = Order.includes(:buyer, :seller_dealer, order_items: { product_variant: :product })
+                .find_by(id: params[:id])
+
+        if order.present?
+          pdf = ::InvoicePdf.new(order).generate
+
+          return send_data pdf,
+            filename: "Invoice_#{order.order_number}.pdf",
+            type: "application/pdf",
+            disposition: "attachment"
+        end
+
+        b2b_order = B2bOrder.includes(:buyer_dealer, :seller_dealer, b2b_order_items: { product_variant: :product }).find_by(id: params[:id])
+
+        if b2b_order.present?
+            pdf = ::InvoicePdf.new(b2b_order).generate
+
+            return send_data pdf,
+              filename: "Invoice_#{b2b_order.reference_number}.pdf",
+              type: "application/pdf",
+              disposition: "attachment"
+        end
+
+        render json: { error: "Order not found" }, status: :not_found
+      end
+
       private
 
       def transform_retail_order(order)

@@ -68,15 +68,18 @@ class InvoicePdf
   end
 
   def seller_gstin
-    seller&.gst_number || seller&.dealer_profile&.gst_number || "N/A"
+    return "N/A" if seller.blank?
+    seller.dealer_profile&.gst_number || "N/A"
   end
 
   def seller_pan
-    seller&.pan_number || seller&.dealer_profile&.pan_number || "N/A"
+    return "N/A" if seller.blank?
+    seller.dealer_profile&.pan_number || "N/A"
   end
 
   def seller_cin
-    seller&.cin_number || "N/A"
+    return "N/A" if seller.blank?
+    seller.dealer_profile&.cin_number || "N/A"
   end
 
   def seller_address
@@ -106,6 +109,7 @@ class InvoicePdf
   end
 
   def buyer_gstin
+    return "N/A" if buyer.blank?
     if buyer.respond_to?(:gst_number)
       buyer.gst_number || "N/A"
     elsif buyer.respond_to?(:dealer_profile) && buyer.dealer_profile&.gst_number

@@ -130,7 +130,7 @@ module Api
       
       return render json: { error: "Order not found" }, status: :not_found unless order
       
-      pdf = InvoicePdfGenerator.new(order).generate
+      pdf = InvoicePdf.new(order).generate
       
       send_data pdf,
         filename: "Invoice_#{order.reference_number}.pdf",

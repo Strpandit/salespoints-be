@@ -12,7 +12,11 @@ Rails.application.routes.draw do
   # Defines the root path route ("/")
   namespace :api do
     namespace :admin do
-      resources :orders, only: [:index, :show]
+      resources :orders, only: [:index, :show] do
+        member do
+          get :download_invoice
+        end
+      end
     end
     resources :accounts do
       put :change_password, on: :member
