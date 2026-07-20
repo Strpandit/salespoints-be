@@ -30,7 +30,10 @@ class InvoicePdf
 
     pdf.font_families.update(
       "DejaVu" => {
-        normal: Rails.root.join("app/assets/fonts/DejaVuSans.ttf")
+        normal: Rails.root.join("app/assets/fonts/DejaVuSans.ttf"),
+        bold: Rails.root.join("app/assets/fonts/DejaVuSans-Bold.ttf"),
+        italic: Rails.root.join("app/assets/fonts/DejaVuSans-Oblique.ttf"),
+        bold_italic: Rails.root.join("app/assets/fonts/DejaVuSans-BoldOblique.ttf")
       }
     )
 
