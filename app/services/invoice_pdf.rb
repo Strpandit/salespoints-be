@@ -293,34 +293,7 @@ class InvoicePdf
     pdf.stroke_horizontal_rule
     pdf.move_down 8
 
-    col1 = 150
-    col2 = 185
-    col3 = 185
-    col4 = 60
-
-    y = pdf.cursor
-
     # Order Details
-    pdf.table(
-      [[order_details, bill_to, ship_to, warranty]],
-      width: pdf.bounds.width,
-      column_widths: [140, 170, 170, 55],
-      cell_style: {
-        borders: [:top, :bottom],
-        border_width: 0.5,
-        border_color: "999999",
-        padding: [6, 8],
-        size: 9,
-        inline_format: true,
-        valign: :top,
-        leading: 2
-      }
-    ) do |t|
-      t.columns(0).font_style = :bold
-    end
-
-    pdf.move_down 10
-
     order_details = <<~TEXT
     <b>Order ID:</b> #{order_reference}
 
@@ -367,6 +340,23 @@ class InvoicePdf
     warranty = <<~TEXT
     Keep this invoice and manufacturer box for warranty purposes.
     TEXT
+
+
+    pdf.table(
+      [[order_details, bill_to, ship_to, warranty]],
+      width: pdf.bounds.width,
+      column_widths: [130, 160, 160, 85],
+      cell_style: {
+        borders: [:left, :right, :top, :bottom],
+        border_width: 0.5,
+        border_color: "CCCCCC",
+        padding: [6, 8],
+        size: 9,
+        inline_format: true,
+        valign: :top,
+        leading: 2
+      }
+    )
 
     pdf.move_down 15
 
