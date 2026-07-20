@@ -1,7 +1,6 @@
 module Api
   class B2bOrdersController < ApplicationController
-    before_action :require_dealer!
-    skip_before_action :authenticate_request!, only: [:download_invoice]
+    before_action :require_dealer!, except: [:download_invoice]
 
     def index
       view = params[:view].to_s
@@ -126,19 +125,45 @@ module Api
     end
 
     def download_invoice
-      order = current_dealer.buyer_b2b_orders.find_by(id: params[:id]) ||
-              current_dealer.seller_b2b_orders.find_by(id: params[:id])
-      
-      return render json: { error: "Order not found" }, status: :not_found unless order
-      
-      pdf = InvoicePdf.new(order).generate
-      
-      send_data pdf,
-        filename: "Invoice_#{order.reference_number}.pdf",
-        type: "application/pdf",
-        disposition: "attachment",
-        status: :ok
-      return
+      begin
+        if current_admin.present?
+          order = B2bOrder.find_by(id: params[:id])
+          if order.blank?
+            return render json: { error: "Order not found" }, status: :not_found
+          end
+
+          pdf = InvoicePdf.new(order).generate
+          
+          send_data pdf,
+            filename: "Invoice_#{order.reference_number}.pdf",
+            type: "application/pdf",
+            disposition: "attachment",
+            status: :ok
+          return
+        end
+
+        if current_dealer.present?
+          order = current_dealer.buyer_b2b_orders.find_by(id: params[:id]) ||
+                  current_dealer.seller_b2b_orders.find_by(id: params[:id])
+          
+          if order.blank?
+            return render json: { error: "Order not found" }, status: :not_found
+          end
+          
+          pdf = InvoicePdf.new(order).generate
+          
+          send_data pdf,
+            filename: "Invoice_#{order.reference_number}.pdf",
+            type: "application/pdf",
+            disposition: "attachment",
+            status: :ok
+          return
+        end
+        render json: { error: "Unauthorized" }, status: :unauthorized
+        
+      rescue => e
+        render json: { error: "Failed to generate invoice: #{e.message}" }, status: :internal_server_error
+      end
     end
 
     def payment
