@@ -210,7 +210,7 @@ class InvoicePdf
   end
 
   def taxable_value
-    @order.taxable_amount.to_f
+    @order.subtotal_amount.to_d - @order.tax_amount.to_d
   end
 
   def order_items
