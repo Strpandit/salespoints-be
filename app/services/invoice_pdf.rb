@@ -4,6 +4,19 @@ require 'prawn/table'
 class InvoicePdf
   attr_reader :order
 
+  GST_STATE_CODES = {
+    "01" => "Jammu and Kashmir", "02" => "Himachal Pradesh", "03" => "Punjab",
+    "04" => "Chandigarh", "05" => "Uttarakhand", "06" => "Haryana",
+    "07" => "Delhi", "08" => "Rajasthan", "09" => "Uttar Pradesh",
+    "10" => "Bihar", "11" => "Sikkim", "18" => "Assam", "19" => "West Bengal",
+    "20" => "Jharkhand", "21" => "Odisha", "22" => "Chhattisgarh",
+    "23" => "Madhya Pradesh", "24" => "Gujarat", "27" => "Maharashtra",
+    "29" => "Karnataka", "30" => "Goa", "32" => "Kerala", "33" => "Tamil Nadu",
+    "36" => "Telangana", "37" => "Andhra Pradesh"
+  }.freeze
+
+  DEFAULT_TAX_RATE = 18.0
+
   def initialize(order)
     @order = order
   end
@@ -14,12 +27,22 @@ class InvoicePdf
       margin: 30,
       info: { Title: "Invoice #{invoice_number}" }
     )
+
+    pdf.font_families.update(
+      "DejaVu" => {
+        normal: Rails.root.join("app/assets/fonts/DejaVuSans.ttf")
+      }
+    )
+
+    pdf.font "DejaVu"
+    pdf.font_size 9
     
     add_company_header(pdf)
     add_invoice_header(pdf)
     add_billing_shipping(pdf)
     add_items_table(pdf)
     add_totals(pdf)
+    add_signature(pdf)
     add_footer(pdf)
     
     pdf.render
@@ -28,13 +51,12 @@ class InvoicePdf
   private
 
   def invoice_number
-    @invoice_number ||= generate_invoice_number
+    @invoice_number ||= @order.respond_to?(:invoice_number) && @order.invoice_number.present? ? @order.invoice_number : generate_invoice_number
   end
 
   def generate_invoice_number
     financial_year = current_financial_year
     
-    # Count existing invoices for this order type
     count = if @order.is_a?(B2bOrder)
       B2bOrder.where("reference_number LIKE ?", "SPIN-#{financial_year}-%").count
     else
@@ -185,7 +207,7 @@ class InvoicePdf
   end
 
   def taxable_value
-    subtotal - discount
+    @order.taxable_amount.to_f
   end
 
   def order_items
@@ -234,15 +256,18 @@ class InvoicePdf
     tax_type == "IGST" ? "IGST" : "CGST/SGST"
   end
 
+  def tax_amount
+    igst_amount + cgst_amount + sgst_amount
+  end
+
+  def currency(amount)
+    "₹#{format('%.2f', amount)}"
+  end
+
   # ============ PDF METHODS ============
 
   def add_company_header(pdf)
-    pdf.text "123503, Farukhnaqar, HARYANA, India - 122503, IN-HR", 
-             size: 8, color: "666666", align: :center
-    pdf.text "GSTIN - #{seller_gstin}", 
-             size: 8, color: "666666", align: :center
-    pdf.text "IRN - #{SecureRandom.hex(20)}", 
-             size: 8, color: "666666", align: :center
+    pdf.text "Tax Invoice", size: 14, align: :center
     pdf.move_down 8
   end
 
@@ -250,145 +275,262 @@ class InvoicePdf
     pdf.bounding_box([0, pdf.cursor], width: pdf.bounds.width) do
       # Left Column
       pdf.bounding_box([0, pdf.cursor], width: pdf.bounds.width * 0.65) do
-        pdf.text "Order ID: #{order_reference}", size: 10, style: :bold
-        pdf.text "Order Date: #{order_date.strftime('%d-%m-%Y')}", size: 10
-        pdf.text "Invoice Date: #{invoice_date.strftime('%d-%m-%Y')}", size: 10
-        pdf.text "PAN: #{seller_pan}", size: 10
-        pdf.text "CIN: #{seller_cin}", size: 10
+        pdf.text "SALESPOINTS INDIA PRIVATE LIMITED", size: 10, style: :bold, color: "0000FF"
+        pdf.text "H-105, Street No. 13, Karawal Nagar, Bhajanpura, Delhi - 110055, IN-DL", size: 8, color: "666666"
+        pdf.text "GSTIN - 07ACEPO1919N1ZA", size: 10, color: "666666"
+        pdf.text "IRN - #{SecureRandom.hex(20)}", size: 10, color: "666666"
       end
       
-      # Right Column
-      pdf.bounding_box([pdf.bounds.width * 0.65, pdf.cursor], width: pdf.bounds.width * 0.35) do
-        pdf.text "SALESPOINTS", size: 16, style: :bold, color: "0F766E", align: :right
-        pdf.text "www.salespoints.in", size: 8, color: "666666", align: :right
-        pdf.text "Invoice No: #{invoice_number}", size: 8, color: "0F766E", align: :right, style: :bold
-      end
     end
     
     pdf.move_down 12
   end
 
   def add_billing_shipping(pdf)
-    pdf.bounding_box([0, pdf.cursor], width: pdf.bounds.width) do
-      # Bill To
-      pdf.bounding_box([0, pdf.cursor], width: pdf.bounds.width * 0.5) do
-        pdf.text "Bill To", size: 10, style: :bold, color: "0F766E"
-        pdf.text buyer_name, size: 10, style: :bold
-        pdf.text buyer_address, size: 9
-        pdf.text "Phone: #{buyer_phone}", size: 9
-        pdf.text "GSTIN: #{buyer_gstin}", size: 9
-        pdf.text "State: #{buyer_state}", size: 9
-        pdf.text "State Code: #{buyer_state_code}", size: 9
-        pdf.text "Place of Supply: #{buyer_state}", size: 9
-      end
+    pdf.stroke_horizontal_rule
+    pdf.move_down 8
+
+    col1 = 130
+    col2 = 180
+    col3 = 180
+    col4 = 90
+
+    y = pdf.cursor
+
+    # Order Details
+    pdf.bounding_box([0, y], width: col1) do
+      pdf.text "<b>Order ID:</b>", inline_format: true, size: 9
+      pdf.text "#{order_reference}", size: 9, style: :bold
+      pdf.text "<b>Invoice No:</b> #{invoice_number}", inline_format: true, size: 9
+
+      pdf.move_down 4
+      pdf.text "<b>Order Date:</b> #{order_date.strftime('%d-%m-%Y')}", inline_format: true, size: 9
+      pdf.move_down 4
+      pdf.text "<b>Invoice Date:</b> #{invoice_date.strftime('%d-%m-%Y')}", inline_format: true, size: 9
+      pdf.move_down 4
+      pdf.text "<b>PAN:</b> ABTCS6593H", inline_format: true, size: 9
+      pdf.move_down 4
+      pdf.text "<b>CIN:</b> U46524DC2026PTC471107", inline_format: true, size: 9
+    end
+
+    pdf.bounding_box([col1 + 10, y], width: col2) do
+      pdf.text "<b>Bill To</b>", inline_format: true, size: 10
+      pdf.text buyer_name, style: :bold, size: 10
+      pdf.text buyer_address, size: 9
+      pdf.text "Phone: #{buyer_phone}", size: 9
+      pdf.text "GSTIN: #{buyer_gstin}", size: 9
+      pdf.text "State: #{buyer_state}", size: 9
+      pdf.text "State Code: #{buyer_state_code}", size: 9
+      pdf.text "Place of Supply: #{buyer_state}", size: 9
+    end
       
-      # Ship To
-      pdf.bounding_box([pdf.bounds.width * 0.5, pdf.cursor], width: pdf.bounds.width * 0.5) do
-        pdf.text "Ship To", size: 10, style: :bold, color: "0F766E"
-        pdf.text buyer_name, size: 10, style: :bold
-        pdf.text buyer_address, size: 9
-        pdf.text "Phone: #{buyer_phone}", size: 9
-        pdf.text "GSTIN: #{buyer_gstin}", size: 9
-        pdf.text "State: #{buyer_state}", size: 9
-        pdf.text "State Code: #{buyer_state_code}", size: 9
-        pdf.text "Place of Supply: #{buyer_state}", size: 9
-      end
+    pdf.bounding_box([col1 + col2 + 20, y], width: col3) do
+      pdf.text "<b>Ship To</b>", inline_format: true, size: 10
+      pdf.text buyer_name, style: :bold, size: 10
+      pdf.text buyer_address, size: 9
+      pdf.text "Phone: #{buyer_phone}", size: 9
+    end
+
+    pdf.bounding_box([col1 + col2 + col3 + 20, y], width: col4) do
+      pdf.text "Keep this invoice and manufacturer box for warranty purposes.",
+        size: 7,
+        align: :center,
+        style: :italic
     end
     
+    pdf.move_down 15
+
+    pdf.stroke_horizontal_rule
+    pdf.move_down 6
+
+    pdf.text "Total items: #{order_items.count}", size: 10
     pdf.move_down 8
-    pdf.text "\\*Keep this invoice and manufacturer box for warranty purposes.", 
-             size: 8, color: "666666"
-    pdf.text "Total items: #{order_items.count}", size: 10, style: :bold
-    pdf.move_down 10
   end
 
   def add_items_table(pdf)
-    table_data = [["Product", "Title", "Qty", "Gross Amount INR", "Discounts/Coupons INR", "Taxable Value INR", tax_label, "Total INR"]]
-    
+    data = [[
+      "Product",
+      "Title",
+      "Qty",
+      "Gross\nAmount ₹",
+      "Discount\n₹",
+      "Taxable\nValue ₹",
+      "#{tax_label} ₹",
+      "Total ₹"
+    ]]
     order_items.each do |item|
-      product_name = item.product_variant&.product&.name || "Product"
+      product = item.product_variant&.product
+
+      left = <<~TEXT
+    Handsets
+
+    FSN: #{product&.sku || "-"}
+
+    HSN/SAC: 85171300
+    TEXT
+
+    title = <<~TEXT
+  <b>#{product&.name}</b>
+
+  Warranty: 1 Year Warranty on Handset and 6 Months Warranty on Accessories
+
+  1. [IMEI/Serial No: #{SecureRandom.random_number(999999999999999)}]
+
+  #{tax_label}: #{product&.tax_rate || 18} %
+  TEXT
       
-      table_data << [
-        "Handsets",
-        product_name.truncate(35),
-        item.quantity.to_s,
-        "%.2f" % item.total_price,
-        "0.00",
-        "%.2f" % item.total_price,
-        "%.2f" % (item.total_price * 0.18),
-        "%.2f" % (item.total_price * 1.18)
+      data << [
+        left,
+        title,
+        item.quantity,
+        format('%.2f', item.total_price),
+        format('%.2f', discount),
+        format('%.2f', taxable_value),
+        format('%.2f', tax_amount),
+        format('%.2f', total_amount)
       ]
     end
+
+    data << [
+      "",
+      "<b>Total</b>",
+      order_items.sum(&:quantity),
+      format('%.2f', subtotal),
+      format('%.2f', discount),
+      format('%.2f', taxable_value),
+      format('%.2f', tax_amount),
+      format('%.2f', total_amount)
+    ]
     
-    pdf.table(table_data,
+    pdf.table(
+      data,
       header: true,
-      position: :center,
+      width: pdf.bounds.width,
       cell_style: {
-        size: 7,
-        padding: [4, 4, 4, 4],
-        borders: [:bottom],
-        border_color: "E2E8F0",
-        align: :center
+        size: 8,
+        padding: [8,6],
+        border_width: 0.5,
+        border_color: "999999",
+        inline_format: true,
+        valign: :top
+      },
+      column_widths: {
+        0 => 80,
+        1 => 180,
+        2 => 30,
+        3 => 55,
+        4 => 55,
+        5 => 60,
+        6 => 50,
+        7 => 55
       }
     ) do
-      row(0).style(background: "0F766E", text_color: "FFFFFF", font_style: :bold, size: 7.5)
-      columns(1).style(align: :left)
-      columns(0).width = 50
-      columns(2).width = 30
-      columns(3).width = 60
-      columns(4).width = 60
-      columns(5).width = 60
-      columns(6).width = 65
-      columns(7).width = 65
-    end
-    
-    pdf.move_down 8
-    
-    order_items.each_with_index do |item, index|
-      pdf.text "#{index + 1}. [IMEI/Serial No: #{SecureRandom.alphanumeric(15).upcase}]", size: 7, color: "666666"
-      pdf.text "Warranty: 1 Year Warranty on Handset and 6 Months Warranty on Accessories", size: 7, color: "666666"
-      pdf.text "HSN/SAC: #{item.product_variant&.product&.hsn_code || '85171300'}", size: 7, color: "666666"
-      pdf.text "#{tax_label}: 18.0 %", size: 7, color: "666666"
-      pdf.move_down 2
+      row(0).font_style = :bold
+      row(0).background_color = "EFEFEF"
+      row(0).align = :center
+
+      columns(2..7).align = :right
+
+      row(-1).font_style = :bold
+      row(-1).background_color = "F9F9F9"
     end
   end
 
   def add_totals(pdf)
-    pdf.move_down 8
+    pdf.move_down 12
+
+    total_table = [
+      ["", "", "Subtotal", currency(subtotal)],
+      ["", "", "Discount", "-#{currency(discount)}"],
+      ["", "", tax_label, currency(tax_amount)],
+      ["", "", "<b>Grand Total</b>", "<b>#{currency(total_amount)}</b>"]
+    ]
     
-    pdf.bounding_box([pdf.bounds.width * 0.5, pdf.cursor], width: pdf.bounds.width * 0.5) do
-      pdf.text "Subtotal: INR #{'%.2f' % subtotal}", align: :right, size: 10
-      pdf.text "Discount: INR #{'%.2f' % discount}", align: :right, size: 10
-      pdf.text "Taxable Value: INR #{'%.2f' % taxable_value}", align: :right, size: 10
-      
-      if tax_type == "IGST"
-        pdf.text "IGST (#{igst_rate}%): INR #{'%.2f' % igst_amount}", align: :right, size: 10
-      else
-        pdf.text "CGST (#{cgst_rate}%): INR #{'%.2f' % cgst_amount}", align: :right, size: 10
-        pdf.text "SGST (#{sgst_rate}%): INR #{'%.2f' % sgst_amount}", align: :right, size: 10
-      end
-      
-      pdf.move_down 4
-      pdf.text "Grand Total INR #{'%.2f' % total_amount}", 
-              align: :right, size: 14, style: :bold, color: "0F766E"
+    pdf.table(
+      total_table,
+      width: 260,
+      position: :right,
+      cell_style: {
+        borders: [],
+        inline_format: true,
+        size: 9,
+        padding: [5,8]
+      }
+    ) do
+
+      columns(2).font_style = :bold
+
+      row(-1).borders = [:top]
+      row(-1).border_width = 1
+      row(-1).font_style = :bold
+      row(-1).size = 11
+
     end
-    
-    pdf.move_down 20
+
+  end
+  
+  def add_signature(pdf)
+
+    pdf.move_down 25
+
+    pdf.bounding_box([pdf.bounds.right-180,pdf.cursor],width:180) do
+
+      pdf.text "Salespoints",
+        align: :center,
+        style: :bold,
+        size: 9
+
+      pdf.move_down 15
+
+      pdf.text "Signature",
+        align: :center,
+        size: 9
+
+      pdf.move_down 18
+
+      pdf.stroke_horizontal_rule
+
+      pdf.move_down 5
+
+      pdf.text "Authorized Signatory",
+        align: :center,
+        style: :bold,
+        size: 9
+
+    end
+
   end
 
   def add_footer(pdf)
-    pdf.text "SALESPOINTS", size: 14, style: :bold, color: "0F766E", align: :center
-    pdf.move_down 2
-    
-    pdf.text "Authorized Signatory", size: 10, style: :italic, align: :center
+
+    pdf.move_down 25
+
+    pdf.stroke_horizontal_rule
+
     pdf.move_down 8
-    
-    pdf.text "Returns Policy: At SalesPoints we try to deliver perfectly each and every time. But in the off-chance that you need to return the item, please do so with the original Brand box/price tag, original packing and invoice without which it will be really difficult for us to act on your request. Please help us in helping you. Terms and conditions apply.", 
-             size: 8, color: "666666", align: :center, inline_format: true
-    
+
+    pdf.text(
+      "Returns Policy: At SalesPoints we try to deliver perfectly every time. " \
+      "Please keep the original invoice and manufacturer's packaging for warranty and returns.",
+      size: 7,
+      color: "666666"
+    )
+
     pdf.move_down 6
-    pdf.text "Regd. office: #{seller_address}", size: 8, color: "666666", align: :center
+
+    pdf.text(
+      "Registered Office: H-105, Street No. 13, Karawal Nagar, Bhajanpura, Delhi - 110055",
+      size: 7,
+      color: "666666"
+    )
+
     pdf.move_down 4
-    pdf.text "Contact: support@salespoints.in | www.salespoints.in", size: 8, color: "666666", align: :center
+
+    pdf.text(
+      "Contact: support@salespoints.in | www.salespoints.in",
+      size: 7,
+      color: "666666"
+    )
+
   end
 end
