@@ -295,9 +295,11 @@ class InvoicePdf
 
     # Order Details
     order_details = <<~TEXT
-    <b>Order ID:</b> #{order_reference}
+    <b>Order ID:</b>
+    #{order_reference}
 
-    <b>Invoice No:</b> #{invoice_number}
+    <b>Invoice No:</b>
+    #{invoice_number}
 
     <b>Order Date:</b> #{order_date.strftime('%d-%m-%Y')}
 
@@ -313,7 +315,7 @@ class InvoicePdf
 
     #{buyer_name}
 
-    #{buyer_address}
+    #{buyer_address.to_s.gsub(', ', ",\n")}
 
     Phone: #{buyer_phone}
 
@@ -331,7 +333,7 @@ class InvoicePdf
 
     #{buyer_name}
 
-    #{buyer_address}
+    #{buyer_address.to_s.gsub(', ', ",\n")}
 
     Phone: #{buyer_phone}
 
@@ -339,7 +341,7 @@ class InvoicePdf
 
     pdf.table(
       [[order_details, bill_to, ship_to]],
-      column_widths: [180, 210, 210],
+      column_widths: [145, 195, 195],
       cell_style: {
         borders: [:left, :right, :top, :bottom],
         border_width: 0.5,
@@ -386,9 +388,11 @@ class InvoicePdf
       title = <<~TEXT
       <b>#{product&.name}</b>
 
-      Warranty: 1 Year Warranty on Handset and 6 Months Warranty on Accessories
+      Warranty: 1 Year (Handset)
+      6 Months (Accessories)
 
-      1. [IMEI/Serial No: #{SecureRandom.random_number(999999999999999)}]
+      1. [IMEI/Serial No:
+      #{SecureRandom.random_number(999999999999999)}]
 
       #{tax_label}: #{product&.tax_rate || 18} %
       TEXT
@@ -429,14 +433,14 @@ class InvoicePdf
         border_color: "999999"
       },
       column_widths: {
-        0 => 75,
-        1 => 210,
-        2 => 35,
-        3 => 60,
-        4 => 50,
-        5 => 65,
-        6 => 50,
-        7 => 55,
+        0 => 60,
+        1 => 160,
+        2 => 30,
+        3 => 55,
+        4 => 45,
+        5 => 60,
+        6 => 45,
+        7 => 50,
       }
     ) do
       row(0).font_style = :bold
@@ -450,6 +454,8 @@ class InvoicePdf
 
       columns(1).padding = [8,8]
       columns(1).valign = :top
+      columns(1).overflow = :shrink_to_fit
+      columns(1).min_font_size = 6
 
       columns(2..7).align = :right
 
