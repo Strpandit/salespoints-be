@@ -337,15 +337,9 @@ class InvoicePdf
 
     TEXT
 
-    warranty = <<~TEXT
-    Keep this invoice and manufacturer box for warranty purposes.
-    TEXT
-
-
     pdf.table(
-      [[order_details, bill_to, ship_to, warranty]],
-      width: pdf.bounds.width,
-      column_widths: [130, 160, 160, 85],
+      [[order_details, bill_to, ship_to]],
+      column_widths: [155, 190, 190],
       cell_style: {
         borders: [:left, :right, :top, :bottom],
         border_width: 0.5,
