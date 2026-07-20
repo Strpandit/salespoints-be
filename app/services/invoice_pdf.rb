@@ -278,7 +278,7 @@ class InvoicePdf
     pdf.bounding_box([0, pdf.cursor], width: pdf.bounds.width) do
       # Left Column
       pdf.bounding_box([0, pdf.cursor], width: pdf.bounds.width * 0.65) do
-        pdf.text "SALESPOINTS INDIA PRIVATE LIMITED", size: 10, style: :bold, color: "0000FF"
+        pdf.text "SALESPOINTS INDIA PRIVATE LIMITED", size: 10, style: :bold
         pdf.text "H-105, Street No. 13, Karawal Nagar, Bhajanpura, Delhi - 110055, IN-DL", size: 8, color: "666666"
         pdf.text "GSTIN - 07ACEPO1919N1ZA", size: 10, color: "666666"
         pdf.text "IRN - #{SecureRandom.hex(20)}", size: 10, color: "666666"
@@ -302,11 +302,8 @@ class InvoicePdf
     #{invoice_number}
 
     <b>Order Date:</b> #{order_date.strftime('%d-%m-%Y')}
-
     <b>Invoice Date:</b> #{invoice_date.strftime('%d-%m-%Y')}
-
     <b>PAN:</b> ABTCS6593H
-
     <b>CIN:</b> U46524DC2026PTC471107
     TEXT
 
@@ -318,13 +315,9 @@ class InvoicePdf
     #{buyer_address.to_s.gsub(', ', ",\n")}
 
     Phone: #{buyer_phone}
-
     GSTIN: #{buyer_gstin}
-
     State: #{buyer_state}
-
     State Code: #{buyer_state_code}
-
     Place of Supply: #{buyer_state}
     TEXT
 
@@ -336,14 +329,13 @@ class InvoicePdf
     #{buyer_address.to_s.gsub(', ', ",\n")}
 
     Phone: #{buyer_phone}
-
     TEXT
 
     pdf.table(
       [[order_details, bill_to, ship_to]],
       column_widths: [145, 195, 195],
       cell_style: {
-        borders: [:left, :right, :top, :bottom],
+        borders: [:top, :bottom],
         border_width: 0.5,
         border_color: "CCCCCC",
         padding: [6, 8],
@@ -354,12 +346,11 @@ class InvoicePdf
       }
     )
 
-    pdf.move_down 15
-
-    pdf.stroke_horizontal_rule
-    pdf.move_down 6
+    pdf.move_down 10
 
     pdf.text "Total items: #{order_items.count}", size: 10
+
+    pdf.stroke_horizontal_rule
     pdf.move_down 8
   end
 
@@ -467,57 +458,36 @@ class InvoicePdf
   def add_totals(pdf)
     pdf.move_down 12
 
-    total_table = [
-      ["", "", "Subtotal", currency(subtotal)],
-      ["", "", "Discount", "-#{currency(discount)}"],
-      ["", "", tax_label, currency(tax_amount)],
-      ["", "", "<b>Grand Total</b>", "<b>#{currency(total_amount)}</b>"]
-    ]
-    
-    pdf.table(
-      total_table,
-      width: 260,
-      position: :right,
-      cell_style: {
-        borders: [],
-        inline_format: true,
-        size: 9,
-        padding: [6,8],
-        leading: 2
-      }
-    ) do
-
-      columns(2).font_style = :bold
-
-      row(-1).borders = [:top]
-      row(-1).border_width = 1
-      row(-1).font_style = :bold
-      row(-1).size = 11
-
-    end
-
+    pdf.text(
+      "<b>Grand Total     #{currency(total_amount)}</b>",
+      inline_format: true,
+      align: :right,
+      size: 11
+    )
   end
   
   def add_signature(pdf)
 
-    pdf.move_down 25
+    pdf.move_down 20
 
-    pdf.bounding_box([pdf.bounds.right-180,pdf.cursor],width:180) do
+    pdf.bounding_box([pdf.bounds.right-170,pdf.cursor],width:170) do
 
-      pdf.text "Salespoints",
+      pdf.text "SalesPoints India Pvt Ltd",
         align: :center,
         style: :bold,
         size: 9
 
-      pdf.move_down 15
+      pdf.move_down 8
 
-      pdf.text "Signature",
-        align: :center,
-        size: 9
+      signature_path = Rails.root.join("app/assets/images/sign.png")
 
-      pdf.move_down 18
-
-      pdf.stroke_horizontal_rule
+      if File.exist?(signature_path)
+        pdf.image signature_path,
+          width: 90,
+          position: :center
+      else
+        pdf.move_down 30
+      end
 
       pdf.move_down 5
 
@@ -527,7 +497,6 @@ class InvoicePdf
         size: 9
 
     end
-
   end
 
   def add_footer(pdf)
