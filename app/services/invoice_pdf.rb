@@ -293,54 +293,81 @@ class InvoicePdf
     pdf.stroke_horizontal_rule
     pdf.move_down 8
 
-    col1 = 130
-    col2 = 180
-    col3 = 180
-    col4 = 90
+    col1 = 150
+    col2 = 185
+    col3 = 185
+    col4 = 60
 
     y = pdf.cursor
 
     # Order Details
-    pdf.bounding_box([0, y], width: col1) do
-      pdf.text "<b>Order ID:</b>", inline_format: true, size: 9
-      pdf.text "#{order_reference}", size: 9, style: :bold
-      pdf.text "<b>Invoice No:</b> #{invoice_number}", inline_format: true, size: 9
-
-      pdf.move_down 4
-      pdf.text "<b>Order Date:</b> #{order_date.strftime('%d-%m-%Y')}", inline_format: true, size: 9
-      pdf.move_down 4
-      pdf.text "<b>Invoice Date:</b> #{invoice_date.strftime('%d-%m-%Y')}", inline_format: true, size: 9
-      pdf.move_down 4
-      pdf.text "<b>PAN:</b> ABTCS6593H", inline_format: true, size: 9
-      pdf.move_down 4
-      pdf.text "<b>CIN:</b> U46524DC2026PTC471107", inline_format: true, size: 9
+    pdf.table(
+      [[order_details, bill_to, ship_to, warranty]],
+      width: pdf.bounds.width,
+      column_widths: [140, 170, 170, 55],
+      cell_style: {
+        borders: [:top, :bottom],
+        border_width: 0.5,
+        border_color: "999999",
+        padding: [6, 8],
+        size: 9,
+        inline_format: true,
+        valign: :top,
+        leading: 2
+      }
+    ) do |t|
+      t.columns(0).font_style = :bold
     end
 
-    pdf.bounding_box([col1 + 10, y], width: col2) do
-      pdf.text "<b>Bill To</b>", inline_format: true, size: 10
-      pdf.text buyer_name, style: :bold, size: 10
-      pdf.text buyer_address, size: 9
-      pdf.text "Phone: #{buyer_phone}", size: 9
-      pdf.text "GSTIN: #{buyer_gstin}", size: 9
-      pdf.text "State: #{buyer_state}", size: 9
-      pdf.text "State Code: #{buyer_state_code}", size: 9
-      pdf.text "Place of Supply: #{buyer_state}", size: 9
-    end
-      
-    pdf.bounding_box([col1 + col2 + 20, y], width: col3) do
-      pdf.text "<b>Ship To</b>", inline_format: true, size: 10
-      pdf.text buyer_name, style: :bold, size: 10
-      pdf.text buyer_address, size: 9
-      pdf.text "Phone: #{buyer_phone}", size: 9
-    end
+    pdf.move_down 10
 
-    pdf.bounding_box([col1 + col2 + col3 + 20, y], width: col4) do
-      pdf.text "Keep this invoice and manufacturer box for warranty purposes.",
-        size: 7,
-        align: :center,
-        style: :italic
-    end
-    
+    order_details = <<~TEXT
+    <b>Order ID:</b> #{order_reference}
+
+    <b>Invoice No:</b> #{invoice_number}
+
+    <b>Order Date:</b> #{order_date.strftime('%d-%m-%Y')}
+
+    <b>Invoice Date:</b> #{invoice_date.strftime('%d-%m-%Y')}
+
+    <b>PAN:</b> ABTCS6593H
+
+    <b>CIN:</b> U46524DC2026PTC471107
+    TEXT
+
+    bill_to = <<~TEXT
+    <b>Bill To</b>
+
+    #{buyer_name}
+
+    #{buyer_address}
+
+    Phone: #{buyer_phone}
+
+    GSTIN: #{buyer_gstin}
+
+    State: #{buyer_state}
+
+    State Code: #{buyer_state_code}
+
+    Place of Supply: #{buyer_state}
+    TEXT
+
+    ship_to = <<~TEXT
+    <b>Ship To</b>
+
+    #{buyer_name}
+
+    #{buyer_address}
+
+    Phone: #{buyer_phone}
+
+    TEXT
+
+    warranty = <<~TEXT
+    Keep this invoice and manufacturer box for warranty purposes.
+    TEXT
+
     pdf.move_down 15
 
     pdf.stroke_horizontal_rule
@@ -365,22 +392,22 @@ class InvoicePdf
       product = item.product_variant&.product
 
       left = <<~TEXT
-    Handsets
+      #{product&.sku}
 
-    FSN: #{product&.sku || "-"}
+      Handsets
 
-    HSN/SAC: 85171300
-    TEXT
+      HSN: 85171300
+      TEXT
 
-    title = <<~TEXT
-  <b>#{product&.name}</b>
+      title = <<~TEXT
+      <b>#{product&.name}</b>
 
-  Warranty: 1 Year Warranty on Handset and 6 Months Warranty on Accessories
+      Warranty: 1 Year Warranty on Handset and 6 Months Warranty on Accessories
 
-  1. [IMEI/Serial No: #{SecureRandom.random_number(999999999999999)}]
+      1. [IMEI/Serial No: #{SecureRandom.random_number(999999999999999)}]
 
-  #{tax_label}: #{product&.tax_rate || 18} %
-  TEXT
+      #{tax_label}: #{product&.tax_rate || 18} %
+      TEXT
       
       data << [
         left,
@@ -410,30 +437,40 @@ class InvoicePdf
       header: true,
       cell_style: {
         size: 8,
-        padding: [8,6],
-        border_width: 0.5,
-        border_color: "999999",
+        padding: [6, 6],
+        leading: 2,
         inline_format: true,
-        valign: :top
+        valign: :top,
+        border_width: 0.5,
+        border_color: "999999"
       },
       column_widths: {
-        0 => 45,
-        1 => 155,
-        2 => 30,
+        0 => 75,
+        1 => 210,
+        2 => 35,
         3 => 60,
-        4 => 45,
-        5 => 60,
-        6 => 40,
-        7 => 40,      }
+        4 => 50,
+        5 => 65,
+        6 => 50,
+        7 => 55,
+      }
     ) do
       row(0).font_style = :bold
       row(0).background_color = "EFEFEF"
+      row(0).height = 42
       row(0).align = :center
+      row(0).valign = :center
+
+      columns(0).overflow = :shrink_to_fit
+      columns(0).min_font_size = 7
+
+      columns(1).padding = [8,8]
+      columns(1).valign = :top
 
       columns(2..7).align = :right
 
       row(-1).font_style = :bold
-      row(-1).background_color = "F9F9F9"
+      row(-1).background_color = "F8F8F8"
     end
   end
 
@@ -455,7 +492,8 @@ class InvoicePdf
         borders: [],
         inline_format: true,
         size: 9,
-        padding: [5,8]
+        padding: [6,8],
+        leading: 2
       }
     ) do
 
