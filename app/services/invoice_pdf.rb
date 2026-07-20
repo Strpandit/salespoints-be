@@ -418,15 +418,14 @@ class InvoicePdf
         valign: :top
       },
       column_widths: {
-        0 => 80,
-        1 => 180,
+        0 => 45,
+        1 => 155,
         2 => 30,
-        3 => 55,
-        4 => 55,
+        3 => 60,
+        4 => 45,
         5 => 60,
-        6 => 50,
-        7 => 55
-      }
+        6 => 40,
+        7 => 40,      }
     ) do
       row(0).font_style = :bold
       row(0).background_color = "EFEFEF"
