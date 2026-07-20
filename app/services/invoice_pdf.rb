@@ -408,7 +408,6 @@ class InvoicePdf
     pdf.table(
       data,
       header: true,
-      width: pdf.bounds.width,
       cell_style: {
         size: 8,
         padding: [8,6],
