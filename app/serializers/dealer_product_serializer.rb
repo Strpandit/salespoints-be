@@ -32,7 +32,7 @@ class DealerProductSerializer < ApplicationSerializer
       url: Rails.application.routes.url_helpers.rails_blob_url(file, host: host),
       filename: file.filename.to_s,
       content_type: file.content_type.to_s,
-      is_primary: object.display_primary_blob_id == file.blob.id
+      is_primary: object.display_primary_blob_id == file.id
     }
   end
 end
