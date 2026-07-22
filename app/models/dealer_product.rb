@@ -58,6 +58,14 @@ class DealerProduct < ApplicationRecord
     []
   end
 
+  def display_primary_blob_id
+    if product_variant.present?
+      product_variant.display_primary_blob_id
+    else
+      product.primary_media_blob_id
+    end
+  end
+
   private
 
   def at_least_one_sales_channel_enabled
