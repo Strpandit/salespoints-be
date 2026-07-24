@@ -179,7 +179,7 @@ class MetaWhatsappWebhookService
       return false unless order.status == "pending"
       return false if order.seller_dealer_id.present?
       return false if order.expires_at.present? && Time.current > order.expires_at
-      return false unless order.payment_status == "paid"
+      # return false unless order.payment_status == "paid"
       return true
     end
 
