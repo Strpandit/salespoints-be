@@ -261,7 +261,13 @@ class MetaWhatsappWebhookService
         end
         next unless offer
 
-        event.update!(b2b_order_offer: offer)
+        # event.update!(b2b_order_offer: offer)
+        case offer
+        when OrderOffer
+          event.update!(order_offer: offer)
+        when B2bOrderOffer
+          event.update!(b2b_order_offer: offer)
+        end
         update_offer_status(offer, status_entry["status"])
       rescue ActiveRecord::RecordNotUnique
         Rails.logger.debug "Duplicate status event for message_id: #{message_id}"
@@ -301,7 +307,6 @@ class MetaWhatsappWebhookService
         button_id: offer.accept_token,
         from: from,
         action: action,
-        order_id: offer.b2b_order&.reference_number,
         dealer_id: offer.dealer&.id,
         order_type: order.is_a?(Order) ? "b2c" : (order.is_direct_buy? && order.source_type == "WholesalerPost" ? "wholesaler" : "b2b"),
         order_id: order.is_a?(Order) ? order.order_number : order.reference_number,
