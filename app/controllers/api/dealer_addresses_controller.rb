@@ -4,15 +4,15 @@ module Api
     before_action :set_address, only: [:show, :update, :destroy]
 
     def index
-      addresses = current_dealer.dealer_addresses.order(is_default: :desc, created_at: :desc)
+      addresses = current_dealer.addresses.order(is_default: :desc, created_at: :desc)
       render json: serialize_resource(addresses, AddressSerializer).merge(
         message: "Dealer addresses fetched successfully"
       ), status: :ok
     end
 
     def create
-      address = current_dealer.dealer_addresses.new(address_params)
-      current_dealer.dealer_addresses.update_all(is_default: false) if truthy?(address_params[:is_default])
+      address = current_dealer.addresses.new(address_params)
+      current_dealer.addresses.update_all(is_default: false) if truthy?(address_params[:is_default])
 
       if address.save
         render json: serialize_resource(address, AddressSerializer).merge(
@@ -30,7 +30,7 @@ module Api
     end
 
     def update
-      current_dealer.dealer_addresses.update_all(is_default: false) if truthy?(address_params[:is_default])
+      current_dealer.addresses.update_all(is_default: false) if truthy?(address_params[:is_default])
 
       if @address.update(address_params)
         render json: serialize_resource(@address, AddressSerializer).merge(
@@ -55,7 +55,7 @@ module Api
     end
 
     def set_address
-      @address = current_dealer.dealer_addresses.find(params[:id])
+      @address = current_dealer.addresses.find(params[:id])
     rescue ActiveRecord::RecordNotFound
       render json: { error: "Address not found" }, status: :not_found
     end
