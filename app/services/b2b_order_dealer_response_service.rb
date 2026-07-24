@@ -110,7 +110,9 @@ class B2bOrderDealerResponseService
   def ensure_b2c_order_can_be_accepted!(order)
     raise StandardError, "Order request expired" if order.expires_at.present? && Time.current > order.expires_at
     raise StandardError, "Order already processed" unless order.status == "pending"
-    raise StandardError, "Payment not completed" unless order.payment_status == "paid"
+    unless order.payment_method.to_s.downcase == "cod"
+      raise StandardError, "Payment not completed" unless order.payment_status == "paid"
+    end
     raise StandardError, "Order already has a seller assigned" if order.seller_dealer_id.present?
   end
 

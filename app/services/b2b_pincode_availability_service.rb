@@ -74,24 +74,116 @@ class B2bPincodeAvailabilityService
     5.0
   end
 
+  # def find_eligible_sellers(coords, radius)
+  #   scope = DealerProduct.live
+  #                        .for_b2b
+  #                        .includes(dealer: :dealer_location)
+  #                        .where("dealer_products.stock_quantity > 0")
+
+  #   scope = scope.where.not(dealer_id: @buyer_dealer.id) if @buyer_dealer.present?
+  #   scope = scope.where(product_variant_id: @product_variant_id) if @product_variant_id.present?
+  #   scope = scope.where(id: @dealer_product_id) if @dealer_product_id.present?
+
+  #   sellers = {}
+
+  #   scope.find_each do |dealer_product|
+  #     dealer = dealer_product.dealer
+  #     location = dealer&.dealer_location
+  #     next unless dealer&.status == "active"
+  #     next unless location&.is_active?
+  #     next if location.latitude.blank? || location.longitude.blank?
+
+  #     distance_info = GoogleMapsService.instance.driving_distance(
+  #       coords[:latitude],
+  #       coords[:longitude],
+  #       location.latitude.to_f,
+  #       location.longitude.to_f
+  #     )
+
+  #     distance_km =
+  #       if distance_info.present?
+  #         distance_info[:distance_km]
+  #       else
+  #         DealerLocation.distance_km(
+  #           coords[:latitude],
+  #           coords[:longitude],
+  #           location.latitude.to_f,
+  #           location.longitude.to_f
+  #         )
+  #       end
+
+  #     seller_radius = location.service_radius_km.to_f
+  #     seller_radius = radius if seller_radius <= 0
+  #     next if distance_km > radius
+  #     next if seller_radius.positive? && distance_km > seller_radius
+
+  #     existing = sellers[dealer.id]
+  #     stock = dealer_product.stock_quantity.to_i
+  #     next if existing && existing[:stock_quantity] >= stock
+
+  #     sellers[dealer.id] = {
+  #       id: dealer.id,
+  #       dealer_code: dealer.dealer_code,
+  #       business_name: dealer.dealer_profile&.business_name,
+  #       stock_quantity: stock,
+  #       distance_km: distance_km.round(2),
+  #       dealer_product_id: dealer_product.id
+  #     }
+  #   end
+
+  #   sellers.values.sort_by { |entry| entry[:distance_km] }
+  # end
+
   def find_eligible_sellers(coords, radius)
+    Rails.logger.info "========== B2B PINCODE DEBUG START =========="
+    Rails.logger.info "Pincode: #{@pincode}"
+    Rails.logger.info "Buyer Dealer ID: #{@buyer_dealer&.id}"
+    Rails.logger.info "Buyer Coordinates: #{coords.inspect}"
+    Rails.logger.info "Search Radius: #{radius} KM"
+    Rails.logger.info "Product Variant ID: #{@product_variant_id}"
+    Rails.logger.info "Dealer Product ID: #{@dealer_product_id}"
+
     scope = DealerProduct.live
-                         .for_b2b
-                         .includes(dealer: :dealer_location)
-                         .where("dealer_products.stock_quantity > 0")
+                        .for_b2b
+                        .includes(dealer: :dealer_location)
+                        .where("dealer_products.stock_quantity > 0")
 
     scope = scope.where.not(dealer_id: @buyer_dealer.id) if @buyer_dealer.present?
     scope = scope.where(product_variant_id: @product_variant_id) if @product_variant_id.present?
     scope = scope.where(id: @dealer_product_id) if @dealer_product_id.present?
+
+    Rails.logger.info "Dealer Products Found: #{scope.count}"
 
     sellers = {}
 
     scope.find_each do |dealer_product|
       dealer = dealer_product.dealer
       location = dealer&.dealer_location
-      next unless dealer&.status == "active"
-      next unless location&.is_active?
-      next if location.latitude.blank? || location.longitude.blank?
+
+      Rails.logger.info "--------------------------------------------"
+      Rails.logger.info "Dealer ID: #{dealer&.id}"
+      Rails.logger.info "Dealer Code: #{dealer&.dealer_code}"
+      Rails.logger.info "Dealer Status: #{dealer&.status}"
+      Rails.logger.info "Stock: #{dealer_product.stock_quantity}"
+      Rails.logger.info "Location Active: #{location&.is_active?}"
+      Rails.logger.info "Latitude: #{location&.latitude}"
+      Rails.logger.info "Longitude: #{location&.longitude}"
+      Rails.logger.info "Seller Radius: #{location&.service_radius_km}"
+
+      unless dealer&.status == "active"
+        Rails.logger.info "SKIPPED -> Dealer inactive"
+        next
+      end
+
+      unless location&.is_active?
+        Rails.logger.info "SKIPPED -> Dealer location inactive"
+        next
+      end
+
+      if location.latitude.blank? || location.longitude.blank?
+        Rails.logger.info "SKIPPED -> Missing coordinates"
+        next
+      end
 
       distance_info = GoogleMapsService.instance.driving_distance(
         coords[:latitude],
@@ -99,6 +191,8 @@ class B2bPincodeAvailabilityService
         location.latitude.to_f,
         location.longitude.to_f
       )
+
+      Rails.logger.info "Google Distance Response: #{distance_info.inspect}"
 
       distance_km =
         if distance_info.present?
@@ -112,14 +206,31 @@ class B2bPincodeAvailabilityService
           )
         end
 
+      Rails.logger.info "Calculated Distance: #{distance_km} KM"
+
       seller_radius = location.service_radius_km.to_f
       seller_radius = radius if seller_radius <= 0
-      next if distance_km > radius
-      next if seller_radius.positive? && distance_km > seller_radius
+
+      Rails.logger.info "Buyer Radius: #{radius}"
+      Rails.logger.info "Seller Radius: #{seller_radius}"
+
+      if distance_km > radius
+        Rails.logger.info "SKIPPED -> Outside buyer radius"
+        next
+      end
+
+      if seller_radius.positive? && distance_km > seller_radius
+        Rails.logger.info "SKIPPED -> Outside seller radius"
+        next
+      end
 
       existing = sellers[dealer.id]
       stock = dealer_product.stock_quantity.to_i
-      next if existing && existing[:stock_quantity] >= stock
+
+      if existing && existing[:stock_quantity] >= stock
+        Rails.logger.info "SKIPPED -> Existing seller has greater stock"
+        next
+      end
 
       sellers[dealer.id] = {
         id: dealer.id,
@@ -129,7 +240,12 @@ class B2bPincodeAvailabilityService
         distance_km: distance_km.round(2),
         dealer_product_id: dealer_product.id
       }
+
+      Rails.logger.info "✅ SELLER ACCEPTED"
     end
+
+    Rails.logger.info "Final Sellers Count: #{sellers.size}"
+    Rails.logger.info "========== B2B PINCODE DEBUG END =========="
 
     sellers.values.sort_by { |entry| entry[:distance_km] }
   end
