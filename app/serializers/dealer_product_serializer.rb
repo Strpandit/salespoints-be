@@ -1,7 +1,7 @@
 class DealerProductSerializer < ApplicationSerializer
   attributes :stock_quantity, :is_active, :approve_status, :sell_in_b2b, :sell_in_b2c, :created_at, :updated_at, :distance_km,
              :media, :consumer_discount_percentage,
-             :dealer_discount_percentage
+             :dealer_discount_percentage, :from_wholesaler
 
   belongs_to :dealer
   belongs_to :product
@@ -9,6 +9,10 @@ class DealerProductSerializer < ApplicationSerializer
 
   def distance_km
     object.respond_to?(:distance_km) ? object.distance_km : nil
+  end
+
+  def from_wholesaler
+    object.respond_to?(:from_wholesaler) ? object.from_wholesaler : false
   end
 
   def consumer_discount_percentage

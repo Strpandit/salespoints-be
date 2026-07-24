@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_07_16_110252) do
+ActiveRecord::Schema[8.0].define(version: 2026_07_23_120100) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -82,7 +82,9 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_16_110252) do
     t.decimal "longitude", precision: 10, scale: 6
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.bigint "dealer_id"
     t.index ["account_id"], name: "index_addresses_on_account_id"
+    t.index ["dealer_id"], name: "index_addresses_on_dealer_id"
   end
 
   create_table "admin_roles", force: :cascade do |t|
@@ -235,6 +237,8 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_16_110252) do
     t.datetime "delivered_at"
     t.text "status_note"
     t.bigint "parent_request_order_id"
+    t.jsonb "billing_address", default: {}, null: false
+    t.jsonb "shipping_address", default: {}, null: false
     t.index ["broadcast_attempts"], name: "index_b2b_orders_on_broadcast_attempts"
     t.index ["buyer_dealer_id"], name: "index_b2b_orders_on_buyer_dealer_id"
     t.index ["buyer_payment_attempt_id"], name: "index_b2b_orders_on_buyer_payment_attempt_id"
@@ -587,7 +591,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_16_110252) do
   create_table "order_offers", force: :cascade do |t|
     t.bigint "order_id", null: false
     t.bigint "dealer_id", null: false
-    t.bigint "notification_id", null: false
+    t.bigint "notification_id"
     t.string "status", default: "open", null: false
     t.string "whatsapp_status", default: "pending", null: false
     t.string "accept_token", null: false
@@ -956,6 +960,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_16_110252) do
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
   add_foreign_key "addresses", "accounts"
+  add_foreign_key "addresses", "dealers"
   add_foreign_key "admin_roles", "admin_users"
   add_foreign_key "admin_roles", "roles"
   add_foreign_key "admin_users", "admin_users", column: "approved_by_id"

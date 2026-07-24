@@ -44,7 +44,7 @@ class DirectBuyNowService
         total_amount: pricing[:total],
         coupon_code: nil,
         payment_method: @payment_method,
-        payment_status: @payment_method == "cod" ? "pending" : "paid",
+        payment_status: "pending",
         payment_gateway: @payment_method == "online" ? "cashfree" : nil,
         billing_address: @billing_address,
         shipping_address: @shipping_address,
@@ -66,17 +66,34 @@ class DirectBuyNowService
         unit_price: pricing[:unit_price],
         total_price: pricing[:subtotal]
       )
+    end
 
-      if @payment_method == "online"
-        payment_data = create_online_payment(order)
-      end
-      
-      ExpireB2cOrderJob.set(wait: 4.hours).perform_later(order.id)
+    if @payment_method == "cod"
+      B2cOrderBroadcastService.new(
+        order: order,
+        actor: @buyer
+      ).broadcast!
+    else
+      payment_data = create_online_payment(order)
+    end
 
+    ExpireB2cOrderJob.set(wait: 4.hours).perform_later(order.id)
+
+    if @payment_method == "cod"
       create_buyer_waiting_notification(order)
     end
 
     Result.new(order: order, payment_data: payment_data)
+
+    rescue => e
+      if order.present? && @payment_method == "online"
+        order.update_columns(
+          payment_status: "failed",
+          status_note: "Payment initialization failed"
+        )
+      end
+
+      raise e
   end
 
   private
@@ -126,7 +143,7 @@ class DirectBuyNowService
     )
 
     attempt.update!(
-      gateway_order_reference: payload["cf_order_id"] || payload["order_id"],
+      gateway_order_reference: payload["cf_order_id"] || payload["order_id"] || payload["order_id"] || attempt.attempt_number,
       payment_session_id: payload["payment_session_id"],
       payment_gateway_payload: payload
     )

@@ -11,6 +11,7 @@ class ExpireB2cOrderJob < ApplicationJob
 
     order.update!(
       status: "cancelled",
+      payment_status: "failed",
       status_note: "No seller accepted the order within time",
       cancelled_at: Time.current
     )

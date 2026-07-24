@@ -77,89 +77,11 @@ module Api
     # Dealer-only B2B listing: same catalog style but excludes own products.
     def b2b_shop_index
       return unauthorized("Dealers only") unless current_dealer
-      buyer_latitude = params[:latitude].presence&.to_f
-      buyer_longitude = params[:longitude].presence&.to_f
-      if buyer_latitude.blank? || buyer_longitude.blank?
-        return render json: { error: "Current location is required to browse nearby B2B products" }, status: :unprocessable_entity
-      end
 
-      configured_radius = current_dealer.dealer_location&.service_radius_km.to_f
-      radius = params[:radius_km].to_f
-      radius = configured_radius if radius <= 0 && configured_radius.positive?
-      radius = 5.0 if radius <= 0
+      params_with_location = auto_capture_location(params)
 
-      items = DealerProduct.live
-                           .for_b2b
-                           .where("dealer_products.stock_quantity > 0")
-                           .where.not(dealer_id: current_dealer.id)
-                           .includes(dealer: :dealer_location, product: {}, product_variant: {})
+      items = B2bShopCatalogService.new(buyer_dealer: current_dealer, params: params_with_location).call
 
-      if params[:category_id].present?
-        items = items.joins(:product).where(products: { category_id: params[:category_id] })
-      end
-
-      if params[:product_id].present?
-        items = items.where(product_id: params[:product_id])
-      end
-
-      if params[:product_variant_id].present?
-        items = items.where(product_variant_id: params[:product_variant_id])
-      end
-
-      if params[:search].present?
-        query = params[:search].strip
-        items = items.joins(:product).where("products.name ILIKE ?", "%#{query}%")
-      end
-
-      case params[:sort]
-      when "price_asc"
-        items = items.joins(:product_variant).order("product_variants.dealer_selling_price ASC")
-      when "price_desc"
-        items = items.joins(:product_variant).order("product_variants.dealer_selling_price DESC")
-      else
-        items = items.order(created_at: :desc)
-      end
-
-      rows = items.to_a.select do |row|
-        seller_location = row.dealer&.dealer_location
-        next false unless seller_location&.is_active && seller_location.latitude.present? && seller_location.longitude.present?
-
-        distance = DealerLocation.distance_km(
-          buyer_latitude,
-          buyer_longitude,
-          seller_location.latitude,
-          seller_location.longitude
-        )
-
-        row.define_singleton_method(:distance_km) { distance.round(2) }
-
-        distance <= radius && distance <= seller_location.service_radius_km.to_f
-      end
-
-      # One listing per product variant: nearest seller within radius (Ola/Uber-style catalog).
-      best_by_variant = {}
-      rows.each do |row|
-        vid = row.product_variant_id
-        d = row.distance_km
-        prev = best_by_variant[vid]
-        best_by_variant[vid] = [row, d] if prev.nil? || d < prev[1]
-      end
-
-      picked = best_by_variant.values.map do |row, d|
-        row.define_singleton_method(:distance_km) { d }
-        row
-      end
-
-      case params[:sort]
-      when "price_asc"
-        picked.sort_by! { |r| r.product_variant.dealer_selling_price.to_f }
-      when "price_desc"
-        picked.sort_by! { |r| -r.product_variant.dealer_selling_price.to_f }
-      else
-        picked.sort_by! { |r| r.distance_km }
-      end
-
-      items = Kaminari.paginate_array(picked).page(params[:page]).per(params[:per_page] || 20)
       render json: serialize_resource(items, DealerProductSerializer, base_url: request.base_url).merge(
         meta: {
           current_page: items.current_page,
@@ -170,6 +92,8 @@ module Api
         },
         message: "B2B dealer products fetched successfully"
       ), status: :ok
+    rescue StandardError => e
+      render json: { error: e.message }, status: :unprocessable_entity
     end
 
     def create
@@ -363,6 +287,42 @@ module Api
       ), status: :ok
     end
 
+    def check_b2b_pincode
+      return unauthorized("Dealers only") unless current_dealer
+
+      result = B2bPincodeAvailabilityService.new(
+        pincode: params[:pincode],
+        product_variant_id: params[:product_variant_id],
+        dealer_product_id: params[:dealer_product_id],
+        buyer_dealer: current_dealer,
+        radius_km: params[:radius_km]
+      ).call
+
+      render json: result, status: :ok
+    rescue StandardError => e
+      render json: {
+        deliverable: false,
+        error: e.message,
+        message: e.message,
+        sellers_count: 0,
+        available_items_count: 0,
+        sellers: []
+      }, status: :unprocessable_entity
+    end
+
+    def b2b_search_suggestions
+      return unauthorized("Dealers only") unless current_dealer
+
+      query = params[:q].presence || params[:search].presence
+      suggestions = B2bSearchSuggestionService.new(
+        buyer_dealer: current_dealer,
+        query: query.to_s,
+        pincode: params[:pincode].presence || params[:postal_code].presence
+      ).call
+
+      render json: { data: suggestions, message: "Suggestions fetched successfully" }, status: :ok
+    end
+
     def check_pincode
       pincode = params[:pincode]
       product_variant_id = params[:product_variant_id]
@@ -426,6 +386,27 @@ module Api
           ]
         ]
       )
+    end
+
+    def auto_capture_location(params)
+      new_params = params.to_unsafe_h.with_indifferent_access
+      
+      return new_params if new_params[:latitude].present? && new_params[:longitude].present?
+      
+      default_address = current_dealer.addresses.where(is_default: true).first ||
+                        current_dealer.addresses.first
+      
+      if default_address.present?
+        if default_address.latitude.present? && default_address.longitude.present?
+          new_params[:latitude] = default_address.latitude
+          new_params[:longitude] = default_address.longitude
+          new_params[:postal_code] = default_address.postal_code
+        elsif default_address.postal_code.present?
+          new_params[:pincode] = default_address.postal_code
+        end
+      end
+      
+      new_params
     end
 
     def submission_dealer

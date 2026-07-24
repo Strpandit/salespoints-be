@@ -104,12 +104,23 @@ class B2bOrderBroadcastService
         next unless location&.is_active?
         next if location.latitude.blank? || location.longitude.blank?
 
-        distance = DealerLocation.distance_km(
+        distance_info = GoogleMapsService.instance.driving_distance(
           buyer_lat,
           buyer_lng,
-          location.latitude,
-          location.longitude
+          location.latitude.to_f,
+          location.longitude.to_f
         )
+
+        distance = if distance_info.present?
+          distance_info[:distance_km]
+        else
+          DealerLocation.distance_km(
+            buyer_lat,
+            buyer_lng,
+            location.latitude,
+            location.longitude
+          )
+        end
 
         next if distance > @current_radius
 

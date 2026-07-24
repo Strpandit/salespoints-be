@@ -1,12 +1,12 @@
 module Api
   class AddressesController < ApplicationController
     before_action :authenticate_request!
-    before_action :set_account
     before_action :set_address, only: [:show, :update, :destroy]
+    before_action :authorize_address!, only: [:show, :update, :destroy]
 
     def index
-      return render json: { error: 'Not authorized' }, status: :unauthorized unless current_account
-      render json: serialize_resource(current_account.addresses, AddressSerializer), status: :ok
+      addresses = current_account.addresses.order(is_default: :desc, created_at: :desc)
+      render json: serialize_resource(addresses, AddressSerializer), status: :ok
     end
 
     def create
@@ -55,19 +55,18 @@ module Api
 
     private
 
-    def set_account
-      @account = current_account
-      return render json: { error: 'Not authorized' }, status: :unauthorized unless @account
+    def set_address
+      @address = Address.find(params[:id])
     end
 
-    def set_address
-      @address = current_account.addresses.find(params[:id])
-      rescue ActiveRecord::RecordNotFound
-        render json: { errors: "Address not found", status: 404 }, status: :not_found
+    def authorize_address!
+      unless @address.account_id == current_account.id
+        render json: { error: 'Not authorized' }, status: :forbidden
+      end
     end
 
     def address_params
-      params.require(:address).permit(:name, :address_line1, :address_line2, :city, :state, :country, :postal_code, :phone, :address_type, :is_default)
+      params.require(:address).permit(:name, :address_line1, :address_line2, :city, :state, :country, :postal_code, :phone, :address_type, :is_default, :latitude, :longitude)
     end
   end
 end

@@ -146,6 +146,7 @@ Rails.application.routes.draw do
     post "dealer/forgot_password", to: "dealer_sessions#forgot_password"
     post "dealer/otp_confirmation", to: "dealer_sessions#otp_confirmation"
     post "dealer/reset_password", to: "dealer_sessions#reset_password"
+    resources :dealer_addresses, path: "dealer/addresses", only: [:index, :create, :show, :update, :destroy]
 
     resources :dealer_products do
       patch :approve, on: :member
@@ -160,6 +161,8 @@ Rails.application.routes.draw do
         get :b2b_shop_index
         get :b2b_similar
         get :check_pincode
+        get :check_b2b_pincode
+        get :b2b_search_suggestions
       end
       resources :reviews, only: [:index, :create]
     end

@@ -5,7 +5,7 @@ class B2bOrderSerializer < ApplicationSerializer
              :buyer_name, :seller_name, :open_items_count, :accepted_items_count, :latitude, :longitude,
              :payment_method, :payment_status, :request_status, :source_type, :is_direct_buy,
              :payment_link_sent_at, :confirmed_at, :payment_confirmed_at, :shipped_at, :delivered_at,
-             :status_note, :payment_token 
+             :status_note, :payment_token, :billing_address, :shipping_address
 
   has_many :b2b_order_items
   has_one :delivery_confirmation

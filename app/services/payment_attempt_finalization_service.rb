@@ -123,11 +123,14 @@ class PaymentAttemptFinalizationService
     Order.where(id: order_ids).find_each do |order|
       order.update!(
         payment_status: "paid",
-        status: "processing",
         payment_reference: attempt.payment_reference,
         payment_confirmed_at: Time.current,
-        paid_at: Time.current
       )
+      
+      B2cOrderBroadcastService.new(
+        order: order,
+        actor: order.buyer
+      ).broadcast!
 
       EmailDispatcherService.retail_order_placed(order)
 

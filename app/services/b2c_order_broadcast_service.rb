@@ -7,6 +7,7 @@ class B2cOrderBroadcastService
   end
 
   def broadcast!
+    return if @order.cancelled?
     items = @order.order_items.includes(product_variant: :product).to_a
     return if items.empty?
 
@@ -15,16 +16,22 @@ class B2cOrderBroadcastService
 
     ActiveRecord::Base.transaction do
       eligible_dealers.each do |dealer, matched_items|
-        OrderBroadcastTracker.create!(
+        tracker = OrderBroadcastTracker.find_or_initialize_by(
           order: @order,
-          dealer: dealer,
+          dealer: dealer
+        )
+
+        tracker.assign_attributes(
           broadcast_radius_km: dealer.dealer_location&.service_radius_km || 5,
           attempt_count: 1,
           last_broadcast_at: Time.current,
           status: "pending"
         )
+        tracker.save!
 
         offer = OrderOffer.find_or_initialize_by(order: @order, dealer: dealer)
+
+        next if offer.whatsapp_status == "sent"
 
         if offer.new_record?
           offer.assign_attributes(
@@ -178,7 +185,7 @@ class B2cOrderBroadcastService
 
     image_url = get_product_image(product, variant)
 
-    MetaWhatsappCloudService.new.send_dealer_order_request(
+    response = MetaWhatsappCloudService.new.send_dealer_order_request(
       to: formatted_phone_for(dealer),
       product: product_name,
       variant: variant_name,
@@ -193,7 +200,7 @@ class B2cOrderBroadcastService
       image_url: image_url
     )
 
-    offer.update!(whatsapp_status: "sent", sent_at: Time.current)
+    offer.update!(whatsapp_status: "sent", sent_at: Time.current, whatsapp_message_id: response.dig("messages",0,"id"),)
   rescue StandardError => e
     offer.update!(whatsapp_status: "failed", failed_at: Time.current, failure_reason: e.message)
   end
@@ -204,7 +211,7 @@ class B2cOrderBroadcastService
     first_item = matched_items.first
     product_name = first_item&.product_variant&.product&.name || "Product"
 
-    NotificationService.deliver(
+    notification = NotificationService.deliver(
       recipient: dealer,
       actor: @actor,
       notifiable: @order,
@@ -223,6 +230,8 @@ class B2cOrderBroadcastService
         items: serialized_offer_items(matched_items)
       }
     )
+    offer.update!(notification: notification)
+    notification
   end
 
   def get_product_image(product, variant)
@@ -298,7 +307,6 @@ class B2cOrderBroadcastService
         quantity: item.quantity,
         unit_price: item.unit_price.to_f,
         total_price: item.total_price.to_f,
-        status: item.status
       }
     end
   end

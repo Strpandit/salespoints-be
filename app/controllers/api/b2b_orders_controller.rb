@@ -53,10 +53,26 @@ module Api
     end
 
     def place_direct
+      billing_address = params[:billing_address].presence || {}
+      shipping_address = params[:shipping_address].presence || billing_address
+      pincode = params[:pincode].presence ||
+                shipping_address["postal_code"].presence ||
+                billing_address["postal_code"].presence
+
       buyer_latitude = params[:latitude].presence&.to_f
       buyer_longitude = params[:longitude].presence&.to_f
       if buyer_latitude.blank? || buyer_longitude.blank?
-        return render json: { error: "Current location is required to place B2B request" }, status: :unprocessable_entity
+        coords = pincode.present? ? B2bPincodeAvailabilityService.geocode_pincode(pincode) : nil
+        buyer_latitude = coords&.dig(:latitude)
+        buyer_longitude = coords&.dig(:longitude)
+      end
+
+      if buyer_latitude.blank? || buyer_longitude.blank?
+        return render json: { error: "Delivery address with valid pincode is required" }, status: :unprocessable_entity
+      end
+
+      if shipping_address.blank?
+        return render json: { error: "Shipping address is required" }, status: :unprocessable_entity
       end
 
       radius = params[:radius_km].to_i
@@ -72,7 +88,10 @@ module Api
         longitude: buyer_longitude,
         radius_km: radius,
         payment_method: payment_method,
-        payment_status: payment_status
+        payment_status: payment_status,
+        billing_address: billing_address,
+        shipping_address: shipping_address,
+        pincode: pincode
       ).call
 
       render json: serialize_resource(order, B2bOrderSerializer, base_url: request.base_url).merge(
