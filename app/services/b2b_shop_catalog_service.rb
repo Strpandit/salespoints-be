@@ -15,7 +15,7 @@ class B2bShopCatalogService
       rows = base_scope.to_a
       rows.each { |row| row.define_singleton_method(:distance_km) { nil } }
       grouped = group_products(rows)
-      sorted = sort_rows(picked)
+      sorted = sort_rows(grouped)
       prioritized = prioritize_wholesaler_matches(sorted)
       return paginate(prioritized)
     end
@@ -23,7 +23,7 @@ class B2bShopCatalogService
     radius = resolved_radius
     rows = filter_rows_within_radius(base_scope.to_a, coords, radius)
     grouped = group_products(rows)
-    sorted = sort_rows(picked)
+    sorted = sort_rows(grouped)
     prioritized = prioritize_wholesaler_matches(sorted)
 
     paginate(prioritized)
