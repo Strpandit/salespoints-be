@@ -128,6 +128,8 @@ class B2bOrder < ApplicationRecord
   end
 
   def mark_accepted!(dealer)
+    raise "Order already accepted" if accepted_at.present?
+    
     update!(
       seller_dealer_id: dealer.id,
       request_status: "accepted_request",

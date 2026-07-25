@@ -18,7 +18,7 @@ module Api
       data = {
         totalRevenue: total_revenue,
         totalOrders: total_orders,
-        totalProducts: sold_orders.joins(:order_items).distinct.count("order_items.product_id"),
+        totalProducts: sold_orders.joins(order_items: { product_variant: :product }).distinct.count("products.id"),
         totalCustomers: sold_orders.where(buyer_type: "Account").distinct.count(:buyer_id),
         revenueGrowth: growth_percentage(previous_revenue, total_revenue),
         ordersGrowth: growth_percentage(previous_order_count, total_orders),
@@ -107,7 +107,8 @@ module Api
     end
 
     def top_products_for(orders)
-      OrderItem.joins(:product, :order)
+      OrderItem.joins(product_variant: :product)
+              .joins(:order)
               .where(order_id: orders.select(:id))
               .group("products.id", "products.name")
               .select("products.id, products.name, SUM(order_items.quantity) AS units_total, COALESCE(SUM(order_items.total_price), 0) AS revenue_total")

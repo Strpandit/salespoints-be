@@ -154,11 +154,11 @@ Rails.application.routes.draw do
       patch :revert_to_pending, on: :member
       patch :update_stock, on: :member
       patch :toggle_active, on: :member
-      get :b2b_show, on: :member
       collection do
         get :shop_index
         get :similar
         get :b2b_shop_index
+        get :b2b_show
         get :b2b_similar
         get :check_pincode
         get :check_b2b_pincode

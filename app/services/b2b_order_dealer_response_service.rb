@@ -409,6 +409,11 @@ class B2bOrderDealerResponseService
         wholesaler_post = WholesalerPost.lock.find(item.wholesaler_post_id)
         dealer_product = wholesaler_post.dealer_product
 
+        unless dealer_product
+          Rails.logger.warn "Dealer product missing for wholesaler post #{wholesaler_post.id}"
+          return nil
+        end
+
         unless dealer_product&.sellable_in_b2b?
           Rails.logger.warn "Dealer product #{wholesaler_post.dealer_product_id} is not enabled for B2B sale"
           return nil
@@ -431,10 +436,19 @@ class B2bOrderDealerResponseService
           product_variant_id: item.product_variant_id
         )
 
-        unless dealer_product && dealer_product.stock_quantity.to_i >= item.quantity.to_i
+        unless dealer_product
+          Rails.logger.warn "Dealer #{@dealer.id} doesn't have product variant #{item.product_variant_id}"
+          return nil
+        end
+
+        unless dealer_product.stock_quantity.to_i >= item.quantity.to_i
           Rails.logger.warn "Dealer #{@dealer.id} doesn't have enough stock for variant #{item.product_variant_id}"
           return nil
         end
+
+        item.update!(
+          dealer_product_id: dealer_product.id
+        )
 
         pricing = Pricing::PriceCalculator.new(
           variant: dealer_product.product_variant,

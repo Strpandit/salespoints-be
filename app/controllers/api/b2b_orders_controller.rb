@@ -53,11 +53,11 @@ module Api
     end
 
     def place_direct
-      billing_address = params[:billing_address].presence || {}
-      shipping_address = params[:shipping_address].presence || billing_address
-      pincode = params[:pincode].presence ||
-                shipping_address["postal_code"].presence ||
-                billing_address["postal_code"].presence
+      pincode = params[:pincode].presence
+
+      return render json: { error: "Product is required" }, status: :unprocessable_entity if params[:product_id].blank?
+      return render json: { error: "Variant is required" }, status: :unprocessable_entity if params[:product_variant_id].blank?
+      return render json: { error: "Pincode is required" }, status: :unprocessable_entity if params[:pincode].blank?
 
       buyer_latitude = params[:latitude].presence&.to_f
       buyer_longitude = params[:longitude].presence&.to_f
@@ -71,26 +71,20 @@ module Api
         return render json: { error: "Delivery address with valid pincode is required" }, status: :unprocessable_entity
       end
 
-      if shipping_address.blank?
-        return render json: { error: "Shipping address is required" }, status: :unprocessable_entity
-      end
-
-      radius = params[:radius_km].to_i
-      radius = 5 if radius <= 0
       payment_method = nil
       payment_status = nil
+      quantity = params[:quantity].to_i
+      quantity = 1 if quantity <= 0
 
       order = B2bDirectOrderService.new(
         buyer: current_dealer,
-        dealer_product_id: params[:dealer_product_id],
-        quantity: params[:quantity],
+        product_id: params[:product_id],
+        product_variant_id: params[:product_variant_id],
+        quantity: quantity,
         latitude: buyer_latitude,
         longitude: buyer_longitude,
-        radius_km: radius,
         payment_method: payment_method,
         payment_status: payment_status,
-        billing_address: billing_address,
-        shipping_address: shipping_address,
         pincode: pincode
       ).call
 

@@ -129,6 +129,7 @@ class B2bOrderCreationService
       wholesaler_post = WholesalerPost.lock.find(request_item.wholesaler_post_id)
       [wholesaler_post, wholesaler_post.dealer_product_id]
     else
+      raise StandardError, "Dealer product missing for request item #{request_item.id}" if request_item.dealer_product_id.blank?
       dealer_product = DealerProduct.lock.find(request_item.dealer_product_id)
       [dealer_product, dealer_product.id]
     end

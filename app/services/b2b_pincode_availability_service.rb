@@ -19,10 +19,11 @@ class B2bPincodeAvailabilityService
     payload
   end
 
-  def initialize(pincode:, product_variant_id: nil, dealer_product_id: nil, buyer_dealer: nil, radius_km: nil)
-    @pincode = pincode.to_s.strip || auto_capture_pincode(buyer_dealer)
+  def initialize(pincode:,  product_id:, product_variant_id: nil, quantity:, buyer_dealer: nil, radius_km: nil)
+    @pincode = pincode.to_s.strip.presence || auto_capture_pincode(buyer_dealer)
+    @product_id = product_id
     @product_variant_id = product_variant_id
-    @dealer_product_id = dealer_product_id
+    @quantity = quantity.to_i
     @buyer_dealer = buyer_dealer
     @radius_km = radius_km
   end
@@ -39,12 +40,11 @@ class B2bPincodeAvailabilityService
     {
       deliverable: sellers.any?,
       message: build_message(sellers, available_items_count),
-      sellers_count: sellers.size,
+      sellers_count: sellers.count,
       available_items_count: available_items_count,
       latitude: coords[:latitude],
       longitude: coords[:longitude],
-      pincode: @pincode,
-      sellers: sellers
+      pincode: @pincode
     }
   end
 
@@ -66,12 +66,12 @@ class B2bPincodeAvailabilityService
   def find_eligible_sellers(coords)
     scope = DealerProduct.live
                          .for_b2b
-                         .includes(dealer: :dealer_location)
-                         .where("dealer_products.stock_quantity > 0")
+                         .includes(dealer: [:dealer_profile, :dealer_location])
+                         .where(product_id: @product_id)
+                         .where("dealer_products.stock_quantity >= ?", @quantity)
 
     scope = scope.where.not(dealer_id: @buyer_dealer.id) if @buyer_dealer.present?
     scope = scope.where(product_variant_id: @product_variant_id) if @product_variant_id.present?
-    scope = scope.where(id: @dealer_product_id) if @dealer_product_id.present?
 
     sellers = {}
 
@@ -103,20 +103,18 @@ class B2bPincodeAvailabilityService
 
       seller_radius = location.service_radius_km.to_f
       next if seller_radius <= 0
-      next if seller_radius.positive? && distance_km > seller_radius
-
-      existing = sellers[dealer.id]
+      next if distance_km > seller_radius
       stock = dealer_product.stock_quantity.to_i
-      next if existing && existing[:stock_quantity] >= stock
 
-      sellers[dealer.id] = {
+      sellers[dealer.id] ||= {
         id: dealer.id,
         dealer_code: dealer.dealer_code,
         business_name: dealer.dealer_profile&.business_name,
-        stock_quantity: stock,
+        stock_quantity: 0,
         distance_km: distance_km.round(2),
-        dealer_product_id: dealer_product.id
       }
+
+      sellers[dealer.id][:stock_quantity] += stock
     end
 
     sellers.values.sort_by { |entry| entry[:distance_km] }
@@ -125,7 +123,7 @@ class B2bPincodeAvailabilityService
   def build_message(sellers, available_items_count)
     return "No sellers available for delivery to pincode #{@pincode}" if sellers.empty?
 
-    if @dealer_product_id.present? || @product_variant_id.present?
+    if @product_variant_id.present?
       "#{available_items_count} item(s) available at pincode #{@pincode} from #{sellers.size} seller(s)"
     else
       "#{available_items_count} item(s) available at pincode #{@pincode}"

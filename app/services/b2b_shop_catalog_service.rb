@@ -14,7 +14,7 @@ class B2bShopCatalogService
     if coords.blank?
       rows = base_scope.to_a
       rows.each { |row| row.define_singleton_method(:distance_km) { nil } }
-      picked = pick_nearest_per_variant(rows)
+      grouped = group_products(rows)
       sorted = sort_rows(picked)
       prioritized = prioritize_wholesaler_matches(sorted)
       return paginate(prioritized)
@@ -22,7 +22,7 @@ class B2bShopCatalogService
 
     radius = resolved_radius
     rows = filter_rows_within_radius(base_scope.to_a, coords, radius)
-    picked = pick_nearest_per_variant(rows)
+    grouped = group_products(rows)
     sorted = sort_rows(picked)
     prioritized = prioritize_wholesaler_matches(sorted)
 
@@ -74,7 +74,7 @@ class B2bShopCatalogService
 
     if @params[:search].present?
       query = @params[:search].strip
-      items = items.joins(:product).where("products.name ILIKE :q OR products.sku ILIKE :q", q: "%#{query}%")
+      items = items.joins(:product).where("products.name ILIKE :q OR products.slug ILIKE :q OR products.sku ILIKE :q", q: "%#{query}%")
     end
 
     items
@@ -107,6 +107,24 @@ class B2bShopCatalogService
     DealerLocation.distance_km(lat1, lng1, lat2, lng2)
   end
 
+  def group_products(rows)
+    grouped = rows.group_by(&:product_id)
+
+    grouped.values.map do |dealer_products|
+      representative = dealer_products.min_by do |row|
+        row.respond_to?(:distance_km) ? (row.distance_km || Float::INFINITY) : Float::INFINITY
+      end
+
+      total_stock = dealer_products.sum(&:stock_quantity)
+
+      representative.define_singleton_method(:stock_quantity) do
+        total_stock
+      end
+
+      representative
+    end
+  end
+
   def pick_nearest_per_variant(rows)
     best_by_variant = {}
 
@@ -127,9 +145,9 @@ class B2bShopCatalogService
   def sort_rows(rows)
     case @params[:sort]
     when "price_asc"
-      rows.sort_by { |row| row.product_variant.dealer_selling_price.to_f }
+      rows.sort_by { |row| row.product_variant&.dealer_selling_price.to_f }
     when "price_desc"
-      rows.sort_by { |row| -row.product_variant.dealer_selling_price.to_f }
+      rows.sort_by { |row| -row.product_variant&.dealer_selling_price.to_f }
     else
       rows.sort_by do |row|
         distance = row.respond_to?(:distance_km) ? row.distance_km : Float::INFINITY
@@ -142,11 +160,11 @@ class B2bShopCatalogService
   def prioritize_wholesaler_matches(rows)
     return rows if @params[:search].blank?
 
-    wholesaler_product_ids = wholesaler_dealer_product_ids(@params[:search].strip)
+    wholesaler_product_ids = wholesaler_product_ids(@params[:search].strip)
     return rows if wholesaler_product_ids.empty?
 
     rows.each do |row|
-      priority = wholesaler_product_ids.include?(row.id) ? PRIORITY_WHOLESALER : PRIORITY_B2B
+      priority = wholesaler_product_ids.include?(row.product_id) ? PRIORITY_WHOLESALER : PRIORITY_B2B
       row.define_singleton_method(:listing_priority) { priority }
       row.define_singleton_method(:from_wholesaler) { priority == PRIORITY_WHOLESALER }
     end
@@ -157,7 +175,7 @@ class B2bShopCatalogService
     end
   end
 
-  def wholesaler_dealer_product_ids(query)
+  def wholesaler_product_ids(query)
     pincode = @params[:pincode].presence || @params[:postal_code].presence
 
     posts = WholesalerPost.visible_to_marketplace
@@ -174,7 +192,7 @@ class B2bShopCatalogService
       next unless dealer_product&.sellable_in_b2b?
       next unless dealer_product.stock_quantity.to_i.positive?
 
-      dealer_product.id
+      dealer_product.product_id
     end.uniq
   end
 

@@ -1,8 +1,8 @@
 class B2bOrderBroadcastService
   include Rails.application.routes.url_helpers
-  DEFAULT_RADIUS = 5
-  MAX_RADIUS = 15
-  INCREMENT_PER_MINUTE = 1
+  DEFAULT_RADIUS = 10
+  MAX_RADIUS = 30
+  INCREMENT_PER_MINUTE = 2
 
   def initialize(order:, actor:, current_radius: nil, is_b2c: false)
     @order = order
@@ -22,6 +22,7 @@ class B2bOrderBroadcastService
     return if @order.accepted? if @order.respond_to?(:accepted?)
 
     @current_radius += INCREMENT_PER_MINUTE
+    return expire_order! if @current_radius > MAX_RADIUS
 
     @order.update!(
       current_broadcast_radius: @current_radius,
@@ -95,9 +96,11 @@ class B2bOrderBroadcastService
                   .for_b2b
                   .includes(:product_variant, dealer: :dealer_location)
                   .where(product_variant_id: item.product_variant_id)
+                  .where("stock_quantity >= ?", item.quantity)
                   .find_each do |dealer_product|
 
         dealer = dealer_product.dealer
+        next unless dealer.status == "active"
         next if dealer.id == @order.buyer_dealer_id
 
         location = dealer.dealer_location
@@ -126,8 +129,6 @@ class B2bOrderBroadcastService
 
         seller_radius = location.service_radius_km.to_f
         next if seller_radius.positive? && distance > seller_radius
-
-        next unless dealer_product.stock_quantity.to_i >= item.quantity.to_i
 
         matches[dealer] ||= []
         matches[dealer] << item unless matches[dealer].include?(item)
@@ -312,5 +313,12 @@ class B2bOrderBroadcastService
         status: item.status
       }
     end
+  end
+
+  def expire_order!
+    @order.update!(
+      status: "expired",
+      request_status: "expired"
+    )
   end
 end

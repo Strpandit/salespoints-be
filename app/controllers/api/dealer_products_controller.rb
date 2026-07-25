@@ -129,15 +129,18 @@ module Api
     def b2b_show
       return unauthorized("Dealers only") unless current_dealer
 
-      item = DealerProduct.live
-                          .for_b2b
-                          .where("dealer_products.stock_quantity > 0")
-                          .where.not(dealer_id: current_dealer.id)
-                          .includes(:dealer, :product, :product_variant)
-                          .find_by(id: params[:id])
-      return render json: { error: "Dealer product not found" }, status: :not_found unless item
+      product = Product.find_by!(slug: params[:slug])
 
-      render json: serialize_resource(item, DealerProductSerializer, base_url: request.base_url).merge(
+      items = DealerProduct.live
+                          .for_b2b
+                          .includes(:dealer, :product, :product_variant)
+                          .where(product_id: product.id)
+                          .where.not(dealer_id: current_dealer.id)
+                          .where("dealer_products.stock_quantity > 0")
+
+      return render json: { error: "Product not found" }, status: :not_found if items.blank?
+
+      render json: serialize_resource(items.first, DealerProductSerializer, base_url: request.base_url, variants: items).merge(
         message: "B2B dealer product fetched successfully"
       ), status: :ok
     end
@@ -262,28 +265,36 @@ module Api
     def b2b_similar
       return unauthorized("Dealers only") unless current_dealer
 
-      base_scope = DealerProduct.live
-                                .for_b2b
-                                .where("dealer_products.stock_quantity > 0")
-                                .where.not(dealer_id: current_dealer.id)
-                                .includes(:product, :product_variant)
+      product = Product.find_by(id: params[:product_id])
+      return render json: { error: "Product not found" }, status: :not_found unless product
 
-      if params[:dealer_product_id].present?
-        current = base_scope.find_by(id: params[:dealer_product_id])
-        return render json: { error: "Dealer product not found" }, status: :not_found unless current
+      dealer_products = DealerProduct.live
+                                    .for_b2b
+                                    .includes(:dealer, :product, :product_variant)
+                                    .joins(:product)
+                                    .where(products: { category_id: product.category_id })
+                                    .where.not(product_id: product.id)
+                                    .where.not(dealer_id: current_dealer.id)
+                                    .where("dealer_products.stock_quantity > 0")
 
-        items = base_scope.joins(:product)
-                          .where(products: { category_id: current.product.category_id })
-                          .where.not(id: current.id)
-                          .limit(8)
-      elsif params[:product_id].present?
-        items = base_scope.where(product_id: params[:product_id]).limit(8)
-      else
-        items = base_scope.limit(8)
+      grouped = dealer_products.group_by(&:product_id)
+
+      items = grouped.values.first(8).map do |products|
+        representative = products.first
+
+        representative.define_singleton_method(:stock_quantity) do
+          products.sum(&:stock_quantity)
+        end
+
+        representative
       end
 
-      render json: serialize_resource(items, DealerProductSerializer, base_url: request.base_url).merge(
-        message: "Similar B2B dealer products fetched successfully"
+      render json: serialize_resource(
+        items,
+        DealerProductSerializer,
+        base_url: request.base_url
+      ).merge(
+        message: "Similar B2B products fetched successfully"
       ), status: :ok
     end
 
@@ -292,10 +303,10 @@ module Api
 
       result = B2bPincodeAvailabilityService.new(
         pincode: params[:pincode],
+        product_id: params[:product_id],
         product_variant_id: params[:product_variant_id],
-        dealer_product_id: params[:dealer_product_id],
+        quantity: params[:quantity] || 1,
         buyer_dealer: current_dealer,
-        radius_km: params[:radius_km]
       ).call
 
       render json: result, status: :ok
@@ -538,7 +549,7 @@ module Api
     end
 
     def set_dealer_product
-      @dealer_product = DealerProduct.find_by(id: params[:id])
+      @dealer_product = DealerProduct.find_by(slug: params[:slug])
       render json: { error: "Dealer product not found" }, status: :not_found unless @dealer_product
     end
 

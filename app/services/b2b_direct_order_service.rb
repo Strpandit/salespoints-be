@@ -1,43 +1,27 @@
 class B2bDirectOrderService
   COD_LIMIT = 50_000.to_d
+  INITIAL_RADIUS = 10
 
-  def initialize(buyer:, dealer_product_id:, quantity:, latitude:, longitude:, radius_km:, payment_method: nil, payment_status: "pending", buyer_payment_attempt: nil, billing_address: {}, shipping_address: {}, pincode: nil)
+  def initialize(buyer:, product_id:, product_variant_id:, quantity:, latitude:, longitude:, payment_method: nil, payment_status: "pending", buyer_payment_attempt: nil, pincode: nil)
     @buyer = buyer
-    @dealer_product_id = dealer_product_id
+    @product_id = product_id
+    @product_variant_id = product_variant_id
     @quantity = quantity.to_i.positive? ? quantity.to_i : 1
     @latitude = latitude.to_f
     @longitude = longitude.to_f
-    @radius_km = radius_km.to_i.positive? ? radius_km.to_i : 5
     @payment_method = payment_method
     @payment_status = payment_status.to_s.presence || "pending"
     @buyer_payment_attempt = buyer_payment_attempt
-    @billing_address = normalize_address(billing_address)
-    @shipping_address = normalize_address(shipping_address)
     @pincode = pincode.to_s.strip.presence
   end
 
   def call
     validate!
-    resolve_coordinates!
+    resolve_coordinates!   
 
-    dealer_product = DealerProduct.live.includes(:product_variant, :dealer).find_by(id: @dealer_product_id)
-    raise StandardError, "Product not available for B2B sale" unless dealer_product&.sellable_in_b2b?
-    raise StandardError, "Cannot buy your own product" if dealer_product.dealer_id == @buyer.id
-    raise StandardError, "Insufficient stock" if dealer_product.stock_quantity.to_i < @quantity
+    variant = ProductVariant.find_by(id: @product_variant_id)
+    raise StandardError, "Product variant not found" unless variant
 
-    availability = B2bPincodeAvailabilityService.new(
-      pincode: order_pincode,
-      dealer_product_id: dealer_product.id,
-      product_variant_id: dealer_product.product_variant_id,
-      buyer_dealer: @buyer,
-      radius_km: @radius_km
-    ).call
-    raise StandardError, availability[:message] unless availability[:deliverable]
-
-    seller = dealer_product.dealer
-    raise StandardError, "Seller dealer is unavailable" unless seller&.status == "active"
-
-    variant = dealer_product.product_variant
     pricing = calculate_pricing(variant)
     if @payment_method.present? && @payment_method == "cod"
       check_cod_limit(pricing[:total])
@@ -52,13 +36,11 @@ class B2bDirectOrderService
         request_status: "pending_request",
         status: "pending_request",
         requested_at: Time.current,
-        requested_radius_km: @radius_km,
-        current_broadcast_radius: 5,
+        requested_radius_km: INITIAL_RADIUS,
+        current_broadcast_radius: INITIAL_RADIUS,
         broadcast_attempts: 0,
         latitude: @latitude,
         longitude: @longitude,
-        billing_address: @billing_address,
-        shipping_address: @shipping_address,
         subtotal_amount: pricing[:subtotal],
         tax_amount: pricing[:gst_amount],
         discount_amount: 0,
@@ -68,8 +50,8 @@ class B2bDirectOrderService
         payment_status: "pending",
         buyer_payment_attempt: @buyer_payment_attempt,
         is_direct_buy: false,
-        source_type: "DealerProduct",
-        source_id: dealer_product.id
+        source_type: "b2b",
+        source_id: @product_id
       )
 
       item = B2bOrderItem.create!(
@@ -78,11 +60,11 @@ class B2bDirectOrderService
         quantity: @quantity,
         unit_price: pricing[:unit_price],
         total_price: pricing[:subtotal],
-        dealer_product_id: dealer_product.id,
+        dealer_product_id: nil,
         status: "open"
       )
 
-      B2bOrderBroadcastService.new(order: order, actor: @buyer, current_radius: 5).initial_broadcast!
+      B2bOrderBroadcastService.new(order: order, actor: @buyer, current_radius: INITIAL_RADIUS).initial_broadcast!
 
       BroadcastB2bOrderJob.set(wait: 1.minute).perform_later(order.id)
     end
@@ -93,7 +75,7 @@ class B2bDirectOrderService
   private
 
   def validate!
-    raise StandardError, "Delivery address is required" if @shipping_address.blank? || @shipping_address["address_line1"].blank?
+    raise StandardError, "Product variant is required" if @product_variant_id.blank?
     raise StandardError, "Delivery pincode is required" if order_pincode.blank?
   end
 
@@ -108,19 +90,7 @@ class B2bDirectOrderService
   end
 
   def order_pincode
-    @pincode.presence ||
-      @shipping_address["postal_code"].presence ||
-      @billing_address["postal_code"].presence
-  end
-
-  def normalize_address(raw)
-    return {} if raw.blank?
-
-    payload = raw.respond_to?(:to_unsafe_h) ? raw.to_unsafe_h : raw.to_h
-    payload.stringify_keys.slice(
-      "name", "phone", "address_line1", "address_line2", "city", "state",
-      "country", "postal_code", "latitude", "longitude"
-    )
+    @pincode
   end
 
   def calculate_pricing(variant)
