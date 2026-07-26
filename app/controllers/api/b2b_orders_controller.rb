@@ -83,29 +83,6 @@ module Api
         delivery_address.save!
       end
 
-      buyer_latitude = params[:latitude].presence&.to_f
-      buyer_longitude = params[:longitude].presence&.to_f
-      if buyer_latitude.blank? || buyer_longitude.blank?
-        if use_business_address
-          location = current_dealer.dealer_location
-          if location&.latitude.present?
-            buyer_latitude = location.latitude.to_f
-            buyer_longitude = location.longitude.to_f
-          end
-        elsif delivery_address.present?
-          buyer_latitude = delivery_address.latitude.to_f
-          buyer_longitude = delivery_address.longitude.to_f
-        else
-          coords = pincode.present? ? B2bPincodeAvailabilityService.geocode_pincode(pincode) : nil
-          buyer_latitude = coords&.dig(:latitude)
-          buyer_longitude = coords&.dig(:longitude)
-        end
-      end
-
-      if buyer_latitude.blank? || buyer_longitude.blank?
-        return render json: { error: "Delivery address with valid pincode is required" }, status: :unprocessable_entity
-      end
-
       payment_method = nil
       payment_status = nil
       quantity = params[:quantity].to_i
@@ -116,8 +93,6 @@ module Api
         product_id: params[:product_id],
         product_variant_id: params[:product_variant_id],
         quantity: quantity,
-        latitude: buyer_latitude,
-        longitude: buyer_longitude,
         payment_method: payment_method,
         payment_status: payment_status,
         pincode: pincode,
