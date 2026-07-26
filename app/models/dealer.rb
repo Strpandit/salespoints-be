@@ -30,6 +30,7 @@ class Dealer < ApplicationRecord
   has_many :order_broadcast_trackers, dependent: :destroy
   has_many :order_offers, dependent: :destroy
   has_many :sales_orders, class_name: "Order", foreign_key: :seller_dealer_id, dependent: :nullify
+  has_many :purchase_orders, class_name: 'Order', as: :buyer
 
   accepts_nested_attributes_for :dealer_profile, reject_if: :all_blank
   accepts_nested_attributes_for :dealer_location, reject_if: :all_blank
@@ -71,6 +72,10 @@ class Dealer < ApplicationRecord
 
   def clear_otp!
     update!(otp_pin: nil, otp_sent_at: nil)
+  end
+
+  def orders
+    sales_orders
   end
 
   def update_location_from_address!
