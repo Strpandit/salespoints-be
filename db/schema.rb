@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_07_26_050347) do
+ActiveRecord::Schema[8.0].define(version: 2026_07_26_120648) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -668,6 +668,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_26_050347) do
     t.text "refund_reason"
     t.datetime "return_window_closes_at"
     t.datetime "expires_at"
+    t.datetime "accepted_at"
     t.index ["buyer_type", "buyer_id"], name: "index_orders_on_buyer_type_and_buyer_id"
     t.index ["expires_at"], name: "index_orders_on_expires_at"
     t.index ["gateway_order_reference"], name: "index_orders_on_gateway_order_reference"
