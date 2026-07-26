@@ -166,7 +166,7 @@ class B2bOrderDealerResponseService
       address: delivery_location,
       order_id: order.order_number,
       latitude: latitude.to_s,
-      longitude: latitude.to_s
+      longitude: latitude.to_s,
       location_name: location_name
     )
   end
