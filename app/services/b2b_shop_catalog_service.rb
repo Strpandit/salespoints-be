@@ -74,7 +74,7 @@ class B2bShopCatalogService
 
     if @params[:search].present?
       query = @params[:search].strip
-      items = items.joins(:product).where("products.name ILIKE :q OR products.slug ILIKE :q OR products.sku ILIKE :q", q: "%#{query}%")
+      items = items.joins(:product).where("products.name ILIKE :q OR products.slug ILIKE :q OR products.sku ILIKE :q OR products.brand ILIKE :q", q: "%#{query}%")
     end
 
     if @params[:brands].present? && @params[:brands].is_a?(Array)
@@ -201,7 +201,7 @@ class B2bShopCatalogService
     posts = WholesalerPost.visible_to_marketplace
                           .includes(:dealer_product)
                           .where.not(dealer_id: @buyer_dealer.id)
-                          .where("title ILIKE :q", q: "%#{query}%")
+                          .where("title ILIKE :q OR description ILIKE :q", q: "%#{query}%")
 
     posts = posts.by_pincode(pincode.to_s) if pincode.present?
 
