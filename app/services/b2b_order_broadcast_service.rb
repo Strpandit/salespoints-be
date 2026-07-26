@@ -200,7 +200,7 @@ class B2bOrderBroadcastService
     delivery_location = if @broadcast_center == :buyer
       get_location(@order.buyer_dealer)
     else
-      get_delivery_address
+      get_order_delivery_address
     end
 
     image_url = get_product_image(product, variant)
@@ -322,7 +322,21 @@ class B2bOrderBroadcastService
     "Location not available"
   end
 
-  def get_delivery_address
+  def get_order_delivery_address
+    shipping_address = @order.shipping_address
+    if shipping_address.present?
+      parts = []
+      parts << shipping_address["address_line1"] if shipping_address["address_line1"].present?
+      parts << shipping_address["address_line2"] if shipping_address["address_line2"].present?
+      parts << shipping_address["city"] if shipping_address["city"].present?
+      parts << shipping_address["state"] if shipping_address["state"].present?
+      parts << shipping_address["postal_code"] if shipping_address["postal_code"].present?
+      parts << shipping_address["country"] if shipping_address["country"].present?
+      
+      formatted = parts.compact.join(", ")
+      return formatted if formatted.present?
+    end
+    
     return "Delivery location not available" if @order.latitude.blank?
     
     coords = GoogleMapsService.instance.reverse_geocode(

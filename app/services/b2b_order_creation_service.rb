@@ -48,7 +48,9 @@ class B2bOrderCreationService
         source_type: request_order.source_type,
         source_id: request_order.source_id,
         payment_confirmed_at: @payment_status == "paid" ? Time.current : nil,
-        confirmed_at: Time.current
+        confirmed_at: Time.current,
+        billing_address: request_order.billing_address,
+        shipping_address: request_order.shipping_address
       )
 
       request_order.b2b_order_items.accepted_items.order(:id).each do |request_item|
@@ -117,8 +119,12 @@ class B2bOrderCreationService
       raise StandardError, "Order is not in pending_payment state" unless request_order.status == "pending_payment" && request_order.request_status == "pending_request"
       raise StandardError, "Payment window has expired" if request_order.expires_at.present? && request_order.expires_at < Time.current
     else
-      raise StandardError, "Accepted request not found" unless request_order.request_status == "accepted_request"
-      raise StandardError, "Request is no longer awaiting payment" unless request_order.pending_payment?
+      unless request_order.request_status == "accepted_request" || request_order.request_status == "pending_request"
+        raise StandardError, "Accepted request not found"
+      end
+      unless request_order.pending_payment? || request_order.pending_request?
+        raise StandardError, "Request is no longer awaiting payment"
+      end
       raise StandardError, "Payment window has expired for this request" if request_order.expires_at.present? && request_order.expires_at < Time.current
       raise StandardError, "Seller is not assigned for this request" if request_order.seller_dealer_id.blank?
     end

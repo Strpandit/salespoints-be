@@ -5,11 +5,17 @@ module Api
 
     def index
       view = params[:view].to_s
+      time_filter = params[:time_filter].to_s.presence || "all"
 
-      orders =
+      base_orders =
         case view
         when "incoming"
-          incoming_order_scope
+          current_dealer.b2b_order_offers
+                  .open_state
+                  .includes(b2b_order: [:buyer_dealer, :seller_dealer, :b2b_order_items])
+                  .map(&:b2b_order)
+                  .select { |o| o.pending_request? && o.parent_request_order_id.nil? }
+                  .uniq
         when "accepted"
           current_dealer.seller_b2b_orders
                         .child_orders
@@ -19,12 +25,14 @@ module Api
                         .distinct
         else
           current_dealer.buyer_b2b_orders
-                        .final_orders
-                        .where("status IN (?)", %w[pending_request pending_payment paid confirmed shipped delivered cancelled])
-                        .includes(:buyer_dealer, :seller_dealer, b2b_order_items: { dealer_product: :dealer })
-                        .order(created_at: :desc)
-                        .distinct
+                  .final_orders
+                  .where("status IN (?)", %w[pending_request pending_payment paid confirmed shipped delivered cancelled])
+                  .includes(:buyer_dealer, :seller_dealer, b2b_order_items: { dealer_product: :dealer })
+                  .order(created_at: :desc)
+                  .distinct
         end
+
+      orders = apply_time_filter(base_orders, time_filter)
 
       if orders.is_a?(Array)
         paginated = Kaminari.paginate_array(orders).page(params[:page]).per(params[:per_page] || 20)
@@ -281,23 +289,27 @@ module Api
       render json: { error: "Dealer only" }, status: :unauthorized
     end
 
-    def incoming_order_scope
-      offers = current_dealer.b2b_order_offers.open_state
-                             .includes(b2b_order: [:buyer_dealer, :seller_dealer, :b2b_order_items])
-                             .order(created_at: :desc)
-
-      orders = {}
-
-      offers.each do |offer|
-        order = offer.b2b_order
-
-        next unless order.pending_request?
-        next if order.parent_request_order_id.present?
-        
-        orders[order.id] ||= order
+    def apply_time_filter(orders, filter)
+      return orders if filter == "all" || filter.blank?
+      
+      case filter
+      when "today"
+        orders.select { |o| o.created_at.to_date == Date.current }
+      when "this_week"
+        orders.select { |o| o.created_at >= Date.current.beginning_of_week }
+      when "this_month"
+        orders.select { |o| o.created_at >= Date.current.beginning_of_month }
+      when "custom"
+        if params[:date_from].present? && params[:date_to].present?
+          from = Date.parse(params[:date_from]).beginning_of_day
+          to = Date.parse(params[:date_to]).end_of_day
+          orders.select { |o| o.created_at.between?(from, to) }
+        else
+          orders
+        end
+      else
+        orders
       end
-
-      orders.values.sort_by(&:created_at).reverse
     end
 
     def acceptable_order?(order)
