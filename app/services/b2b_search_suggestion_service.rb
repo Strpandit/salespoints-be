@@ -29,7 +29,10 @@ class B2bSearchSuggestionService
     posts = WholesalerPost.visible_to_marketplace
                           .includes(dealer_product: { product: {} })
                           .where.not(dealer_id: @buyer_dealer.id)
-                          .where("title ILIKE :q", q: "%#{@query}%")
+                          .where(
+                            "title ILIKE :q OR modal_no ILIKE :q OR body ILIKE :q",
+                            q: "%#{@query}%"
+                          )
 
     posts = posts.by_pincode(@pincode) if @pincode.present?
 

@@ -4,11 +4,12 @@ class B2bOrderBroadcastService
   MAX_RADIUS = 30
   INCREMENT_PER_MINUTE = 2
 
-  def initialize(order:, actor:, current_radius: nil, is_b2c: false)
+  def initialize(order:, actor:, current_radius: nil, is_b2c: false, broadcast_center: :delivery)
     @order = order
     @actor = actor
     @current_radius = current_radius || order.current_broadcast_radius || DEFAULT_RADIUS
     @is_b2c = is_b2c
+    @broadcast_center = broadcast_center
   end
 
   def initial_broadcast!
@@ -85,8 +86,22 @@ class B2bOrderBroadcastService
   end
 
   def find_eligible_dealers(items)
-    buyer_lat = @order.latitude.to_f
-    buyer_lng = @order.longitude.to_f
+    case @broadcast_center
+    when :buyer
+      location = @order.buyer_dealer&.dealer_location
+      if location&.latitude.present?
+        buyer_lat = location.latitude.to_f
+        buyer_lng = location.longitude.to_f
+      else
+        address = @order.buyer_dealer&.dealer_profile&.business_address
+        coords = GoogleMapsService.instance.geocode(address)
+        buyer_lat = coords[:latitude].to_f
+        buyer_lng = coords[:longitude].to_f
+      end
+    else
+      buyer_lat = @order.latitude.to_f
+      buyer_lng = @order.longitude.to_f
+    end
 
     matches = {}
 
@@ -121,8 +136,8 @@ class B2bOrderBroadcastService
           DealerLocation.distance_km(
             buyer_lat,
             buyer_lng,
-            location.latitude,
-            location.longitude
+            location.latitude.to_f,
+            location.longitude.to_f
           )
         end
 
@@ -158,21 +173,34 @@ class B2bOrderBroadcastService
     quantity = matched_items.sum(&:quantity)
     total_amount = matched_items.sum(&:total_price)
 
-    buyer_location = @order.buyer_dealer&.dealer_location
+    broadcast_location = if @broadcast_center == :buyer
+      @order.buyer_dealer&.dealer_location
+    else
+      { 
+        latitude: @order.latitude, 
+        longitude: @order.longitude 
+      }
+    end
+
     seller_location = dealer&.dealer_location
     
-    delivery_location = get_location(dealer)
-    approx_distance = if buyer_location.present? && seller_location.present? &&
-                        buyer_location.latitude.present? && buyer_location.longitude.present? &&
+    approx_distance = if broadcast_location.present? && seller_location.present? &&
+                        broadcast_location[:latitude].present? && broadcast_location[:longitude].present? &&
                         seller_location.latitude.present? && seller_location.longitude.present?
       DealerLocation.distance_km(
-        buyer_location.latitude.to_f,
-        buyer_location.longitude.to_f,
+        broadcast_location[:latitude].to_f,
+        broadcast_location[:longitude].to_f,
         seller_location.latitude.to_f,
         seller_location.longitude.to_f
       ).round(2).to_s
     else
       "0"
+    end
+
+    delivery_location = if @broadcast_center == :buyer
+      get_location(@order.buyer_dealer)
+    else
+      get_delivery_address
     end
 
     image_url = get_product_image(product, variant)
@@ -292,6 +320,17 @@ class B2bOrderBroadcastService
     return words.first if words.size == 1
     
     "Location not available"
+  end
+
+  def get_delivery_address
+    return "Delivery location not available" if @order.latitude.blank?
+    
+    coords = GoogleMapsService.instance.reverse_geocode(
+      @order.latitude,
+      @order.longitude
+    )
+    
+    coords[:formatted_address] if coords.present?
   end
 
   def formatted_phone_for(dealer)

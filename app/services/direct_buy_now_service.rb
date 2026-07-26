@@ -99,6 +99,8 @@ class DirectBuyNowService
   private
 
   def find_eligible_dealers(variant)
+    coords = B2bPincodeAvailabilityService.geocode_pincode(@pincode)
+    return [] if coords.blank?
     Dealer.active
           .includes(:dealer_products)
           .where(dealer_products: {
@@ -108,8 +110,24 @@ class DirectBuyNowService
             approve_status: "approved"
           })
           .where("dealer_products.stock_quantity > 0")
-          .where(pincode: @pincode)
           .distinct
+          .select do |dealer|
+            location = dealer.dealer_location
+            next false unless location&.is_active?
+            next false if location.latitude.blank? || location.longitude.blank?
+            
+            service_radius = location.service_radius_km.to_f
+            next false if service_radius <= 0
+            
+            distance = DealerLocation.distance_km(
+              coords[:latitude].to_f,
+              coords[:longitude].to_f,
+              location.latitude.to_f,
+              location.longitude.to_f
+            )
+
+            distance <= service_radius
+          end
   end
 
   def create_online_payment(order)

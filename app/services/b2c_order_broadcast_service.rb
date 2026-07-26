@@ -61,8 +61,8 @@ class B2cOrderBroadcastService
   private
 
   def find_eligible_dealers(items)
-    pincode = @order.shipping_address["postal_code"] || @order.billing_address["postal_code"]
-    return {} if pincode.blank?
+    buyer_location = get_shipping_location
+    return {} if buyer_location.blank?
 
     variant_ids = items.map(&:product_variant_id)
 
@@ -75,41 +75,28 @@ class B2cOrderBroadcastService
                                 approve_status: "approved"
                               })
                               .where("dealer_products.stock_quantity > 0")
-                              .where(pincode: pincode)
                               .distinct
 
     return {} if potential_dealers.empty?
-
-    buyer_location = get_buyer_location
-    return {} if buyer_location.blank?
 
     matches = {}
 
     potential_dealers.each do |dealer|
       location = dealer.dealer_location
       next unless location&.is_active?
+      next if location.latitude.blank? || location.longitude.blank?
       
       service_radius = location.service_radius_km.to_f
+      next if service_radius <= 0
 
-      distance_info = location.driving_distance_to(
-        buyer_location[:latitude],
-        buyer_location[:longitude]
+      distance = DealerLocation.distance_km(
+        buyer_location[:latitude].to_f,
+        buyer_location[:longitude].to_f,
+        location.latitude.to_f,
+        location.longitude.to_f
       )
-      
-      if distance_info.blank?
-        distance = DealerLocation.distance_km(
-          buyer_location[:latitude].to_f,
-          buyer_location[:longitude].to_f,
-          location.latitude.to_f,
-          location.longitude.to_f
-        )
-      else
-        distance = distance_info[:distance_km]
-      end
         
-      if service_radius > 0 && distance > service_radius
-        next
-      end
+      next if distance > service_radius
 
       matched_items = items.select do |item|
         dealer.dealer_products.any? do |dp|
@@ -123,50 +110,6 @@ class B2cOrderBroadcastService
     end
 
     matches
-  end
-
-  def get_buyer_location
-    address = @order.shipping_address
-    
-    if address.present?
-      full_address = [
-        address["city"],
-        address["state"],
-        address["postal_code"]
-      ].compact.join(", ")
-
-      if full_address.present?
-        results = Geocoder.search(full_address)
-        if results.any?
-          return {
-            latitude: results.first.latitude,
-            longitude: results.first.longitude
-          }
-        end
-      end
-    end
-
-    buyer = @order.buyer
-    if buyer.respond_to?(:addresses)
-      default_address = buyer.addresses.find_by(is_default: true)
-      if default_address.present?
-        full_address = [
-          default_address.city,
-          default_address.state,
-          default_address.postal_code
-        ].compact.join(", ")
-
-        results = Geocoder.search(full_address)
-        if results.any?
-          return {
-            latitude: results.first.latitude,
-            longitude: results.first.longitude
-          }
-        end
-      end
-    end
-
-    nil
   end
 
   def send_dealer_order_request(offer, dealer, matched_items)
@@ -183,7 +126,31 @@ class B2cOrderBroadcastService
 
     buyer = @order.buyer
     address = @order.shipping_address
-    latitude, longitude, location_name = get_location_from_address(address, buyer)
+    shipping_location = get_shipping_location
+
+    delivery_location = if address.present?
+      [
+        address["address_line1"],
+        address["city"],
+        address["state"],
+        address["postal_code"]
+      ].compact.join(", ")
+    else
+      "Customer Location"
+    end
+
+    seller_location = dealer&.dealer_location
+    approx_distance = if shipping_location.present? && seller_location.present? &&
+                        seller_location.latitude.present? && seller_location.longitude.present?
+      DealerLocation.distance_km(
+        shipping_location[:latitude].to_f,
+        shipping_location[:longitude].to_f,
+        seller_location.latitude.to_f,
+        seller_location.longitude.to_f
+      ).round(2).to_s
+    else
+      "0"
+    end
 
     image_url = get_product_image(product, variant)
 
@@ -195,8 +162,8 @@ class B2cOrderBroadcastService
       price: unit_price.to_f.round(2).to_s,
       quantity: quantity.to_s,
       total_amount: total_amount.to_f.round(2).to_s,
-      delivery_location: location_name,
-      approx_distance: "0",
+      delivery_location: delivery_location,
+      approx_distance: approx_distance,
       accept_token: offer.accept_token,
       reject_token: offer.reject_token,
       image_url: image_url
@@ -250,9 +217,12 @@ class B2cOrderBroadcastService
     "#{ENV['FRONTEND_URL']}/images/ac.png"
   end
 
-  def get_location_from_address(address, buyer)
+  def get_shipping_location
+    address = @order.shipping_address
+    
     if address.present?
       full_address = [
+        address["address_line1"],
         address["city"],
         address["state"],
         address["postal_code"]
@@ -261,19 +231,20 @@ class B2cOrderBroadcastService
       if full_address.present?
         results = Geocoder.search(full_address)
         if results.any?
-          return [
-            results.first.latitude.to_s,
-            results.first.longitude.to_s,
-            "Customer Location - #{full_address}"
-          ]
+          return {
+            latitude: results.first.latitude,
+            longitude: results.first.longitude
+          }
         end
       end
     end
 
+    buyer = @order.buyer
     if buyer.respond_to?(:addresses)
       default_address = buyer.addresses.find_by(is_default: true)
       if default_address.present?
         full_address = [
+          default_address.address_line1,
           default_address.city,
           default_address.state,
           default_address.postal_code
@@ -281,16 +252,15 @@ class B2cOrderBroadcastService
 
         results = Geocoder.search(full_address)
         if results.any?
-          return [
-            results.first.latitude.to_s,
-            results.first.longitude.to_s,
-            "Customer Location - #{full_address}"
-          ]
+          return {
+            latitude: results.first.latitude,
+            longitude: results.first.longitude
+          }
         end
       end
     end
 
-    ["28.6139", "77.2090", "Customer Location"]
+    nil
   end
 
   def formatted_phone_for(dealer)

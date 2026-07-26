@@ -1,6 +1,7 @@
 module Api
   class B2bOrdersController < ApplicationController
     before_action :require_dealer!, except: [:download_invoice, :payment]
+    skip_beforoe_action :authenticate_request, only: [:payment]
 
     def index
       view = params[:view].to_s
@@ -19,7 +20,7 @@ module Api
         else
           current_dealer.buyer_b2b_orders
                         .final_orders
-                        .where("request_status IS NULL OR status IN (?)", %w[pending_request pending_payment paid confirmed shipped delivered cancelled])
+                        .where("status IN (?)", %w[pending_request pending_payment paid confirmed shipped delivered cancelled])
                         .includes(:buyer_dealer, :seller_dealer, b2b_order_items: { dealer_product: :dealer })
                         .order(created_at: :desc)
                         .distinct
@@ -61,12 +62,44 @@ module Api
       return render json: { error: "Variant is required" }, status: :unprocessable_entity if params[:product_variant_id].blank?
       return render json: { error: "Pincode is required" }, status: :unprocessable_entity if params[:pincode].blank?
 
+      use_business_address = params[:use_business_address].to_s == "true"
+      delivery_address = nil
+
+      if !use_business_address && params[:delivery_address].present?
+        delivery_address = Address.new(
+          address_line1: params[:delivery_address][:address_line1],
+          address_line2: params[:delivery_address][:address_line2],
+          city: params[:delivery_address][:city],
+          state: params[:delivery_address][:state],
+          country: params[:delivery_address][:country] || "India",
+          postal_code: params[:delivery_address][:postal_code] || pincode,
+          phone: params[:delivery_address][:phone],
+          name: params[:delivery_address][:name],
+          latitude: params[:delivery_address][:latitude],
+          longitude: params[:delivery_address][:longitude],
+          dealer_id: current_dealer.id
+        )
+        
+        delivery_address.save!
+      end
+
       buyer_latitude = params[:latitude].presence&.to_f
       buyer_longitude = params[:longitude].presence&.to_f
       if buyer_latitude.blank? || buyer_longitude.blank?
-        coords = pincode.present? ? B2bPincodeAvailabilityService.geocode_pincode(pincode) : nil
-        buyer_latitude = coords&.dig(:latitude)
-        buyer_longitude = coords&.dig(:longitude)
+        if use_business_address
+          location = current_dealer.dealer_location
+          if location&.latitude.present?
+            buyer_latitude = location.latitude.to_f
+            buyer_longitude = location.longitude.to_f
+          end
+        elsif delivery_address.present?
+          buyer_latitude = delivery_address.latitude.to_f
+          buyer_longitude = delivery_address.longitude.to_f
+        else
+          coords = pincode.present? ? B2bPincodeAvailabilityService.geocode_pincode(pincode) : nil
+          buyer_latitude = coords&.dig(:latitude)
+          buyer_longitude = coords&.dig(:longitude)
+        end
       end
 
       if buyer_latitude.blank? || buyer_longitude.blank?
@@ -87,7 +120,9 @@ module Api
         longitude: buyer_longitude,
         payment_method: payment_method,
         payment_status: payment_status,
-        pincode: pincode
+        pincode: pincode,
+        delivery_address: delivery_address,
+        use_business_address: use_business_address
       ).call
 
       render json: serialize_resource(order, B2bOrderSerializer, base_url: request.base_url).merge(

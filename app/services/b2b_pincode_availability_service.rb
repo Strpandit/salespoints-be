@@ -37,6 +37,9 @@ class B2bPincodeAvailabilityService
     sellers = find_eligible_sellers(coords)
     available_items_count = sellers.sum { |entry| entry[:stock_quantity].to_i }
 
+    buyer_pincode = @buyer_dealer&.pincode
+    is_same_pincode = (@pincode == buyer_pincode)
+
     {
       deliverable: sellers.any?,
       message: build_message(sellers, available_items_count),
@@ -44,7 +47,17 @@ class B2bPincodeAvailabilityService
       available_items_count: available_items_count,
       latitude: coords[:latitude],
       longitude: coords[:longitude],
-      pincode: @pincode
+      pincode: @pincode,
+      address_config: {
+        use_business_address: is_same_pincode,
+        show_business_address: is_same_pincode,
+        show_add_address: !is_same_pincode,
+        is_address_mandatory: !is_same_pincode,
+        is_same_pincode: is_same_pincode,
+        message: is_same_pincode ? 
+          "✅ Item available at your location! We'll use your business address for delivery." : 
+          "✅ Item available at this pincode! Please add delivery address to proceed."
+      }
     }
   end
 
