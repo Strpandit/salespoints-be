@@ -155,16 +155,9 @@ class B2bOrderDealerResponseService
     buyer = order.buyer
     address = order.shipping_address
 
-    delivery_location = if address.present?
-      [
-        address["address_line1"],
-        address["city"],
-        address["state"],
-        address["postal_code"]
-      ].compact.join(", ")
-    else
-      "Customer Location"
-    end
+    latitude, longitude, location_name = get_location_from_address(address, buyer)
+
+    delivery_location = format_address(address)
 
     MetaWhatsappCloudService.new.send_order_accept(
       to: formatted_phone_for(seller),
@@ -172,8 +165,8 @@ class B2bOrderDealerResponseService
       phone: formatted_phone_for(buyer) || "N/A",
       address: delivery_location,
       order_id: order.order_number,
-      latitude: latitude,
-      longitude: longitude,
+      latitude: latitude.to_s,
+      longitude: latitude.to_s
       location_name: location_name
     )
   end
@@ -685,5 +678,95 @@ class B2bOrderDealerResponseService
     end
     
     item
+  end
+
+  def get_location_from_address(address, buyer)
+    if address.present?
+      if address["latitude"].present? && address["longitude"].present?
+        return [
+          address["latitude"].to_s,
+          address["longitude"].to_s,
+          "Customer Location - #{format_address(address)}"
+        ]
+      end
+
+      pincode = address["postal_code"] || address[:postal_code]
+      if pincode.present?
+        coords = B2bPincodeAvailabilityService.geocode_pincode(pincode)
+        if coords.present?
+          return [
+            coords[:latitude].to_s,
+            coords[:longitude].to_s,
+            "Customer Location - #{format_address(address)}"
+          ]
+        end
+      end
+
+      full_address = [
+        address["address_line1"],
+        address["city"],
+        address["state"],
+        address["postal_code"]
+      ].compact.join(", ")
+
+      if full_address.present?
+        results = Geocoder.search(full_address)
+        if results.any?
+          return [
+            results.first.latitude.to_s,
+            results.first.longitude.to_s,
+            "Customer Location - #{full_address}"
+          ]
+        end
+      end
+    end
+
+    if buyer.respond_to?(:addresses)
+      default_address = buyer.addresses.find_by(is_default: true)
+      if default_address.present?
+        pincode = default_address.postal_code
+        if pincode.present?
+          coords = B2bPincodeAvailabilityService.geocode_pincode(pincode)
+          if coords.present?
+            return [
+              coords[:latitude].to_s,
+              coords[:longitude].to_s,
+              "Customer Location - #{default_address.full_address}"
+            ]
+          end
+        end
+        
+        full_address = default_address.full_address
+        if full_address.present?
+          results = Geocoder.search(full_address)
+          if results.any?
+            return [
+              results.first.latitude.to_s,
+              results.first.longitude.to_s,
+              "Customer Location - #{full_address}"
+            ]
+          end
+        end
+      end
+    end
+
+    ["28.6139", "77.2090", "Customer Location"]
+  end
+
+  def format_address(address)
+    return "Address not available" if address.blank?
+    
+    if address.is_a?(Hash) || address.is_a?(ActionController::Parameters)
+      parts = []
+      parts << address["address_line1"] if address["address_line1"].present?
+      parts << address["address_line2"] if address["address_line2"].present?
+      parts << address["city"] if address["city"].present?
+      parts << address["state"] if address["state"].present?
+      parts << address["postal_code"] if address["postal_code"].present?
+      parts << address["country"] if address["country"].present?
+      return parts.compact.join(", ") if parts.any?
+    end
+    
+    address.to_s
   end
 end
