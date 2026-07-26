@@ -154,13 +154,23 @@ class B2bOrderDealerResponseService
 
     buyer = order.buyer
     address = order.shipping_address
-    latitude, longitude, location_name = get_location_from_address(address, buyer)
-    
+
+    delivery_location = if address.present?
+      [
+        address["address_line1"],
+        address["city"],
+        address["state"],
+        address["postal_code"]
+      ].compact.join(", ")
+    else
+      "Customer Location"
+    end
+
     MetaWhatsappCloudService.new.send_order_accept(
       to: formatted_phone_for(seller),
       dealer_code: buyer.full_name.to_s,
       phone: formatted_phone_for(buyer) || "N/A",
-      address: address.to_s,
+      address: delivery_location,
       order_id: order.order_number,
       latitude: latitude,
       longitude: longitude,
@@ -645,51 +655,6 @@ class B2bOrderDealerResponseService
       end
       [28.6139, 77.2090, "Default Location", address]
     end
-  end
-
-  def get_location_from_address(address, buyer)
-    if address.present?
-      full_address = [
-        address["address_line1"],
-        address["city"],
-        address["state"],
-        address["postal_code"]
-      ].compact.join(", ")
-
-      if full_address.present?
-        results = Geocoder.search(full_address)
-        if results.any?
-          return [
-            results.first.latitude.to_s,
-            results.first.longitude.to_s,
-            "Customer Location - #{full_address}"
-          ]
-        end
-      end
-    end
-
-    if buyer.respond_to?(:addresses)
-      default_address = buyer.addresses.find_by(is_default: true)
-      if default_address.present?
-        full_address = [
-          default_address.address_line1,
-          default_address.city,
-          default_address.state,
-          default_address.postal_code
-        ].compact.join(", ")
-
-        results = Geocoder.search(full_address)
-        if results.any?
-          return [
-            results.first.latitude.to_s,
-            results.first.longitude.to_s,
-            "Customer Location - #{full_address}"
-          ]
-        end
-      end
-    end
-
-    ["28.6139", "77.2090", "Customer Location"]
   end
 
   def formatted_phone_for(dealer)
