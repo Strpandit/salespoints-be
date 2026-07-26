@@ -453,8 +453,21 @@ module Api
                       .compact
                       .sort
 
-      price_min = base_scope.minimum(:dealer_selling_price).to_f
-      price_max = base_scope.maximum(:dealer_selling_price).to_f
+      price_min = base_scope.joins(:product_variant)
+                            .minimum("product_variants.dealer_selling_price")
+                            .to_f
+      price_max = base_scope.joins(:product_variant)
+                            .maximum("product_variants.dealer_selling_price")
+                            .to_f
+
+      if price_min.zero? && price_max.zero?
+        price_min = base_scope.joins(:product_variant)
+                              .minimum("product_variants.dealer_price")
+                              .to_f
+        price_max = base_scope.joins(:product_variant)
+                              .maximum("product_variants.dealer_price")
+                              .to_f
+      end
 
       {
         brands: brands,
