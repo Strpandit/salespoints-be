@@ -60,10 +60,10 @@ class B2bShopCatalogService
 
   def base_scope
     items = DealerProduct.live
-                         .for_b2b
-                         .where("dealer_products.stock_quantity > 0")
-                         .where.not(dealer_id: @buyer_dealer.id)
-                         .includes(dealer: :dealer_location, product: {}, product_variant: {})
+                        .for_b2b
+                        .where("dealer_products.stock_quantity > 0")
+                        .where.not(dealer_id: @buyer_dealer.id)
+                        .includes(dealer: :dealer_location, product: { brand: {} }, product_variant: {})
 
     if @params[:category_id].present?
       items = items.joins(:product).where(products: { category_id: @params[:category_id] })
@@ -74,7 +74,15 @@ class B2bShopCatalogService
 
     if @params[:search].present?
       query = @params[:search].strip
-      items = items.joins(:product).left_outer_joins(product: :brand).where("products.name ILIKE :q OR products.slug ILIKE :q OR products.sku ILIKE :q OR brands.name ILIKE :q", q: "%#{query}%")
+      items = items.joins(:product)
+                  .left_outer_joins(product: :brand)
+                  .where(
+                    "products.name ILIKE :q OR 
+                      products.slug ILIKE :q OR 
+                      products.sku ILIKE :q OR 
+                      brands.name ILIKE :q",
+                    q: "%#{query}%"
+                  )
     end
 
     if @params[:brands].present? && @params[:brands].is_a?(Array)
@@ -85,13 +93,13 @@ class B2bShopCatalogService
     if @params[:min_price].present?
       min_price = @params[:min_price].to_f
       items = items.joins(:product_variant)
-                  .where("COALESCE(product_variants.dealer_selling_price, product_variants.dealer_price) >= ?", min_price)
+                  .where(Arel.sql("COALESCE(product_variants.dealer_selling_price, product_variants.dealer_price) >= ?"), min_price)
     end
 
     if @params[:max_price].present?
       max_price = @params[:max_price].to_f
       items = items.joins(:product_variant)
-                  .where("COALESCE(product_variants.dealer_selling_price, product_variants.dealer_price) <= ?", max_price)
+                  .where(Arel.sql("COALESCE(product_variants.dealer_selling_price, product_variants.dealer_price) <= ?"), max_price)
     end
 
     items

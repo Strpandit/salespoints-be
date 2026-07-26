@@ -457,18 +457,18 @@ module Api
 
       brands = base_scope.joins(product: :brand)
                      .where.not(brands: { name: [nil, ""] })
-                     .pluck("DISTINCT brands.name")
+                     .pluck(Arel.sql("DISTINCT brands.name"))
                      .compact
                      .sort
 
       price_min = base_scope.joins(:product_variant)
                             .where("product_variants.dealer_selling_price > 0 OR product_variants.dealer_price > 0")
-                            .minimum("COALESCE(product_variants.dealer_selling_price, product_variants.dealer_price)")
+                            .minimum(Arel.sql("COALESCE(product_variants.dealer_selling_price, product_variants.dealer_price)"))
                             .to_f
 
       price_max = base_scope.joins(:product_variant)
                             .where("product_variants.dealer_selling_price > 0 OR product_variants.dealer_price > 0")
-                            .maximum("COALESCE(product_variants.dealer_selling_price, product_variants.dealer_price)")
+                            .maximum(Arel.sql("COALESCE(product_variants.dealer_selling_price, product_variants.dealer_price)"))
                             .to_f
 
       {
