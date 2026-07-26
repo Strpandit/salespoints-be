@@ -18,9 +18,7 @@ Rails.application.routes.draw do
         end
       end
     end
-    namespace :dealer do
-      resources :orders, only: [:index, :show]
-    end
+    resources :dealer_orders, only: [:index, :show]
     resources :accounts do
       put :change_password, on: :member
       patch :block, on: :member
