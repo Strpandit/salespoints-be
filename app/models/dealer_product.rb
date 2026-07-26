@@ -6,6 +6,9 @@ class DealerProduct < ApplicationRecord
   has_many :reviews, dependent: :destroy
   has_many :wholesaler_posts, dependent: :destroy
 
+  has_many :order_items, dependent: :nullify
+  has_many :b2b_order_items, dependent: :nullify
+
   enum :approve_status, { pending: 0, approved: 1, rejected: 2 }
 
   validates :stock_quantity, numericality: { greater_than_or_equal_to: 0 }

@@ -1,9 +1,12 @@
 class OrderItem < ApplicationRecord
   belongs_to :order
   belongs_to :product_variant
+  belongs_to :dealer_product, optional: true 
 
   validates :quantity, numericality: { greater_than: 0 }
   validates :unit_price, :total_price, numericality: { greater_than_or_equal_to: 0 }
+
+  scope :accepted_items, -> { where.not(dealer_product_id: nil) }
 
   before_validation :assign_total_price
 
@@ -18,6 +21,10 @@ class OrderItem < ApplicationRecord
     return sku if base.blank?
 
     "#{base} (#{sku})"
+  end
+
+  def accepted?
+    dealer_product_id.present?
   end
 
   private

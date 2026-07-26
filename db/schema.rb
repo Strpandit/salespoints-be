@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_07_24_191219) do
+ActiveRecord::Schema[8.0].define(version: 2026_07_26_050347) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -584,6 +584,8 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_24_191219) do
     t.decimal "total_price", precision: 12, scale: 2, default: "0.0", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.integer "dealer_product_id"
+    t.index ["dealer_product_id"], name: "index_order_items_on_dealer_product_id"
     t.index ["order_id"], name: "index_order_items_on_order_id"
     t.index ["product_variant_id"], name: "index_order_items_on_product_variant_id"
   end
@@ -999,6 +1001,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_24_191219) do
   add_foreign_key "deletion_requests", "admin_users", column: "reviewed_by_admin_id"
   add_foreign_key "order_broadcast_trackers", "dealers"
   add_foreign_key "order_broadcast_trackers", "orders"
+  add_foreign_key "order_items", "dealer_products"
   add_foreign_key "order_items", "orders"
   add_foreign_key "order_items", "product_variants"
   add_foreign_key "order_offers", "dealers"

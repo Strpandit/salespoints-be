@@ -81,6 +81,7 @@ class B2bOrderBroadcastService
         notify_admin_new_b2b_request(dealer, matched_items)
       end
     end
+    EmailDispatcherService.b2b_request_placed(@order)
   end
 
   def find_eligible_dealers(items)

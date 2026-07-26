@@ -41,6 +41,7 @@ class B2bOrderPaymentService
           payment_status: "pending"
         )
         send_order_request_to_seller(@order)
+        EmailDispatcherService.b2b_request_placed(@order)
         return {
           order: @order,
           payment_method: "cod",

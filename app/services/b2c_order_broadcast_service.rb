@@ -54,6 +54,8 @@ class B2cOrderBroadcastService
         create_in_app_notification(dealer, offer, matched_items)
       end
     end
+
+    EmailDispatcherService.retail_order_placed(@order)
   end
 
   private

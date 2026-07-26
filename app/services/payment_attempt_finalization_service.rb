@@ -131,6 +131,7 @@ class PaymentAttemptFinalizationService
     )
 
     send_order_request_to_seller(order)
+    EmailDispatcherService.b2b_request_placed(order)
     
     order
   end
