@@ -78,8 +78,8 @@ class B2bShopCatalogService
     end
 
     if @params[:brands].present? && @params[:brands].is_a?(Array)
-      items = items.joins(:product)
-                  .where("LOWER(products.brand) IN (?)", @params[:brands].map(&:downcase))
+      items = items.joins(product: :brand)
+                  .where("LOWER(brands.name) IN (?)", @params[:brands].map(&:downcase))
     end
 
     items

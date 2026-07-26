@@ -446,10 +446,10 @@ module Api
                               .where("products.name ILIKE :q OR products.slug ILIKE :q", q: "%#{query}%")
       end
 
-      brands = base_scope.joins(:product)
-                      .where.not(products: { brand: [nil, ""] })
-                      .select("DISTINCT products.brand")
-                      .map(&:brand)
+      brands = base_scope.joins(product: :brand)
+                      .where.not(brands: { name: [nil, ""] })
+                      .select("DISTINCT brands.name")
+                      .map(&:name)
                       .compact
                       .sort
 
