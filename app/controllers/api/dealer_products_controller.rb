@@ -79,8 +79,18 @@ module Api
       return unauthorized("Dealers only") unless current_dealer
 
       params_with_location = auto_capture_location(params)
+      if params[:brands].present?
+        brand_list = params[:brands].split(",").map(&:strip)
+        params_with_location[:brands] = brand_list if brand_list.any?
+      end
+
+      if params[:ratings].present?
+        rating_list = params[:ratings].split(",").map(&:to_i).select { |r| r >= 1 && r <= 5 }
+        params_with_location[:ratings] = rating_list if rating_list.any?
+      end
 
       items = B2bShopCatalogService.new(buyer_dealer: current_dealer, params: params_with_location).call
+      filters_meta = fetch_filters_meta(params_with_location)
 
       render json: serialize_resource(items, DealerProductSerializer, base_url: request.base_url).merge(
         meta: {
@@ -418,6 +428,41 @@ module Api
       end
       
       new_params
+    end
+
+    def fetch_filters_meta(params)
+      base_scope = DealerProduct.live
+                                .for_b2b
+                                .where("dealer_products.stock_quantity > 0")
+                                .where.not(dealer_id: current_dealer.id)
+
+      if params[:category_id].present?
+        base_scope = base_scope.joins(:product).where(products: { category_id: params[:category_id] })
+      end
+
+      if params[:search].present?
+        query = params[:search].strip
+        base_scope = base_scope.joins(:product)
+                              .where("products.name ILIKE :q OR products.slug ILIKE :q", q: "%#{query}%")
+      end
+
+      brands = base_scope.joins(:product)
+                      .where.not(product: { brand: [nil, ""] })
+                      .select("DISTINCT products.brand")
+                      .map(&:brand)
+                      .compact
+                      .sort
+
+      price_min = base_scope.minimum(:dealer_price).to_f
+      price_max = base_scope.maximum(:dealer_price).to_f
+
+      {
+        brands: brands,
+        price_range: {
+          min: price_min,
+          max: price_max
+        }
+      }
     end
 
     def submission_dealer

@@ -45,7 +45,7 @@ class B2bDirectOrderService
         tax_amount: pricing[:gst_amount],
         discount_amount: 0,
         total_amount: pricing[:total],
-        expires_at: 10.minutes.from_now,
+        expires_at: 4.hours.from_now,
         payment_method: @payment_method || "cod",
         payment_status: "pending",
         buyer_payment_attempt: @buyer_payment_attempt,

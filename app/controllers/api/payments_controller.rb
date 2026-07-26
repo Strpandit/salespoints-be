@@ -1,6 +1,6 @@
 module Api
   class PaymentsController < ApplicationController
-    skip_before_action :authenticate_request!, only: [:cashfree_webhook]
+    skip_before_action :authenticate_request!, only: [:cashfree_webhook, :payment_details]
 
     def verify_cashfree
       if params[:payment_attempt_id].present?
@@ -74,14 +74,12 @@ module Api
 
     def payment_details
       order = B2bOrder.find_by(payment_token: params[:token])
-      raise ActiveRecord::RecordNotFound unless order.buyer_dealer_id == current_dealer.id
 
       return render json: { error: "Invalid payment link" }, status: :not_found unless order
-      return render json: { error: "Unauthorized" } unless current_dealer == order.buyer_dealer
       return render json: { error: "Order cancelled" } if order.status == "cancelled"
       return render json: { error: "Order rejected" } if order.request_status == "rejected_request"
-      return render json: { error: "Payment link expired" }, status: :unprocessable_entity if order.expires_at.present? && order.expires_at < Time.current
       return render json: { error: "Payment already completed" }, status: :unprocessable_entity if order.payment_status == "paid"
+      return render json: { error: "Payment link expired" }, status: :unprocessable_entity if order.expires_at.present? && order.expires_at < Time.current
 
       if order.total_amount > 50000 && order.payment_method == "cod"
         cod_allowed = false

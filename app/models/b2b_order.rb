@@ -38,7 +38,6 @@ class B2bOrder < ApplicationRecord
   scope :child_orders, -> {
     where(is_direct_buy: false)
       .where.not(parent_request_order_id: nil)
-      .where(request_status: nil)
   }
 
   before_validation :assign_payment_token, on: :create
@@ -50,10 +49,6 @@ class B2bOrder < ApplicationRecord
 
   def expired?
     expires_at.present? && expires_at < Time.current
-  end
-
-  def can_accept?
-    pending_request? && !expired? && !accepted?
   end
 
   def pending_request?

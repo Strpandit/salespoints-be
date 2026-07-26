@@ -169,11 +169,11 @@ Rails.application.routes.draw do
     resources :b2b_orders, only: [:index, :show] do
       collection do
         post :place_direct
+        post :payment
       end
       member do
         post :accept
         post :reject
-        post :payment
         patch :update_status
         get :download_invoice
       end

@@ -87,6 +87,22 @@ class PaymentAttemptFinalizationService
     
     raise StandardError, "Accepted B2B request not found" if request_order.blank?
 
+    if request_order.expires_at.present? &&
+      request_order.expires_at <= Time.current
+
+      attempt.update!(
+        status: "failed",
+        failure_reason: "Payment window expired",
+        failed_at: Time.current
+      )
+
+      raise StandardError, "Payment window has expired."
+    end
+
+    if request_order.payment_status == "paid"
+      raise StandardError, "Payment already completed."
+    end
+
     if request_order.is_direct_buy? && request_order.source_type == "WholesalerPost"
       return process_wholesaler_direct_order!(request_order, attempt)
     end
@@ -105,6 +121,8 @@ class PaymentAttemptFinalizationService
   end
 
   def process_wholesaler_direct_order!(order, attempt)
+    raise StandardError, "Payment window has expired." if order.expires_at.present? &&
+                                                      order.expires_at <= Time.current
     order.update!(
       payment_method: "online",
       payment_status: "paid",

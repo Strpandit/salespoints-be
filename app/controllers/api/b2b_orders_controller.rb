@@ -1,6 +1,6 @@
 module Api
   class B2bOrdersController < ApplicationController
-    before_action :require_dealer!, except: [:download_invoice]
+    before_action :require_dealer!, except: [:download_invoice, :payment]
 
     def index
       view = params[:view].to_s
@@ -12,15 +12,17 @@ module Api
         when "accepted"
           current_dealer.seller_b2b_orders
                         .child_orders
-                        .where("request_status = ? OR (request_status IS NULL AND status IN (?))", "accepted_request", %w[paid confirmed shipped delivered])
+                        .where("request_status = ? OR (request_status IS NULL AND status IN (?))", "accepted_request", %w[pending_payment paid confirmed shipped delivered cancelled])
                         .includes(:buyer_dealer, :seller_dealer, b2b_order_items: { dealer_product: :dealer })
                         .order(created_at: :desc)
+                        .distinct
         else
           current_dealer.buyer_b2b_orders
                         .final_orders
-                        .where("request_status IS NULL OR status IN (?)", %w[pending_request pending_payment paid confirmed shipped delivered])
+                        .where("request_status IS NULL OR status IN (?)", %w[pending_request pending_payment paid confirmed shipped delivered cancelled])
                         .includes(:buyer_dealer, :seller_dealer, b2b_order_items: { dealer_product: :dealer })
                         .order(created_at: :desc)
+                        .distinct
         end
 
       if orders.is_a?(Array)
@@ -180,8 +182,17 @@ module Api
     end
 
     def payment
-      order = current_dealer.buyer_b2b_orders.find_by(id: params[:id])
+      order =
+        if params[:payment_token].present?
+          B2bOrder.find_by(payment_token: params[:payment_token])
+        else
+          current_dealer&.buyer_b2b_orders&.find_by(id: params[:id])
+        end
       return render json: { error: "Order not found" }, status: :not_found unless order
+      return render json: { error: "Payment link expired" }, status: :unprocessable_entity if order.expires_at.present? && order.expires_at <= Time.current
+      return render json: { error: "Payment already completed" }, status: :unprocessable_entity if order.payment_status == "paid"
+      return render json: { error: "Order cancelled" }, status: :unprocessable_entity if order.status == "cancelled"
+      return render json: { error: "Order rejected" }, status: :unprocessable_entity if order.request_status == "rejected_request"
 
       if order.status == "confirmed"
         return render json: {
@@ -262,7 +273,7 @@ module Api
 
     def incoming_order_scope
       offers = current_dealer.b2b_order_offers.open_state
-                             .includes(b2b_order: [:buyer_dealer, :seller_dealer, { b2b_order_items: { dealer_product: :dealer } }])
+                             .includes(b2b_order: [:buyer_dealer, :seller_dealer, :b2b_order_items])
                              .order(created_at: :desc)
 
       orders = {}
@@ -270,12 +281,9 @@ module Api
       offers.each do |offer|
         order = offer.b2b_order
 
-        next if order.request_status.present?
+        next unless order.pending_request?
         next if order.parent_request_order_id.present?
         
-        visible_ids = offer.item_id_values
-        visible_items = order.b2b_order_items.select { |item| visible_ids.include?(item.id) }
-        order.define_singleton_method(:b2b_order_items) { visible_items }
         orders[order.id] ||= order
       end
 

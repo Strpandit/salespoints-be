@@ -77,6 +77,11 @@ class B2bShopCatalogService
       items = items.joins(:product).where("products.name ILIKE :q OR products.slug ILIKE :q OR products.sku ILIKE :q", q: "%#{query}%")
     end
 
+    if @params[:brands].present? && @params[:brands].is_a?(Array)
+      items = items.joins(:product)
+                  .where("LOWER(products.brand) IN (?)", @params[:brands].map(&:downcase))
+    end
+
     items
   end
 
@@ -109,6 +114,15 @@ class B2bShopCatalogService
 
   def group_products(rows)
     grouped = rows.group_by(&:product_id)
+
+    if @params[:ratings].present? && @params[:ratings].is_a?(Array)
+      min_rating = @params[:ratings].min.to_i
+      grouped = grouped.select do |product_id, dealer_products|
+        product = dealer_products.first&.product
+        next false unless product
+        product.average_rating.to_f >= min_rating
+      end
+    end
 
     grouped.values.map do |dealer_products|
       representative = dealer_products.min_by do |row|
@@ -148,6 +162,12 @@ class B2bShopCatalogService
       rows.sort_by { |row| row.product_variant&.dealer_selling_price.to_f }
     when "price_desc"
       rows.sort_by { |row| -row.product_variant&.dealer_selling_price.to_f }
+    when "a_to_z"
+      rows.sort_by { |row| row.product&.name.to_s.downcase }
+    when "z_to_a"
+      rows.sort_by { |row| -row.product&.name.to_s.downcase }
+    when "newest"
+      rows.sort_by { |row| row.product&.created_at || Time.current }.reverse
     else
       rows.sort_by do |row|
         distance = row.respond_to?(:distance_km) ? row.distance_km : Float::INFINITY

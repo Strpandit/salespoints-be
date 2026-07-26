@@ -14,6 +14,16 @@ class B2bOrderPaymentService
 
   def call
     raise StandardError, "Order not found" unless @order
+
+    if @order.expires_at.present? &&
+      @order.expires_at <= Time.current
+      raise StandardError, "Payment window has expired."
+    end
+
+    if @order.payment_status == "paid"
+      raise StandardError, "Payment already completed."
+    end
+    
     raise StandardError, "Invalid payment method" unless B2bOrder::PAYMENT_METHODS.include?(@payment_method)
     unless @order.pending_request? || @order.pending_payment?
       raise StandardError, "Order is not in a processable state. Current status: #{@order.status}"
