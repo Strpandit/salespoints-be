@@ -9,6 +9,8 @@ class B2bOrderCreationService
   def call
     raise StandardError, "Request order not found" unless @request_order
 
+    final_order = nil
+
     ActiveRecord::Base.transaction do
       request_order = B2bOrder.lock.find(@request_order.id)
       existing_order = B2bOrder.find_by(parent_request_order_id: request_order.id)

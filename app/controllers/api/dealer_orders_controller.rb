@@ -7,11 +7,14 @@ module Api
       time_filter = params[:time_filter].to_s.presence || "all"
       
       orders = fetch_orders(tab)
-      
       orders = apply_time_filter(orders, time_filter)
       
       if params[:status].present? && params[:status] != "all"
         orders = orders.select { |o| o[:status] == params[:status] }
+      end
+      
+      if params[:source_type].present? && params[:source_type] != "all"
+        orders = orders.select { |o| o[:source_type] == params[:source_type] }
       end
       
       if params[:search].present?
@@ -33,6 +36,7 @@ module Api
         by_status: orders.group_by { |o| o[:status] }.transform_values(&:count),
         by_type: orders.group_by { |o| o[:type] }.transform_values(&:count),
         by_payment: orders.group_by { |o| o[:payment_method] }.transform_values(&:count),
+        by_source: orders.group_by { |o| o[:source_type] }.transform_values(&:count),
         total_amount: orders.sum { |o| o[:total_amount].to_f }
       }
       
@@ -64,7 +68,7 @@ module Api
       end
 
       retail_order = current_dealer.sales_orders.find_by(id: order_id) ||
-                current_dealer.orders.find_by(id: order_id)
+                     current_dealer.orders.find_by(id: order_id)
 
       if retail_order.present?
         return render json: {
@@ -90,10 +94,6 @@ module Api
         fetch_accepted_orders
       when "outgoing"
         fetch_outgoing_orders
-      when "sales"
-        fetch_sales_orders
-      when "purchases"
-        fetch_purchase_orders
       else
         fetch_incoming_orders
       end
@@ -127,10 +127,11 @@ module Api
       results = []
 
       b2b_orders = current_dealer.seller_b2b_orders
-                                  .child_orders
-                                  .where("request_status = ? OR (request_status IS NULL AND status IN (?))", 
-                                        "accepted_request", 
-                                        %w[pending_payment paid confirmed shipped delivered cancelled])
+                                  .where(
+                                    "request_status = ? OR (request_status IS NULL AND status IN (?))", 
+                                    "accepted_request", 
+                                    %w[pending_payment paid confirmed shipped delivered cancelled]
+                                  )
                                   .includes(:buyer_dealer, :seller_dealer, :b2b_order_items)
       
       b2b_orders.each do |o|
@@ -152,8 +153,6 @@ module Api
       results = []
 
       b2b_orders = current_dealer.buyer_b2b_orders
-                                  .final_orders
-                                  .where("status IN (?)", %w[pending_request pending_payment paid confirmed shipped delivered cancelled])
                                   .includes(:buyer_dealer, :seller_dealer, :b2b_order_items)
       
       b2b_orders.each do |o|
@@ -170,53 +169,22 @@ module Api
       results.sort_by { |o| o[:created_at] }.reverse
     end
 
-    def fetch_sales_orders
-      results = []
-
-      b2b_orders = current_dealer.seller_b2b_orders
-                                  .includes(:buyer_dealer, :seller_dealer, :b2b_order_items)
-      
-      b2b_orders.each do |o|
-        results << transform_b2b_order(o, "sales")
-      end
-
-      b2c_orders = current_dealer.sales_orders
-                                  .includes(:buyer, :order_items)
-      
-      b2c_orders.each do |o|
-        results << transform_retail_order(o, "sales")
-      end
-
-      results.sort_by { |o| o[:created_at] }.reverse
-    end
-
-    def fetch_purchase_orders
-      results = []
-
-      b2b_orders = current_dealer.buyer_b2b_orders
-                                  .includes(:buyer_dealer, :seller_dealer, :b2b_order_items)
-      
-      b2b_orders.each do |o|
-        results << transform_b2b_order(o, "purchases")
-      end
-
-      b2c_orders = current_dealer.orders
-                                  .includes(:buyer, :order_items)
-      
-      b2c_orders.each do |o|
-        results << transform_retail_order(o, "purchases")
-      end
-
-      results.sort_by { |o| o[:created_at] }.reverse
-    end
-
     def transform_b2b_order(order, source_tab)
       meta = b2b_order_meta(order)
+      
+      source_type = if order.is_direct_buy? && order.source_type == "WholesalerPost"
+        "wholesale"
+      elsif order.is_direct_buy?
+        "direct_buy"
+      else
+        "broadcast"
+      end
       
       {
         id: order.id,
         type: "b2b",
         tab: source_tab,
+        source_type: source_type,
         reference_number: order.reference_number || order.id.to_s,
         status: order.status,
         request_status: order.request_status,
@@ -266,6 +234,7 @@ module Api
         id: order.id,
         type: "retail",
         tab: source_tab,
+        source_type: "retail",
         reference_number: order.order_number,
         status: order.status,
         display_status: meta[:label],
@@ -356,6 +325,57 @@ module Api
         "replacement_delivered" => { label: "Replacement Delivered", color: "#0A7B3E", bg: "#E7F8EE" }
       }
       status_meta[order.status] || { label: order.status || "Pending", color: "#54595E", bg: "#F1F3F4" }
+    end
+
+    def transform_b2b_order_detail(order)
+      base = transform_b2b_order(order, "detail")
+      
+      base.merge({
+        billing_address: order.billing_address,
+        shipping_address: order.shipping_address,
+        offers: order.b2b_order_offers.map do |offer|
+          {
+            dealer_id: offer.dealer_id,
+            dealer_name: offer.dealer&.dealer_code,
+            status: offer.status,
+            responded_at: offer.responded_at&.iso8601
+          }
+        end,
+        broadcast_trackers: order.dealer_broadcast_trackers.map do |tracker|
+          {
+            dealer_id: tracker.dealer_id,
+            dealer_name: tracker.dealer&.dealer_code,
+            radius_km: tracker.broadcast_radius_km,
+            status: tracker.status
+          }
+        end
+      })
+    end
+
+    def transform_retail_order_detail(order)
+      base = transform_retail_order(order, "detail")
+      
+      base.merge({
+        billing_address: order.billing_address,
+        shipping_address: order.shipping_address,
+        offers: order.order_offers.map do |offer|
+          {
+            dealer_id: offer.dealer_id,
+            dealer_name: offer.dealer&.dealer_code,
+            status: offer.status,
+            responded_at: offer.responded_at&.iso8601
+          }
+        end,
+        return_requests: order.return_requests.map do |rr|
+          {
+            id: rr.id,
+            request_type: rr.request_type,
+            status: rr.status,
+            reason: rr.reason,
+            refund_amount: rr.refund_amount.to_f
+          }
+        end
+      })
     end
 
     def apply_time_filter(orders, filter)
