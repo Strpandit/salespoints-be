@@ -447,7 +447,7 @@ module Api
       end
 
       brands = base_scope.joins(:product)
-                      .where.not(product: { brand: [nil, ""] })
+                      .where.not(products: { brand: [nil, ""] })
                       .select("DISTINCT products.brand")
                       .map(&:brand)
                       .compact

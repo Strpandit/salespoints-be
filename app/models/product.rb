@@ -78,6 +78,10 @@ class Product < ApplicationRecord
     return "product" if has_price?
     "none"
   end
+
+  def average_rating
+    reviews.average(:rating).to_f.round(1)
+  end
   
   private
 

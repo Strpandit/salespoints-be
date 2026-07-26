@@ -120,7 +120,7 @@ class B2bShopCatalogService
       grouped = grouped.select do |product_id, dealer_products|
         product = dealer_products.first&.product
         next false unless product
-        product.average_rating.to_f >= min_rating
+        product.average_rating >= min_rating
       end
     end
 
