@@ -453,8 +453,8 @@ module Api
                       .compact
                       .sort
 
-      price_min = base_scope.minimum(:dealer_price).to_f
-      price_max = base_scope.maximum(:dealer_price).to_f
+      price_min = base_scope.minimum(:dealer_selling_price).to_f
+      price_max = base_scope.maximum(:dealer_selling_price).to_f
 
       {
         brands: brands,
