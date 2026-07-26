@@ -74,12 +74,24 @@ class B2bShopCatalogService
 
     if @params[:search].present?
       query = @params[:search].strip
-      items = items.joins(:product).where("products.name ILIKE :q OR products.slug ILIKE :q OR products.sku ILIKE :q OR products.brand ILIKE :q", q: "%#{query}%")
+      items = items.joins(:product).left_outer_joins(product: :brand).where("products.name ILIKE :q OR products.slug ILIKE :q OR products.sku ILIKE :q OR brands.name ILIKE :q", q: "%#{query}%")
     end
 
     if @params[:brands].present? && @params[:brands].is_a?(Array)
       items = items.joins(product: :brand)
                   .where("LOWER(brands.name) IN (?)", @params[:brands].map(&:downcase))
+    end
+
+    if @params[:min_price].present?
+      min_price = @params[:min_price].to_f
+      items = items.joins(:product_variant)
+                  .where("COALESCE(product_variants.dealer_selling_price, product_variants.dealer_price) >= ?", min_price)
+    end
+
+    if @params[:max_price].present?
+      max_price = @params[:max_price].to_f
+      items = items.joins(:product_variant)
+                  .where("COALESCE(product_variants.dealer_selling_price, product_variants.dealer_price) <= ?", max_price)
     end
 
     items

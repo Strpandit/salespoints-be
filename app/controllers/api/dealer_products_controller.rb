@@ -89,6 +89,14 @@ module Api
         params_with_location[:ratings] = rating_list if rating_list.any?
       end
 
+      if params[:min_price].present?
+        params_with_location[:min_price] = params[:min_price].to_f
+      end
+
+      if params[:max_price].present?
+        params_with_location[:max_price] = params[:max_price].to_f
+      end
+
       items = B2bShopCatalogService.new(buyer_dealer: current_dealer, params: params_with_location).call
       filters_meta = fetch_filters_meta(params_with_location)
 
@@ -100,6 +108,7 @@ module Api
           total_pages: items.total_pages,
           total_count: items.total_count
         },
+        filters: filters_meta,
         message: "B2B dealer products fetched successfully"
       ), status: :ok
     rescue StandardError => e
@@ -447,27 +456,20 @@ module Api
       end
 
       brands = base_scope.joins(product: :brand)
-                      .where.not(brands: { name: [nil, ""] })
-                      .select("DISTINCT brands.name")
-                      .map(&:name)
-                      .compact
-                      .sort
+                     .where.not(brands: { name: [nil, ""] })
+                     .pluck("DISTINCT brands.name")
+                     .compact
+                     .sort
 
       price_min = base_scope.joins(:product_variant)
-                            .minimum("product_variants.dealer_selling_price")
-                            .to_f
-      price_max = base_scope.joins(:product_variant)
-                            .maximum("product_variants.dealer_selling_price")
+                            .where("product_variants.dealer_selling_price > 0 OR product_variants.dealer_price > 0")
+                            .minimum("COALESCE(product_variants.dealer_selling_price, product_variants.dealer_price)")
                             .to_f
 
-      if price_min.zero? && price_max.zero?
-        price_min = base_scope.joins(:product_variant)
-                              .minimum("product_variants.dealer_price")
-                              .to_f
-        price_max = base_scope.joins(:product_variant)
-                              .maximum("product_variants.dealer_price")
-                              .to_f
-      end
+      price_max = base_scope.joins(:product_variant)
+                            .where("product_variants.dealer_selling_price > 0 OR product_variants.dealer_price > 0")
+                            .maximum("COALESCE(product_variants.dealer_selling_price, product_variants.dealer_price)")
+                            .to_f
 
       {
         brands: brands,
