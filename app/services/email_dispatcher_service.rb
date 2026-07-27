@@ -21,7 +21,8 @@ class EmailDispatcherService
   end
   
   def self.retail_order_terminated(order, reason)
-    RetailOrderMailer.order_terminated(order.id, reason).deliver_later
+    RetailOrderMailer.order_terminated(order.id, "buyer", reason).deliver_later
+    RetailOrderMailer.order_terminated(order.id, "admin", reason).deliver_later
   end
   
   # B2B Emails
@@ -52,6 +53,7 @@ class EmailDispatcherService
   end
   
   def self.b2b_order_terminated(order, reason)
-    B2bOrderMailer.order_terminated(order.id, reason).deliver_later
+    B2bOrderMailer.order_terminated(order.id, "buyer", reason).deliver_later
+    B2bOrderMailer.order_terminated(order.id, "admin", reason).deliver_later
   end
 end

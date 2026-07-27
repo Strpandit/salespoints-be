@@ -24,7 +24,7 @@ module Api
 
       render json: serialize_resource(@confirmation.reload, DeliveryConfirmationSerializer).merge(
         deliverable: serialized_deliverable,
-        message: "Delivery proof submitted. OTP sent to seller and buyer."
+        message: "Delivery proof submitted. OTP sent to buyer."
       ), status: :ok
     rescue StandardError => e
       render json: { error: e.message }, status: :unprocessable_entity
@@ -43,7 +43,6 @@ module Api
     def verify_otps
       confirmation = service.verify_otps!(
         confirmation: @confirmation,
-        seller_otp: params[:seller_otp],
         buyer_otp: params[:buyer_otp]
       )
 

@@ -43,9 +43,8 @@ class B2bOrderCreationService
 
       final_order
     end
-
-    B2bOrderMailer.order_created(final_order.id).deliver_later if final_order.present?
-    EmailDispatcherService.b2b_payment_done(final_order) if final_order.present?
+    
+    final_order
   end
   private
 

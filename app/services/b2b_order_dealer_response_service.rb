@@ -789,7 +789,11 @@ class B2bOrderDealerResponseService
         create_seller_acceptance_notification(order)
         create_buyer_acceptance_notification(order)
         notify_admin_order_confirmed(order)
-        EmailDispatcherService.b2b_request_accepted(order)
+        if order.payment_status.to_s == "paid"
+          EmailDispatcherService.b2b_payment_done(order)
+        else
+          EmailDispatcherService.b2b_request_accepted(order)
+        end
 
       else
 

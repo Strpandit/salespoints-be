@@ -61,6 +61,7 @@ class B2bOrderPaymentService
         create_buyer_payment_success_notification(final_order)
         create_seller_payment_success_notification(final_order)
         notify_admin_order_confirmed(final_order)
+        EmailDispatcherService.b2b_payment_done(final_order)
         return { order: final_order, payment_method: "cod", status: "confirmed", message: "Order confirmed with COD." }
       else
         result = create_online_payment_attempt(@order)
@@ -78,13 +79,13 @@ class B2bOrderPaymentService
 
   def send_payment_success_to_buyer(order)
     buyer = order.buyer_dealer
-    seller = order.seller_dealer
-    items = order.b2b_order_items.accepted_items
+    items = order.b2b_order_items.accepted_items.to_a
+    items = order.b2b_order_items.to_a if items.empty?
     first_item = items.first
 
     wholesaler_post = first_item&.wholesaler_post
     variant = first_item&.product_variant
-    product = variant&.product || wholesaler_post&.dealer_product
+    product = variant&.product || wholesaler_post&.dealer_product&.product
     
     unit_price = first_item&.unit_price
     quantity = items.sum(&:quantity)
@@ -334,9 +335,10 @@ class B2bOrderPaymentService
 
   def create_seller_request_notification(order, item)
     variant = item.product_variant
-    product = variant&.product
+    wholesaler_post = item.wholesaler_post
+    product = variant&.product || wholesaler_post&.dealer_product&.product
 
-    product_name = product&.name || "Product"
+    product_name = product&.name || wholesaler_post&.title || "Product"
     
     NotificationService.deliver(
       recipient: order.seller_dealer,

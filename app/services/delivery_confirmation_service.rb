@@ -40,24 +40,21 @@ class DeliveryConfirmationService
 
   def send_otps!(confirmation)
     confirmation.update!(
-      seller_otp: generated_otp,
       buyer_otp: generated_otp,
-      seller_otp_sent_at: Time.current,
+      seller_otp: nil,
+      seller_otp_sent_at: nil,
       buyer_otp_sent_at: Time.current
     )
 
-    send_otp_message(phone: confirmation.seller_phone, otp: confirmation.seller_otp)
     send_otp_message(phone: confirmation.buyer_phone, otp: confirmation.buyer_otp)
   end
 
-  def verify_otps!(confirmation:, seller_otp:, buyer_otp:)
+  def verify_otps!(confirmation:, buyer_otp:)
     raise StandardError, "Delivery proof form is not submitted yet" unless confirmation.pending_otp? || confirmation.completed?
-    raise StandardError, "Invalid seller OTP" unless confirmation.seller_otp_valid?(seller_otp)
     raise StandardError, "Invalid buyer OTP" unless confirmation.buyer_otp_valid?(buyer_otp)
 
     ActiveRecord::Base.transaction do
       confirmation.update!(
-        seller_otp_verified_at: confirmation.seller_otp_verified_at || Time.current,
         buyer_otp_verified_at: confirmation.buyer_otp_verified_at || Time.current,
         seller_otp: nil,
         buyer_otp: nil,

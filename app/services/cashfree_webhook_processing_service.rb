@@ -106,15 +106,7 @@ class CashfreeWebhookProcessingService
         payment_reference: payload.dig("data", "payment", "cf_payment_id") || attempt.payment_reference,
         payment_gateway_payload: attempt.payment_gateway_payload.merge(payload)
       )
-      finalization = PaymentAttemptFinalizationService.new(payment_attempt: attempt).call
-      if finalization.b2b_order.present?
-        EmailDispatcherService.b2b_payment_done(finalization.b2b_order)
-      else
-        finalization.orders.each do |order|
-          EmailDispatcherService.retail_order_placed(order)
-          EmailDispatcherService.retail_order_accepted(order)
-        end
-      end
+      PaymentAttemptFinalizationService.new(payment_attempt: attempt).call
     elsif payment_status.present?
       terminal_state = payment_status.in?(%w[CANCELLED USER_DROPPED]) ? "cancelled" : "failed"
       attempt.update!(
@@ -133,7 +125,7 @@ class CashfreeWebhookProcessingService
         reference: payload.dig("data", "payment", "cf_payment_id"),
         gateway_payload: payload
       )
-      OrderMailer.order_status_update(order.id).deliver_later if order.buyer&.email.present?
+      EmailDispatcherService.retail_order_accepted(order) if order.seller_dealer.present?
     elsif payment_status.present?
       order.mark_payment_failed!(gateway_payload: payload)
     end

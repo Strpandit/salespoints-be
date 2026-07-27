@@ -1,11 +1,7 @@
 class DeliveryConfirmationSerializer < ApplicationSerializer
   attributes :token, :status, :notes, :seller_phone, :buyer_phone, :submitted_at, :completed_at,
-             :seller_otp_sent_at, :buyer_otp_sent_at, :seller_otp_verified, :buyer_otp_verified,
+             :buyer_otp_sent_at, :buyer_otp_verified,
              :invoice_reference_time, :buyer_name, :seller_name, :declarations, :uploads
-
-  def seller_otp_verified
-    object.seller_verified?
-  end
 
   def buyer_otp_verified
     object.buyer_verified?

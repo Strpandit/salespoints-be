@@ -26,20 +26,12 @@ class DeliveryConfirmation < ApplicationRecord
     status == "pending_otp"
   end
 
-  def seller_verified?
-    seller_otp_verified_at.present?
-  end
-
   def buyer_verified?
     buyer_otp_verified_at.present?
   end
 
   def invoice_reference_time
     deliverable.try(:shipped_at) || submitted_at || created_at
-  end
-
-  def seller_otp_valid?(otp)
-    seller_otp.present? && seller_otp == otp.to_s && seller_otp_sent_at.present? && seller_otp_sent_at > 10.minutes.ago
   end
 
   def buyer_otp_valid?(otp)

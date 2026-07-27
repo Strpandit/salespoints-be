@@ -23,9 +23,7 @@ module Api
             actor: current_user,
             status_note: "Online payment confirmed successfully."
           ).transition!(next_status: "processing")
-          OrderMailer.customer_order_confirmation(order.id).deliver_later if order.buyer&.email.present?
-          OrderMailer.dealer_new_order(order.id).deliver_later if order.seller_dealer&.email.present?
-          OrderMailer.admin_order_alert(order.id).deliver_later
+          EmailDispatcherService.retail_order_accepted(order) if order.seller_dealer.present?
         end
       when "ACTIVE"
         order.update!(payment_gateway_payload: order.payment_gateway_payload.merge(payload))
@@ -147,8 +145,6 @@ module Api
             expires_at: Time.current
           )
 
-          EmailDispatcherService.b2b_payment_done(finalization.b2b_order)
-
           return render json: {
             data: B2bOrderSerializer.render(finalization.b2b_order),
             b2b_order: B2bOrderSerializer.render(finalization.b2b_order),
@@ -157,10 +153,6 @@ module Api
             message: "B2B request broadcasted after successful payment"
           }, status: :ok
         end
-        finalization.orders.each do |order|
-          EmailDispatcherService.retail_order_placed(order)
-        end
-
         render json: {
           data: OrderSerializer.render(finalization.orders),
           orders: OrderSerializer.render(finalization.orders),

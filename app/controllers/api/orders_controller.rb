@@ -85,7 +85,7 @@ module Api
       next_status = params[:status].to_s
       return render json: { error: "Status is required" }, status: :unprocessable_entity if next_status.blank?
       if next_status == "delivered"
-        return render json: { error: "Delivered status will be set automatically after delivery form and dual OTP verification" }, status: :unprocessable_entity
+        return render json: { error: "Delivered status will be set automatically after delivery form and buyer OTP verification" }, status: :unprocessable_entity
       end
 
       OrderLifecycleService.new(order: order, actor: current_user, status_note: params[:status_note]).transition!(next_status: next_status)

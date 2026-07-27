@@ -176,15 +176,7 @@ class EnhancedPaymentWebhookProcessor
       payment_gateway_payload: attempt.payment_gateway_payload.merge(payload)
     )
 
-    finalization = PaymentAttemptFinalizationService.new(payment_attempt: attempt).call
-    if finalization.b2b_order.present?
-      EmailDispatcherService.b2b_payment_done(finalization.b2b_order)
-    else
-      finalization.orders.each do |order|
-        EmailDispatcherService.retail_order_placed(order)
-        EmailDispatcherService.retail_order_accepted(order)
-      end
-    end
+    PaymentAttemptFinalizationService.new(payment_attempt: attempt).call
   end
 
   def finalize_failed_attempt!(attempt, payload)

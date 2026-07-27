@@ -116,8 +116,12 @@ class PaymentAttemptFinalizationService
       buyer_payment_attempt: attempt
     ).call
 
-    send_b2b_notifications(order)
-    # EmailDispatcherService.b2b_payment_done(order)
+    send_order_accept_to_seller(order)
+    send_payment_success_to_buyer(order)
+    create_buyer_online_payment_notification(order)
+    create_seller_online_payment_notification(order)
+    notify_admin_online_payment(order)
+    EmailDispatcherService.b2b_payment_done(order)
     order
   end
 
@@ -200,14 +204,6 @@ class PaymentAttemptFinalizationService
     coupon&.consume_for!(attempt.buyer)
   end
 
-  def send_b2b_notifications(order)
-    send_order_accept_to_seller(order)
-    send_payment_success_to_buyer(order)
-    create_buyer_online_payment_notification(order)
-    create_seller_online_payment_notification(order)
-    notify_admin_online_payment(order)
-  end
-
   def send_order_request_to_seller(order)
     return unless order.is_direct_buy? && order.source_type == "WholesalerPost"
 
@@ -276,17 +272,19 @@ class PaymentAttemptFinalizationService
 
   def send_payment_success_to_buyer(order)
     buyer = order.buyer_dealer
-    items = order.b2b_order_items.accepted_items
+    items = order.b2b_order_items.accepted_items.to_a
+    items = order.b2b_order_items.to_a if items.empty?
     first_item = items.first
     variant = first_item&.product_variant
-    product = variant&.product
+    wholesaler_post = first_item&.wholesaler_post
+    product = variant&.product || wholesaler_post&.dealer_product&.product
 
     MetaWhatsappCloudService.new.send_payment_success(
       to: formatted_phone_for(buyer),
-      product: product&.name || "Product",
-      variant: variant&.variant_sku || "Standard",
-      quantity: items.sum(&:quantity),
-      unit_price: first_item&.unit_price.to_f.round(2).to_s || 0,
+      product: product&.name || wholesaler_post&.title || "Product",
+      variant: variant&.variant_sku || wholesaler_post&.modal_no || "Standard",
+      quantity: items.sum(&:quantity).to_s,
+      unit_price: first_item&.unit_price.to_f.round(2).to_s,
       total_paid: order.total_amount.to_f.round(2).to_s,
       payment_id: order.payment_method.to_s.upcase,
       order_id: order.reference_number
@@ -295,8 +293,9 @@ class PaymentAttemptFinalizationService
 
   def create_seller_request_notification(order, item)
     variant = item.product_variant
-    product = variant&.product
-    product_name = product&.name || "Product"
+    wholesaler_post = item.wholesaler_post
+    product = variant&.product || wholesaler_post&.dealer_product&.product
+    product_name = product&.name || wholesaler_post&.title || "Product"
     
     NotificationService.deliver(
       recipient: order.seller_dealer,
