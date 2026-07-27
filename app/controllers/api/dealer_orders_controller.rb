@@ -216,7 +216,8 @@ module Api
         delivery_confirmation: order.delivery_confirmation&.as_json(only: [:token, :status, :submitted_at, :completed_at]),
         can_accept: order.pending_request? && !order.expired?,
         can_reject: order.pending_request? && !order.expired?,
-        can_update: order.can_transition_to?("shipped") || order.can_transition_to?("delivered")
+        can_update: order.can_transition_to?("shipped") || order.can_transition_to?("delivered"),
+        next_status: b2b_next_status(order)
       }
     end
 
@@ -377,6 +378,13 @@ module Api
           }
         end
       })
+    end
+
+    def b2b_next_status(order)
+      return "shipped" if order.can_transition_to?("shipped")
+      return "delivered" if order.can_transition_to?("delivered")
+
+      nil
     end
 
     def apply_time_filter(orders, filter)
