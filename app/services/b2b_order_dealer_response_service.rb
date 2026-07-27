@@ -289,7 +289,7 @@ class B2bOrderDealerResponseService
     order.mark_accepted!(@dealer)
     order.recalculate_totals!
 
-    accepted_tracker = DealerBroadcastTracker.find_by!(b2b_order: order, dealer: seller)
+    accepted_tracker = DealerBroadcastTracker.find_by!(b2b_order: order, dealer: @dealer)
 
     accepted_tracker.mark_accepted!
     DealerBroadcastTracker
