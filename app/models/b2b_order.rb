@@ -4,6 +4,7 @@ class B2bOrder < ApplicationRecord
   belongs_to :buyer_payment_attempt, class_name: "PaymentAttempt", optional: true
   belongs_to :source, polymorphic: true, optional: true
   has_many :notifications, as: :notifiable, dependent: :destroy
+  has_many :b2b_order_items, dependent: :destroy
   has_many :b2b_order_offers, dependent: :destroy
   has_many :dealer_broadcast_trackers, dependent: :destroy
   has_one :delivery_confirmation, as: :deliverable, dependent: :destroy
