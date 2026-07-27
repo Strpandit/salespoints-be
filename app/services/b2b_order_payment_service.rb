@@ -212,6 +212,8 @@ class B2bOrderPaymentService
           }
         }
       )
+      
+      order.update!(buyer_payment_attempt_id: attempt.id)
 
       cashfree = CashfreeService.new
       payload = cashfree.create_cashfree_order(

@@ -117,38 +117,17 @@ module Api
           return render json: { error: "Payment already completed" }, status: :unprocessable_entity if order.payment_status == "paid"
           return render json: { error: "Payment link expired" }, status: :unprocessable_entity if order.expires_at.present? && order.expires_at <= Time.current
 
-          Rails.logger.info "===== VERIFY PAYMENT ====="
-          Rails.logger.info "payment_token=#{token}"
-          Rails.logger.info "order.id=#{order.id}"
-          Rails.logger.info "payment_attempt_id=#{params[:payment_attempt_id]}"
-          Rails.logger.info "buyer_id=#{order.buyer_dealer_id}"
-
-          attempt = PaymentAttempt.find_by(
-            id: params[:payment_attempt_id],
-            buyer: order.buyer_dealer
-          )
-
-          Rails.logger.info "attempt.id=#{attempt&.id}"
-          Rails.logger.info "attempt.buyer_id=#{attempt&.buyer_id}"
-          Rails.logger.info "result_payload=#{attempt&.result_payload.inspect}"
-          Rails.logger.info "payload_order_id=#{attempt&.result_payload&.dig('b2b_order_id')}"
-          Rails.logger.info "expected_order_id=#{order.id}"
+          attempt = PaymentAttempt.find_by(id: params[:payment_attempt_id])
 
           unless attempt
-            return render json: { error: "STEP-1: Attempt not found" }, status: :not_found
+            return render json: { error: "Payment attempt not found" }, status: :not_found
           end
 
-          unless attempt.result_payload.present?
-            return render json: { error: "STEP-2: Result payload blank" }, status: :not_found
+          unless attempt.result_payload.present? && attempt.result_payload["b2b_order_id"].to_i == order.id
+            return render json: { error: "Payment attempt does not match this order" }, status: :not_found
           end
 
-          unless attempt.result_payload["b2b_order_id"].to_i == order.id
-            return render json: {
-              error: "STEP-3: Order mismatch",
-              expected_order_id: order.id,
-              payload_order_id: attempt.result_payload["b2b_order_id"]
-            }, status: :not_found
-          end
+          attempt
         end
       return render json: { error: "Payment attempt not found" }, status: :not_found unless attempt
       return render json: { error: "Cashfree reference missing" }, status: :unprocessable_entity if attempt.gateway_order_reference.blank?
