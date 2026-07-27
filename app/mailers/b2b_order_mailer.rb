@@ -91,6 +91,8 @@ class B2bOrderMailer < ApplicationMailer
                       .find(order_id)
     @buyer = @order.buyer_dealer
     @seller = @order.seller_dealer
+    @seller_dealer = @seller
+    @buyer_dealer = @buyer
     @payment = {
       method: payment_method_label(@order.payment_method),
       reference: @order.payment_reference || @order.gateway_order_reference,

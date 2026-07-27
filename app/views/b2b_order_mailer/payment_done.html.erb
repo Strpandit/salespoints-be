@@ -21,7 +21,6 @@
             <tr><td style="padding:4px 0;color:#64748B;">Total Amount</td><td style="padding:4px 0;font-weight:600;">₹<%= @order.total_amount.to_f.round(2) %></td></tr>
             <tr><td style="padding:4px 0;color:#64748B;">Payment Method</td><td style="padding:4px 0;"><%= payment_method_label(@order.payment_method) %></td></tr>
             <tr><td style="padding:4px 0;color:#64748B;">Payment Status</td><td style="padding:4px 0;font-weight:600;color:#15803D;">✅ <%= @order.payment_status.to_s.upcase %></td></tr>
-            <tr><td style="padding:4px 0;color:#64748B;">Payment Reference</td><td style="padding:4px 0;font-size:13px;color:#64748B;"><%= @order.payment_reference || @order.gateway_order_reference || 'N/A' %></td></tr>
           </table>
         </div>
         
