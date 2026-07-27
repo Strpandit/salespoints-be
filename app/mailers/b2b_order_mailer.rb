@@ -95,7 +95,7 @@ class B2bOrderMailer < ApplicationMailer
     @buyer_dealer = @buyer
     @payment = {
       method: payment_method_label(@order.payment_method),
-      reference: @order.payment_reference || @order.gateway_order_reference,
+      # reference: @order.payment_reference || @order.gateway_order_reference,
       paid_at: @order.payment_confirmed_at,
       amount: @order.total_amount
     }

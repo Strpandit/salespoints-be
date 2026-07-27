@@ -609,7 +609,7 @@ module Api
     end
 
     def set_dealer_product
-      @dealer_product = DealerProduct.find_by(slug: params[:slug])
+      @dealer_product = DealerProduct.find_by(id: params[:id]) || DealerProduct.find_by(slug: params[:slug])
       render json: { error: "Dealer product not found" }, status: :not_found unless @dealer_product
     end
 
