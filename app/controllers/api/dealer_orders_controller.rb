@@ -214,9 +214,9 @@ module Api
         open_items_count: order.b2b_order_items.open_items.count,
         items: order.b2b_order_items.map { |item| transform_b2b_item(item) },
         delivery_confirmation: order.delivery_confirmation&.as_json(only: [:token, :status, :submitted_at, :completed_at]),
-        can_accept: order.pending_request? && !order.expired?,
-        can_reject: order.pending_request? && !order.expired?,
-        can_update: order.can_transition_to?("shipped") || order.can_transition_to?("delivered"),
+        can_accept: order.pending_request? && !order.expired? && order.seller_dealer_id == current_dealer.id,
+        can_reject: order.pending_request? && !order.expired? && order.seller_dealer_id == current_dealer.id,
+        can_update: (order.can_transition_to?("shipped") || order.can_transition_to?("delivered")) && order.seller_dealer_id == current_dealer.id,
         next_status: b2b_next_status(order)
       }
     end
@@ -262,7 +262,7 @@ module Api
         refund_status: order.refund_status || "none",
         items: order.order_items.map { |item| transform_retail_item(item) },
         delivery_confirmation: order.delivery_confirmation&.as_json(only: [:token, :status, :submitted_at, :completed_at]),
-        can_update: order.can_transition_to?("processing") || order.can_transition_to?("shipped"),
+        can_update: (order.can_transition_to?("processing") || order.can_transition_to?("shipped")) && order.seller_dealer_id == current_dealer.id,
         next_status: order.status == "pending" ? "processing" : (order.status == "processing" ? "shipped" : nil)
       }
     end
