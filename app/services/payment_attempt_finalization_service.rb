@@ -30,7 +30,7 @@ class PaymentAttemptFinalizationService
 
   def handle_processed_attempt(attempt)
     if checkout_context == "b2b_order"
-      order = B2bOrder.find_by(buyer_payment_attempt_id: attempt.id, request_status: nil)
+      order = B2bOrder.find_by(id: metadata["request_order_id"], buyer_payment_attempt_id: attempt.id)
       return Result.new(orders: [], b2b_order: order) if order.present?
     else
       orders = load_orders(attempt)
@@ -44,7 +44,7 @@ class PaymentAttemptFinalizationService
       attempt = PaymentAttempt.lock.find(@payment_attempt.id)
 
       if attempt.processed?
-        existing_order = B2bOrder.find_by(buyer_payment_attempt_id: attempt.id, request_status: nil)
+        existing_order = B2bOrder.find_by(id: metadata["request_order_id"], buyer_payment_attempt_id: attempt.id)
         return Result.new(orders: [], b2b_order: existing_order) if existing_order.present?
         return Result.new(orders: [], b2b_order: nil)
       end
@@ -83,8 +83,10 @@ class PaymentAttemptFinalizationService
 
   def process_b2b_order!(attempt)
     metadata = attempt.result_payload.fetch("request_metadata", {}).stringify_keys
-    request_order = B2bOrder.find_by(id: metadata["request_order_id"])
-    
+    request_order_id = metadata["request_order_id"]
+    raise StandardError, "Request order id missing" if request_order_id.blank?
+
+    request_order = B2bOrder.find_by(id: request_order_id)
     raise StandardError, "Accepted B2B request not found" if request_order.blank?
 
     if request_order.expires_at.present? &&
@@ -115,8 +117,7 @@ class PaymentAttemptFinalizationService
     ).call
 
     send_b2b_notifications(order)
-    EmailDispatcherService.b2b_payment_done(order)
-
+    # EmailDispatcherService.b2b_payment_done(order)
     order
   end
 
@@ -160,11 +161,8 @@ class PaymentAttemptFinalizationService
   end
 
   def find_existing_b2b_order(attempt)
-    B2bOrder.find_by(buyer_payment_attempt_id: attempt.id, request_status: nil)
-  end
-
-  def find_attempt
-    @attempt ||= PaymentAttempt.lock.find(@payment_attempt.id)
+    metadata = attempt.result_payload.fetch("request_metadata", {}).stringify_keys
+    B2bOrder.find_by(id: metadata["request_order_id"], buyer_payment_attempt_id: attempt.id)
   end
 
   def load_orders(attempt)
@@ -254,7 +252,7 @@ class PaymentAttemptFinalizationService
     offer.update!(whatsapp_status: "sent", sent_at: Time.current)
     create_seller_request_notification(order, item)
   rescue StandardError => e
-    offer.update!(whatsapp_status: "failed", failed_at: Time.current, failure_reason: e.message)
+    offer&.update!(whatsapp_status: "failed", failed_at: Time.current, failure_reason: e.message)
   end
 
   def send_order_accept_to_seller(order)

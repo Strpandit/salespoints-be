@@ -370,9 +370,6 @@ class B2bOrderBroadcastService
   end
 
   def expire_order!
-    @order.update!(
-      status: "expired",
-      request_status: "expired"
-    )
+    @order.expire!
   end
 end

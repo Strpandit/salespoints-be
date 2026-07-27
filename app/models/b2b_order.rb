@@ -3,9 +3,6 @@ class B2bOrder < ApplicationRecord
   belongs_to :seller_dealer, class_name: "Dealer", optional: true
   belongs_to :buyer_payment_attempt, class_name: "PaymentAttempt", optional: true
   belongs_to :source, polymorphic: true, optional: true
-  belongs_to :parent_request_order, class_name: "B2bOrder", optional: true
-  has_one :final_order, class_name: "B2bOrder", foreign_key: :parent_request_order_id, dependent: nil
-  has_many :b2b_order_items, dependent: :destroy
   has_many :notifications, as: :notifiable, dependent: :destroy
   has_many :b2b_order_offers, dependent: :destroy
   has_many :dealer_broadcast_trackers, dependent: :destroy
@@ -28,17 +25,6 @@ class B2bOrder < ApplicationRecord
   scope :pending_payments, -> { where(status: "pending_payment") }
   scope :from_wholesaler_post, -> { where(source_type: 'WholesalerPost') }
   scope :direct_buy, -> { where(is_direct_buy: true) }
-  scope :final_orders, -> {
-    where(
-      "is_direct_buy = ? OR (is_direct_buy = ? AND parent_request_order_id IS NOT NULL)",
-      true,
-      false
-    )
-  }
-  scope :child_orders, -> {
-    where(is_direct_buy: false)
-      .where.not(parent_request_order_id: nil)
-  }
 
   before_validation :assign_payment_token, on: :create
   before_validation :set_reference_number, on: :create
@@ -72,7 +58,7 @@ class B2bOrder < ApplicationRecord
   end
 
   def final_order?
-    request_status.nil?
+    %w[paid confirmed shipped delivered cancelled].include?(status)
   end
 
   def paid?
@@ -103,6 +89,8 @@ class B2bOrder < ApplicationRecord
   end
 
   def mark_shipped!(note: nil)
+    raise StandardError, "Only confirmed orders can be shipped" unless confirmed?
+    
     update!(
       status: "shipped",
       status_note: note.presence || status_note,
@@ -111,6 +99,8 @@ class B2bOrder < ApplicationRecord
   end
 
   def mark_delivered!(note: nil)
+    raise StandardError, "Only shipped orders can be delivered" unless shipped?
+    
     update!(
       status: "delivered",
       status_note: note.presence || status_note,
@@ -142,6 +132,8 @@ class B2bOrder < ApplicationRecord
   end
 
   def mark_payment_paid!
+    raise StandardError, "Only pending payment orders can be marked as paid" unless pending_payment?
+    
     update!(
       status: "paid",
       payment_status: "paid",

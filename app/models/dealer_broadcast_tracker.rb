@@ -33,14 +33,17 @@ class DealerBroadcastTracker < ApplicationRecord
   end
 
   def mark_accepted!
+    return if accepted?
     update!(status: "accepted")
   end
 
   def mark_rejected!
+    return if rejected?
     update!(status: "rejected")
   end
 
   def mark_expired!
+    return if expired?
     update!(status: "expired")
   end
 end

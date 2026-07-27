@@ -9,39 +9,51 @@ class B2bOrderDealerResponseService
   end
 
   def accept!
+    result = nil
     ActiveRecord::Base.transaction do
       if @order.is_a?(Order)
         lock_order = Order.lock.find(@order.id)
-        accept_b2c_order!(lock_order)
+        result = accept_b2c_order!(lock_order)
       elsif @order.is_a?(B2bOrder)
         lock_order = B2bOrder.lock.find(@order.id)
-        if lock_order.is_direct_buy?
-          accept_direct_buy!(lock_order)
-        else
-          accept_b2b_broadcast!(lock_order)
-        end
+        result =
+          if lock_order.is_direct_buy?
+            accept_direct_buy!(lock_order)
+          else
+            accept_b2b_broadcast!(lock_order)
+          end
       else
         raise StandardError, "Invalid order type"
       end
     end
+
+    send_accept_notifications(result)
+
+    result
   end
 
   def reject!
+     result = nil
     ActiveRecord::Base.transaction do
       if @order.is_a?(Order)
         lock_order = Order.lock.find(@order.id)
-        reject_b2c_order!(lock_order)
+        result = reject_b2c_order!(lock_order)
       elsif @order.is_a?(B2bOrder)
         lock_order = B2bOrder.lock.find(@order.id)
-        if lock_order.is_direct_buy?
-          reject_direct_buy!(lock_order)
-        else
-          reject_b2b_broadcast!(lock_order)
-        end
+        result = 
+          if lock_order.is_direct_buy?
+            reject_direct_buy!(lock_order)
+          else
+            reject_b2b_broadcast!(lock_order)
+          end
       else
         raise StandardError, "Invalid order type"
       end
     end
+
+    send_reject_notifications(result)
+
+    result
   end
 
   private
@@ -64,13 +76,7 @@ class B2bOrderDealerResponseService
     offer.update!(status: "accepted", responded_at: Time.current, whatsapp_status: "replied")
     close_other_b2c_offers!(order)
 
-    send_b2c_order_accept_to_seller(order)
-    send_b2c_payment_success_to_buyer(order)
-    create_b2c_buyer_notification(order)
-    create_b2c_seller_notification(order)
-    notify_admin_b2c_order_confirmed(order)
-
-    EmailDispatcherService.retail_order_accepted(order)
+    order
   end
 
   def reject_b2c_order!(order)
@@ -92,8 +98,7 @@ class B2bOrderDealerResponseService
       )
     end
 
-    notify_b2c_buyer_of_rejection(order)
-    EmailDispatcherService.retail_order_terminated(order, "cancelled")
+    order
   end
 
   def lock_b2c_request_offer!(order:)
@@ -284,17 +289,20 @@ class B2bOrderDealerResponseService
     order.mark_accepted!(@dealer)
     order.recalculate_totals!
 
-    DealerBroadcastTracker.for_order(order.id).update_all(status: "accepted")
+    accepted_tracker = DealerBroadcastTracker.find_by!(b2b_order: order, dealer: seller)
+
+    accepted_tracker.mark_accepted!
+    DealerBroadcastTracker
+      .for_order(order.id)
+      .pending
+      .where.not(id: accepted_tracker.id)
+      .update_all(status: "expired")
+    # DealerBroadcastTracker.for_order(order.id).update_all(status: "accepted")
     close_other_b2b_offers!(order)
 
     offer.update!(status: "accepted", responded_at: Time.current, whatsapp_status: "replied")
 
-    send_payment_request_template(order)
-    create_buyer_notification(order, "accepted")
-    create_seller_acceptance_notification(order)
-    EmailDispatcherService.b2b_request_accepted(order)
-
-    updated_items.map(&:first)
+    order
   end
 
   def reject_b2b_broadcast!(order)
@@ -317,12 +325,6 @@ class B2bOrderDealerResponseService
     tracker = DealerBroadcastTracker.find_by(b2b_order: order, dealer: @dealer)
     tracker&.update!(status: "rejected")
 
-    close_other_b2b_offers!(order)
-
-    notify_buyer_of_rejection(order)
-    create_buyer_notification(order, "rejected")
-    EmailDispatcherService.b2b_order_terminated(order, "rejected")
-
     total_dealers = DealerBroadcastTracker.for_order(order.id).count
     rejected_count = DealerBroadcastTracker.for_order(order.id).where(status: "rejected").count
     
@@ -332,7 +334,11 @@ class B2bOrderDealerResponseService
         status: "cancelled",
         rejected_at: Time.current
       )
+
+      close_other_b2b_offers!(order)
     end
+
+    order
   end
 
   def accept_direct_buy!(order)
@@ -353,7 +359,7 @@ class B2bOrderDealerResponseService
 
     order.update!(
       status: "confirmed",
-      request_status: nil,
+      request_status: "accepted_request",
       confirmed_at: Time.current,
       accepted_at: Time.current
     )
@@ -363,12 +369,6 @@ class B2bOrderDealerResponseService
     close_other_b2b_offers!(order)
 
     order.reload
-    send_order_accept_to_seller(order)
-    send_payment_success_to_buyer(order)
-    create_seller_acceptance_notification(order)
-    create_buyer_acceptance_notification(order)
-    notify_admin_order_confirmed(order)
-    EmailDispatcherService.b2b_request_accepted(order)
 
     order
   end
@@ -381,10 +381,8 @@ class B2bOrderDealerResponseService
     order.update!(status: "cancelled", request_status: "rejected_request", rejected_at: Time.current)
     offer.update!(status: "rejected", responded_at: Time.current, whatsapp_status: "replied")
 
-    notify_buyer_of_rejection(order)
-    create_buyer_notification(order, "rejected")
-    EmailDispatcherService.b2b_order_terminated(order, "rejected")
     # refund code here
+    order
   end
 
   def lock_b2b_request_offer!(order:)
@@ -768,5 +766,57 @@ class B2bOrderDealerResponseService
     end
     
     address.to_s
+  end
+
+  def send_accept_notifications(order)
+    return unless order
+
+    if order.is_a?(Order)
+
+      send_b2c_order_accept_to_seller(order)
+      send_b2c_payment_success_to_buyer(order)
+      create_b2c_buyer_notification(order)
+      create_b2c_seller_notification(order)
+      notify_admin_b2c_order_confirmed(order)
+      EmailDispatcherService.retail_order_accepted(order)
+
+    elsif order.is_a?(B2bOrder)
+
+      if order.is_direct_buy?
+
+        send_order_accept_to_seller(order)
+        send_payment_success_to_buyer(order)
+        create_seller_acceptance_notification(order)
+        create_buyer_acceptance_notification(order)
+        notify_admin_order_confirmed(order)
+        EmailDispatcherService.b2b_request_accepted(order)
+
+      else
+
+        send_payment_request_template(order)
+        create_buyer_notification(order, "accepted")
+        create_seller_acceptance_notification(order)
+        EmailDispatcherService.b2b_request_accepted(order)
+
+      end
+    end
+  end
+
+  def send_reject_notifications(order)
+    return unless order
+
+    if order.is_a?(Order)
+
+      notify_buyer_of_rejection(order)
+      create_buyer_notification(order, "rejected")
+      EmailDispatcherService.retail_order_terminated(order, "rejected")
+
+    elsif order.is_a?(B2bOrder)
+
+      notify_buyer_of_rejection(order)
+      create_buyer_notification(order, "rejected")
+      EmailDispatcherService.b2b_order_terminated(order, "rejected")
+
+    end
   end
 end

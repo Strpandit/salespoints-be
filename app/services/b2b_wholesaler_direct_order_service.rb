@@ -29,8 +29,6 @@ class B2bWholesalerDirectOrderService
       raise "Requested radius km must be greater than 0"
     end
     
-    raise StandardError, "Insufficient stock" if @wholesaler_post.stock_quantity.to_i < @quantity
-
     subtotal = unit_price * @quantity
     gst_amount = calculate_gst(unit_price, @quantity)
     total_amount = subtotal
@@ -42,6 +40,9 @@ class B2bWholesalerDirectOrderService
     order = nil
 
     ActiveRecord::Base.transaction do
+      @wholesaler_post.lock!
+      raise StandardError, "Insufficient stock" if @wholesaler_post.stock_quantity.to_i < @quantity
+
       order = B2bOrder.create!(
         buyer_dealer_id: @buyer.id,
         seller_dealer_id: @seller.id,
@@ -75,7 +76,7 @@ class B2bWholesalerDirectOrderService
         status: "open"
       )
 
-      offer = B2bOrderOffer.create!(
+      B2bOrderOffer.create!(
         b2b_order: order,
         dealer: @seller,
         status: "open",
@@ -111,6 +112,8 @@ class B2bWholesalerDirectOrderService
     if @payment_method.present? && !B2bOrder::PAYMENT_METHODS.include?(@payment_method)
       raise StandardError, "Invalid payment method"
     end
+    raise StandardError, "Invalid seller" if @seller.blank?
+    raise StandardError, "Buyer cannot order from self" if @buyer.id == @seller.id
   end
 
   def calculate_gst(unit_price, quantity)

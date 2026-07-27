@@ -228,6 +228,12 @@ class CashfreeService
     raise StandardError, "Missing webhook signature header" if signature.blank?
     raise StandardError, "Missing webhook timestamp header" if timestamp.blank?
     
+    timestamp_i = timestamp.to_i
+
+    if (Time.current.to_i - timestamp_i).abs > WEBHOOK_TOLERANCE_SECONDS
+      raise StandardError, "Webhook timestamp expired"
+    end
+
     signature_string = "#{timestamp}#{raw_body}"
     computed_signature = Base64.strict_encode64(
       OpenSSL::HMAC.digest("sha256", @webhook_secret, signature_string)

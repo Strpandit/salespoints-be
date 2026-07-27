@@ -1,6 +1,6 @@
 module Api
   class PaymentsController < ApplicationController
-    skip_before_action :authenticate_request!, only: [:cashfree_webhook, :payment_details]
+    skip_before_action :authenticate_request!, only: [:cashfree_webhook, :payment_details, :verify_cashfree]
 
     def verify_cashfree
       if params[:payment_attempt_id].present?
@@ -73,11 +73,11 @@ module Api
     end
 
     def payment_details
-      order = B2bOrder.find_by(payment_token: params[:token])
+      order = B2bOrder.find_by(payment_token: params[:payment_token])
 
       return render json: { error: "Invalid payment link" }, status: :not_found unless order
-      return render json: { error: "Order cancelled" } if order.status == "cancelled"
-      return render json: { error: "Order rejected" } if order.request_status == "rejected_request"
+      return render json: { error: "Order cancelled" }, status: :unprocessable_entity if order.status == "cancelled"
+      return render json: { error: "Order rejected" }, status: :unprocessable_entity if order.request_status == "rejected_request"
       return render json: { error: "Payment already completed" }, status: :unprocessable_entity if order.payment_status == "paid"
       return render json: { error: "Payment link expired" }, status: :unprocessable_entity if order.expires_at.present? && order.expires_at < Time.current
 
@@ -105,7 +105,23 @@ module Api
     private
 
     def verify_payment_attempt!
-      attempt = scoped_payment_attempts.find_by(id: params[:payment_attempt_id])
+      attempt =
+        if current_admin || current_dealer || current_account
+          scoped_payment_attempts.find_by(id: params[:payment_attempt_id])
+        else
+          order = B2bOrder.find_by(payment_token: params[:payment_token])
+
+          return render json: { error: "Invalid payment link" }, status: :not_found unless order
+          return render json: { error: "Payment already completed" }, status: :unprocessable_entity if order.payment_status == "paid"
+          return render json: { error: "Payment link expired" }, status: :unprocessable_entity if order.expires_at.present? && order.expires_at <= Time.current
+
+          PaymentAttempt.find_by(
+            id: params[:payment_attempt_id],
+            buyer: order.buyer_dealer,
+            b2b_order_id: order.id
+          )
+        end
+
       return render json: { error: "Payment attempt not found" }, status: :not_found unless attempt
       return render json: { error: "Cashfree reference missing" }, status: :unprocessable_entity if attempt.gateway_order_reference.blank?
 
@@ -117,30 +133,35 @@ module Api
         mark_attempt_paid!(attempt, payload)
         finalization = PaymentAttemptFinalizationService.new(payment_attempt: attempt).call
         if finalization.b2b_order.present?
-          render json: {
+          finalization.b2b_order.update!(
+            payment_reference: payload.dig("payment", "cf_payment_id") || payload["cf_payment_id"] || payload["payment_id"],
+            payment_gateway_payload: payload,
+            payment_token: SecureRandom.hex(32),
+            expires_at: Time.current
+          )
+
+          EmailDispatcherService.b2b_payment_done(finalization.b2b_order)
+
+          return render json: {
             data: B2bOrderSerializer.render(finalization.b2b_order),
             b2b_order: B2bOrderSerializer.render(finalization.b2b_order),
             payment_attempt: serialize_payment_attempt(attempt.reload),
             payment_gateway_status: status,
             message: "B2B request broadcasted after successful payment"
           }, status: :ok
-        else
-          if finalization.b2b_order.present?
-            EmailDispatcherService.b2b_payment_done(finalization.b2b_order)
-          else
-            finalization.orders.each do |order|
-              EmailDispatcherService.retail_order_placed(order)
-            end
-          end
-
-          render json: {
-            data: OrderSerializer.render(finalization.orders),
-            orders: OrderSerializer.render(finalization.orders),
-            payment_attempt: serialize_payment_attempt(attempt.reload),
-            payment_gateway_status: status,
-            message: "#{finalization.orders.size} order(s) created after successful payment"
-          }, status: :ok
         end
+        finalization.orders.each do |order|
+          EmailDispatcherService.retail_order_placed(order)
+        end
+
+        render json: {
+          data: OrderSerializer.render(finalization.orders),
+          orders: OrderSerializer.render(finalization.orders),
+          payment_attempt: serialize_payment_attempt(attempt.reload),
+          payment_gateway_status: status,
+          message: "#{finalization.orders.size} order(s) created after successful payment"
+        }, status: :ok
+
       when "ACTIVE"
         attempt.update!(payment_gateway_payload: attempt.payment_gateway_payload.merge(payload))
         render json: {

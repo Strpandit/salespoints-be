@@ -15,63 +15,64 @@ class B2bOrderPaymentService
   def call
     raise StandardError, "Order not found" unless @order
 
-    if @order.expires_at.present? &&
-      @order.expires_at <= Time.current
-      raise StandardError, "Payment window has expired."
-    end
+    @order.with_lock do
+      if @order.expires_at.present? && @order.expires_at <= Time.current
+        raise StandardError, "Payment window has expired."
+      end
 
-    if @order.payment_status == "paid"
-      raise StandardError, "Payment already completed."
-    end
-    
-    raise StandardError, "Invalid payment method" unless B2bOrder::PAYMENT_METHODS.include?(@payment_method)
-    unless @order.pending_request? || @order.pending_payment?
-      raise StandardError, "Order is not in a processable state. Current status: #{@order.status}"
-    end
-
-    if @payment_method == "cod" && @order.total_amount > COD_LIMIT
-      raise StandardError, "COD is not allowed for orders above ₹#{COD_LIMIT}. Please choose online payment."
-    end
-
-    if @payment_method == "cod"
-      is_wholesaler = @order.is_direct_buy? && @order.source_type == "WholesalerPost"
-      if is_wholesaler
-        @order.update!(
-          payment_method: "cod",
-          payment_status: "pending"
-        )
-        send_order_request_to_seller(@order)
-        EmailDispatcherService.b2b_request_placed(@order)
-        return {
-          order: @order,
-          payment_method: "cod",
-          status: "pending_request",
-          message: "Order request sent to seller."
-        }
+      if @order.payment_status == "paid"
+        raise StandardError, "Payment already completed."
       end
       
-      final_order = B2bOrderCreationService.new(
-        request_order: @order,
-        payment_method: "cod",
-        payment_status: "pending"
-      ).call
+      raise StandardError, "Invalid payment method" unless B2bOrder::PAYMENT_METHODS.include?(@payment_method)
+      unless @order.pending_request? || @order.pending_payment?
+        raise StandardError, "Order is not in a processable state. Current status: #{@order.status}"
+      end
 
-      send_order_accept_to_seller(final_order)
-      send_payment_success_to_buyer(final_order)
-      create_buyer_payment_success_notification(final_order)
-      create_seller_payment_success_notification(final_order)
-      notify_admin_order_confirmed(final_order)
-      return { order: final_order, payment_method: "cod", status: "confirmed", message: "Order confirmed with COD." }
-    else
-      result = create_online_payment_attempt(@order)
-      return { 
-        order: @order, 
-        payment_method: "online", 
-        status: "pending", 
-        payment_attempt: result[:payment_attempt],
-        payment_data: result[:payment_data],
-        message: "Payment initiated. Complete payment to confirm order."
-      }
+      if @payment_method == "cod" && @order.total_amount > COD_LIMIT
+        raise StandardError, "COD is not allowed for orders above ₹#{COD_LIMIT}. Please choose online payment."
+      end
+
+      if @payment_method == "cod"
+        is_wholesaler = @order.is_direct_buy? && @order.source_type == "WholesalerPost"
+        if is_wholesaler
+          @order.update!(
+            payment_method: "cod",
+            payment_status: "pending"
+          )
+          send_order_request_to_seller(@order)
+          EmailDispatcherService.b2b_request_placed(@order)
+          return {
+            order: @order,
+            payment_method: "cod",
+            status: "pending_request",
+            message: "Order request sent to seller."
+          }
+        end
+        
+        final_order = B2bOrderCreationService.new(
+          request_order: @order,
+          payment_method: "cod",
+          payment_status: "pending"
+        ).call
+
+        send_order_accept_to_seller(final_order)
+        send_payment_success_to_buyer(final_order)
+        create_buyer_payment_success_notification(final_order)
+        create_seller_payment_success_notification(final_order)
+        notify_admin_order_confirmed(final_order)
+        return { order: final_order, payment_method: "cod", status: "confirmed", message: "Order confirmed with COD." }
+      else
+        result = create_online_payment_attempt(@order)
+        return { 
+          order: @order, 
+          payment_method: "online", 
+          status: "pending", 
+          payment_attempt: result[:payment_attempt],
+          payment_data: result[:payment_data],
+          message: "Payment initiated. Complete payment to confirm order."
+        }
+      end
     end
   end
 
@@ -163,10 +164,16 @@ class B2bOrderPaymentService
   private
 
   def create_online_payment_attempt(order)
-    existing_attempt = PaymentAttempt.find_by(
+    raise StandardError, "Payment already completed." if order.payment_status == "paid"
+    raise StandardError, "Payment link has expired." if order.expires_at.present? &&
+                                                        order.expires_at <= Time.current
+    raise StandardError, "Payment link is no longer valid." if order.status == "cancelled"
+    raise StandardError, "Payment request rejected." if order.request_status == "rejected_request"
+    
+    existing_attempt = PaymentAttempt.lock.where(
       buyer: order.buyer_dealer,
       status: "pending"
-    )
+    ).find_by("result_payload ->> 'b2b_order_id' = ?", order.id.to_s)
 
     if existing_attempt.present? &&
       existing_attempt.result_payload["b2b_order_id"] == order.id
@@ -313,7 +320,8 @@ class B2bOrderPaymentService
     offer.update!(whatsapp_status: "sent", sent_at: Time.current)
     create_seller_request_notification(order, item)
   rescue StandardError => e
-    offer.update!(whatsapp_status: "failed", failed_at: Time.current, failure_reason: e.message)
+    offer&.update!(whatsapp_status: "failed", failed_at: Time.current, failure_reason: e.message)
+    raise
   end
 
   def create_seller_request_notification(order, item)

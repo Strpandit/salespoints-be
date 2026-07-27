@@ -13,59 +13,16 @@ class B2bOrderCreationService
 
     ActiveRecord::Base.transaction do
       request_order = B2bOrder.lock.find(@request_order.id)
-      existing_order = B2bOrder.find_by(parent_request_order_id: request_order.id)
-
-      return existing_order if existing_order.present?
 
       ensure_request_ready!(request_order)
 
-      if request_order.is_direct_buy?
-        final_order_status = "pending_request"
-        final_order_request_status = "pending_request"
-      else
-        final_order_status = "confirmed"
-        final_order_request_status = nil
-      end
-
-      final_order = B2bOrder.create!(
-        parent_request_order_id: request_order.id,
-        buyer_dealer_id: request_order.buyer_dealer_id,
-        seller_dealer_id: request_order.seller_dealer_id,
-        request_status: final_order_request_status,
-        status: final_order_status,
-        requested_at: request_order.requested_at,
-        requested_radius_km: request_order.requested_radius_km,
-        latitude: request_order.latitude,
-        longitude: request_order.longitude,
-        subtotal_amount: request_order.subtotal_amount,
-        tax_amount: request_order.tax_amount,
-        discount_amount: request_order.discount_amount,
-        total_amount: request_order.total_amount,
-        accepted_at: request_order.accepted_at || Time.current,
-        expires_at: nil,
-        payment_method: @payment_method,
-        payment_status: @payment_status,
-        buyer_payment_attempt: @buyer_payment_attempt,
-        is_direct_buy: request_order.is_direct_buy,
-        source_type: request_order.source_type,
-        source_id: request_order.source_id,
-        payment_confirmed_at: @payment_status == "paid" ? Time.current : nil,
-        confirmed_at: Time.current,
-        billing_address: request_order.billing_address,
-        shipping_address: request_order.shipping_address
-      )
+      final_order = request_order
 
       request_order.b2b_order_items.accepted_items.order(:id).each do |request_item|
         _, dealer_product_id = resolve_source!(request_item)
 
-        B2bOrderItem.create!(
-          b2b_order: final_order,
-          product_variant_id: request_item.product_variant_id,
-          quantity: request_item.quantity,
-          unit_price: request_item.unit_price,
-          total_price: request_item.total_price,
+        request_item.update!(
           dealer_product_id: dealer_product_id,
-          wholesaler_post_id: request_item.wholesaler_post_id,
           status: "accepted",
           responded_at: request_item.responded_at || Time.current
         )
@@ -75,15 +32,14 @@ class B2bOrderCreationService
 
       final_order.recalculate_totals!
 
-      unless request_order.is_direct_buy?
-        request_order.update!(
-          status: "confirmed",
-          payment_status: @payment_status,
-          payment_method: @payment_method,
-          payment_confirmed_at: @payment_status == "paid" ? Time.current : request_order.payment_confirmed_at,
-          confirmed_at: Time.current
-        )
-      end
+      request_order.update!(
+        payment_method: @payment_method,
+        buyer_payment_attempt: @buyer_payment_attempt
+      )
+
+      request_order.mark_payment_paid! if @payment_status == "paid"
+
+      request_order.mark_order_confirmed! unless request_order.is_direct_buy?
 
       final_order
     end
@@ -91,25 +47,26 @@ class B2bOrderCreationService
     B2bOrderMailer.order_created(final_order.id).deliver_later if final_order.present?
     EmailDispatcherService.b2b_payment_done(final_order) if final_order.present?
   end
-
   private
 
   def deduct_stock!(request_item)
     if request_item.wholesaler_post_id.present?
-      wholesaler_post = WholesalerPost.lock.find(request_item.wholesaler_post_id)
+      wholesaler_post = WholesalerPost.lock.find_by(id: request_item.wholesaler_post_id)
+      raise StandardError, "Wholesaler post not found" unless wholesaler_post
       if wholesaler_post.stock_quantity.to_i < request_item.quantity.to_i
         raise StandardError, "Insufficient stock for wholesaler buy #{wholesaler_post.id}"
       end
       wholesaler_post.update!(
-        stock_quantity: wholesaler_post.stock_quantity - request_item.quantity
+        stock_quantity: wholesaler_post.stock_quantity.to_i - request_item.quantity.to_i
       )
     elsif request_item.dealer_product_id.present?
-      dealer_product = DealerProduct.lock.find(request_item.dealer_product_id)
+      dealer_product = DealerProduct.lock.find_by(id: request_item.dealer_product_id)
+      raise StandardError, "Dealer product not found" unless dealer_product
       if dealer_product.stock_quantity.to_i < request_item.quantity.to_i
         raise StandardError, "Insufficient stock for dealer product #{dealer_product.id}"
       end
       dealer_product.update!(
-        stock_quantity: dealer_product.stock_quantity - request_item.quantity
+        stock_quantity: dealer_product.stock_quantity.to_i - request_item.quantity.to_i
       )
     else
       raise StandardError, "Cannot deduct stock: no source found for request item #{request_item.id}"
@@ -119,14 +76,13 @@ class B2bOrderCreationService
   def ensure_request_ready!(request_order)
     if request_order.is_direct_buy?
       raise StandardError, "Order is not in pending_payment state" unless request_order.status == "pending_payment" && request_order.request_status == "pending_request"
+      raise StandardError, "Payment already completed" if request_order.paid? || request_order.confirmed?
       raise StandardError, "Payment window has expired" if request_order.expires_at.present? && request_order.expires_at < Time.current
     else
-      unless request_order.request_status == "accepted_request" || request_order.request_status == "pending_request"
+      unless request_order.request_status == "accepted_request"
         raise StandardError, "Accepted request not found"
       end
-      unless request_order.pending_payment? || request_order.pending_request?
-        raise StandardError, "Request is no longer awaiting payment"
-      end
+      raise StandardError, "Request is not awaiting payment" unless request_order.pending_payment?
       raise StandardError, "Payment window has expired for this request" if request_order.expires_at.present? && request_order.expires_at < Time.current
       raise StandardError, "Seller is not assigned for this request" if request_order.seller_dealer_id.blank?
     end
@@ -134,11 +90,14 @@ class B2bOrderCreationService
 
   def resolve_source!(request_item)
     if request_item.wholesaler_post_id.present?
-      wholesaler_post = WholesalerPost.lock.find(request_item.wholesaler_post_id)
+      wholesaler_post = WholesalerPost.lock.find_by(id: request_item.wholesaler_post_id)
+      raise StandardError, "Wholesaler post not found" unless wholesaler_post
+      raise StandardError, "Dealer product missing for wholesaler post #{wholesaler_post.id}" if wholesaler_post.dealer_product_id.blank?
       [wholesaler_post, wholesaler_post.dealer_product_id]
     else
       raise StandardError, "Dealer product missing for request item #{request_item.id}" if request_item.dealer_product_id.blank?
-      dealer_product = DealerProduct.lock.find(request_item.dealer_product_id)
+      dealer_product = DealerProduct.lock.find_by(id: request_item.dealer_product_id)
+      raise StandardError, "Dealer product not found" unless dealer_product
       [dealer_product, dealer_product.id]
     end
   end

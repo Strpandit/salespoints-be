@@ -24,6 +24,6 @@ class B2bOrderOffer < ApplicationRecord
   end
 
   def expired?
-    expires_at.present? && expires_at <= Time.current
+    status == "expired" || (open? && expires_at.present? && expires_at <= Time.current)
   end
 end

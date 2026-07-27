@@ -14,18 +14,18 @@ module Api
                   .open_state
                   .includes(b2b_order: [:buyer_dealer, :seller_dealer, :b2b_order_items])
                   .map(&:b2b_order)
-                  .select { |o| o.pending_request? && o.parent_request_order_id.nil? }
+                  .select { |o| o.pending_request? && o.request_status.present? }
                   .uniq
         when "accepted"
           current_dealer.seller_b2b_orders
-                        .child_orders
+                        .where.not(request_status: nil)
                         .where("request_status = ? OR (request_status IS NULL AND status IN (?))", "accepted_request", %w[pending_payment paid confirmed shipped delivered cancelled])
                         .includes(:buyer_dealer, :seller_dealer, b2b_order_items: { dealer_product: :dealer })
                         .order(created_at: :desc)
                         .distinct
         else
           current_dealer.buyer_b2b_orders
-                  .final_orders
+                  .where(request_status: nil)
                   .where("status IN (?)", %w[pending_request pending_payment paid confirmed shipped delivered cancelled])
                   .includes(:buyer_dealer, :seller_dealer, b2b_order_items: { dealer_product: :dealer })
                   .order(created_at: :desc)
@@ -194,7 +194,7 @@ module Api
         end
         render json: { error: "Unauthorized" }, status: :unauthorized
         
-      rescue => e
+      rescue StandardError => e
         render json: { error: "Failed to generate invoice: #{e.message}" }, status: :internal_server_error
       end
     end
@@ -290,23 +290,51 @@ module Api
     end
 
     def apply_time_filter(orders, filter)
-      return orders if filter == "all" || filter.blank?
+      return orders if filter.blank? || filter == "all"
+
+      unless orders.is_a?(ActiveRecord::Relation)
+        return case filter
+              when "today"
+                orders.select { |o| o.created_at.to_date == Date.current }
+              when "this_week"
+                orders.select { |o| o.created_at >= Date.current.beginning_of_week }
+              when "this_month"
+                orders.select { |o| o.created_at >= Date.current.beginning_of_month }
+              when "custom"
+                begin
+                  return orders unless params[:date_from].present? && params[:date_to].present?
+
+                  from = Date.parse(params[:date_from]).beginning_of_day
+                  to   = Date.parse(params[:date_to]).end_of_day
+
+                  orders.select { |o| o.created_at.between?(from, to) }
+                rescue ArgumentError
+                  orders
+                end
+              else
+                orders
+              end
+      end
       
       case filter
       when "today"
-        orders.select { |o| o.created_at.to_date == Date.current }
+        orders.where(created_at: Date.current.all_day)
       when "this_week"
-        orders.select { |o| o.created_at >= Date.current.beginning_of_week }
+        orders.where(created_at: Date.current.beginning_of_week..Time.current)
       when "this_month"
-        orders.select { |o| o.created_at >= Date.current.beginning_of_month }
+        orders.where(created_at: Date.current.beginning_of_month..Time.current)
       when "custom"
-        if params[:date_from].present? && params[:date_to].present?
+        return orders unless params[:date_from].present? && params[:date_to].present?
+
+        begin
           from = Date.parse(params[:date_from]).beginning_of_day
-          to = Date.parse(params[:date_to]).end_of_day
-          orders.select { |o| o.created_at.between?(from, to) }
-        else
+          to   = Date.parse(params[:date_to]).end_of_day
+
+          orders.where(created_at: from..to)
+        rescue ArgumentError
           orders
         end
+
       else
         orders
       end
@@ -314,11 +342,7 @@ module Api
 
     def acceptable_order?(order)
       return false unless order.request_status == "pending_request"
-      if order.is_direct_buy? && order.source_type == "WholesalerPost"
-        order.status.in?(%w[pending_request pending_payment])
-      else
-        order.status.in?(%w[pending_request pending_payment])
-      end
+      order.request_status == "pending_request" && order.status.in?(%w[pending_request pending_payment])
     end
 
     def matching_open_offer(order:)
