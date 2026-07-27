@@ -73,7 +73,8 @@ module Api
     end
 
     def payment_details
-      order = B2bOrder.find_by(payment_token: params[:payment_token])
+      token = params[:payment_token] || params[:token]
+      order = B2bOrder.find_by(payment_token: token)
 
       return render json: { error: "Invalid payment link" }, status: :not_found unless order
       return render json: { error: "Order cancelled" }, status: :unprocessable_entity if order.status == "cancelled"
