@@ -189,52 +189,58 @@ class B2bOrderPaymentService
       }
     end
 
-    attempt = PaymentAttempt.create!(
-      buyer: order.buyer_dealer,
-      status: "pending",
-      amount: order.total_amount,
-      currency: "INR",
-      payment_gateway: "cashfree",
-      result_payload: {
-        checkout_context: "b2b_order",
-        order_id: order.id,
-        b2b_order_id: order.id,
-        request_metadata: {
-          request_order_id: order.id,
-          latitude: order.latitude,
-          longitude: order.longitude,
-          radius_km: order.requested_radius_km
+    ActiveRecord::Base.transaction do
+      order.update!(
+        payment_method: "online",
+        payment_status: "pending"
+      )
+      attempt = PaymentAttempt.create!(
+        buyer: order.buyer_dealer,
+        status: "pending",
+        amount: order.total_amount,
+        currency: "INR",
+        payment_gateway: "cashfree",
+        result_payload: {
+          checkout_context: "b2b_order",
+          order_id: order.id,
+          b2b_order_id: order.id,
+          request_metadata: {
+            request_order_id: order.id,
+            latitude: order.latitude,
+            longitude: order.longitude,
+            radius_km: order.requested_radius_km
+          }
+        }
+      )
+
+      cashfree = CashfreeService.new
+      payload = cashfree.create_cashfree_order(
+        reference: attempt.attempt_number,
+        amount: attempt.amount,
+        customer: order.buyer_dealer,
+        return_params: { 
+          payment_attempt_id: attempt.id, 
+          b2b_order_id: order.id,
+          attempt_number: attempt.attempt_number
+        }
+      )
+
+      attempt.update!(
+        gateway_order_reference: payload["cf_order_id"] || payload["order_id"],
+        payment_session_id: payload["payment_session_id"],
+        payment_gateway_payload: payload
+      )
+
+      {
+        payment_attempt: attempt,
+        payment_data: {
+          payment_session_id: attempt.payment_session_id,
+          gateway_order_reference: attempt.gateway_order_reference,
+          payment_attempt_id: attempt.id,
+          provider: "cashfree"
         }
       }
-    )
-
-    cashfree = CashfreeService.new
-    payload = cashfree.create_cashfree_order(
-      reference: attempt.attempt_number,
-      amount: attempt.amount,
-      customer: order.buyer_dealer,
-      return_params: { 
-        payment_attempt_id: attempt.id, 
-        b2b_order_id: order.id,
-        attempt_number: attempt.attempt_number
-      }
-    )
-
-    attempt.update!(
-      gateway_order_reference: payload["cf_order_id"] || payload["order_id"],
-      payment_session_id: payload["payment_session_id"],
-      payment_gateway_payload: payload
-    )
-
-    {
-      payment_attempt: attempt,
-      payment_data: {
-        payment_session_id: attempt.payment_session_id,
-        gateway_order_reference: attempt.gateway_order_reference,
-        payment_attempt_id: attempt.id,
-        provider: "cashfree"
-      }
-    }
+    end
   end
 
   def send_order_accept_to_seller(order)

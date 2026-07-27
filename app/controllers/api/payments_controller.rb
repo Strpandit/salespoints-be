@@ -110,17 +110,22 @@ module Api
         if current_admin || current_dealer || current_account
           scoped_payment_attempts.find_by(id: params[:payment_attempt_id])
         else
-          order = B2bOrder.find_by(payment_token: params[:payment_token])
+          token = params[:payment_token] || params[:token]
+          order = B2bOrder.find_by(payment_token: token)
 
           return render json: { error: "Invalid payment link" }, status: :not_found unless order
           return render json: { error: "Payment already completed" }, status: :unprocessable_entity if order.payment_status == "paid"
           return render json: { error: "Payment link expired" }, status: :unprocessable_entity if order.expires_at.present? && order.expires_at <= Time.current
 
-          PaymentAttempt.find_by(
+          attempt = PaymentAttempt.find_by(
             id: params[:payment_attempt_id],
-            buyer: order.buyer_dealer,
-            b2b_order_id: order.id
+            buyer: order.buyer_dealer
           )
+
+          if attempt.blank? ||
+            attempt.result_payload.blank? || attempt.result_payload&.dig("b2b_order_id").to_i != order.id
+            return render json: { error: "Payment attempt not found" }, status: :not_found
+          end
         end
 
       return render json: { error: "Payment attempt not found" }, status: :not_found unless attempt
@@ -164,7 +169,7 @@ module Api
         }, status: :ok
 
       when "ACTIVE"
-        attempt.update!(payment_gateway_payload: attempt.payment_gateway_payload.merge(payload))
+        attempt.update!(payment_gateway_payload: (attempt.payment_gateway_payload || {}).merge(payload))
         render json: {
           data: serialize_payment_attempt(attempt.reload),
           payment_attempt: serialize_payment_attempt(attempt.reload),
