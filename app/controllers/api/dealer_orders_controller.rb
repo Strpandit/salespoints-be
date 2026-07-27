@@ -106,7 +106,8 @@ module Api
                                   .open_state
                                   .includes(b2b_order: [:buyer_dealer, :seller_dealer, :b2b_order_items])
                                   .map(&:b2b_order)
-                                  .select { |o| o.pending_request? && o.parent_request_order_id.nil? }
+                                  .uniq
+                                  .select(&:pending_request?)
       
       b2b_orders.each do |o|
         results << transform_b2b_order(o, "incoming")
