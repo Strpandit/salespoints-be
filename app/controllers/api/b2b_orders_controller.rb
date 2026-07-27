@@ -257,6 +257,8 @@ module Api
 
     def update_status
       order = current_dealer.seller_b2b_orders.includes(:delivery_confirmation).find_by(id: params[:id])
+      Rails.logger.info "ORDER => #{order.inspect}"
+      Rails.logger.info "Current Dealer: #{current_dealer.id}"
       return render json: { error: "Order not found" }, status: :not_found unless order
 
       next_status = params[:status].to_s

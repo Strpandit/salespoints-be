@@ -11,7 +11,7 @@ module Api
       return render json: { error: "Order not found" }, status: :not_found unless order
       return render json: { error: "Cashfree reference missing" }, status: :unprocessable_entity if order.gateway_order_reference.blank?
 
-      payload = CashfreeService.new.fetch_order(order.gateway_order_reference)
+      payload = CashfreeService.new.fetch_order(order.order_number)
       status = payload["order_status"].to_s.upcase
 
       case status
@@ -130,7 +130,7 @@ module Api
       return render json: { error: "Payment attempt not found" }, status: :not_found unless attempt
       return render json: { error: "Cashfree reference missing" }, status: :unprocessable_entity if attempt.gateway_order_reference.blank?
 
-      payload = CashfreeService.new.fetch_order(attempt.gateway_order_reference)
+      payload = CashfreeService.new.fetch_order(attempt.attempt_number)
       status = payload["order_status"].to_s.upcase
 
       case status
