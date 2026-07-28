@@ -192,25 +192,11 @@ class MetaWhatsappWebhookService
         )
       end
 
-      update_offer_status_for_order(order, "shipped")
-      
       create_shipped_webhook_event(order, from, dealer)
       
     rescue StandardError => e
       send_text_acknowledgement(to: from, message: "❌ Failed to mark as shipped: #{e.message}")
       Rails.logger.error "Failed to mark order as shipped via WhatsApp: #{e.message}"
-    end
-  end
-
-  def update_offer_status_for_order(order, status)
-    if order.is_a?(B2bOrder)
-      order.b2b_order_offers.where(status: "accepted").each do |offer|
-        offer.update!(whatsapp_status: status)
-      end
-    elsif order.is_a?(Order)
-      order.order_offers.where(status: "accepted").each do |offer|
-        offer.update!(whatsapp_status: status)
-      end
     end
   end
 
