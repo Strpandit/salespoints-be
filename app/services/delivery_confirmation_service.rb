@@ -1,5 +1,5 @@
 class DeliveryConfirmationService
-  REQUIRED_DECLARATIONS = %w[
+  BASE_REQUIRED_DECLARATIONS = %w[
     delivered_without_fraud
     packaging_checked
     customer_consent_open_box
@@ -63,6 +63,7 @@ class DeliveryConfirmationService
       )
 
       mark_delivered!
+      mark_payment_paid_if_required!
       create_completed_notifications(confirmation)
       send_delivery_emails
     end
@@ -84,7 +85,9 @@ class DeliveryConfirmationService
 
   def ensure_required_declarations!(declarations)
     normalized = normalized_declarations(declarations)
-    missing = REQUIRED_DECLARATIONS.reject { |key| normalized[key] == true }
+    required = BASE_REQUIRED_DECLARATIONS.dup
+    required << "payment_collected" if cod_payment_pending?
+    missing = required.reject { |key| normalized[key] == true }
     raise StandardError, "Please accept all required declarations" if missing.any?
   end
 
@@ -130,6 +133,31 @@ class DeliveryConfirmationService
     end
   end
 
+  def mark_payment_paid_if_required!
+    return unless cod_payment_pending?
+
+    case @deliverable
+    when Order
+      @deliverable.mark_payment_paid!
+
+    when B2bOrder
+      @deliverable.update!(
+        payment_status: "paid",
+        payment_confirmed_at: @deliverable.payment_confirmed_at || Time.current
+      )
+
+      @deliverable.buyer_payment_attempt&.mark_paid!(
+        reference: nil,
+        gateway_payload: {}
+      )
+    end
+  end
+
+  def cod_payment_pending?
+    @deliverable.payment_method.to_s.downcase == "cod" &&
+      @deliverable.payment_status.to_s.downcase == "pending"
+  end
+
   def create_pending_notification(confirmation)
     return if seller.blank?
 
@@ -160,7 +188,8 @@ class DeliveryConfirmationService
         payload: {
           delivery_confirmation_token: confirmation.token,
           reference: deliverable_reference,
-          completed_at: confirmation.completed_at
+          completed_at: confirmation.completed_at,
+          payment_status: @deliverable.payment_status
         },
         delivery_channels: { push: true, email: true, in_app: true }
       )
