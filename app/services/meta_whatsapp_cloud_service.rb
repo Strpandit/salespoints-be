@@ -67,7 +67,7 @@ class MetaWhatsappCloudService
     )
   end
 
-  def send_order_accept(to:, dealer_code:, phone:, address:, order_id:, latitude:, longitude:, location_name:)
+  def send_order_accept(to:, dealer_code:, phone:, address:, order_id:, latitude:, longitude:, location_name:, shipped_token: nil)
     name = "Salespoints Dealer Point #{dealer_code.presence || 'N/A'}"
     components = [
       {
@@ -94,6 +94,19 @@ class MetaWhatsappCloudService
         ]
       }
     ]
+
+    if shipped_token.present?
+      components << {
+        type: "button",
+        sub_type: "quick_reply",
+        index: 0,
+        parameters: [
+          {
+            type: "payload", payload: shipped_token.to_s
+          }
+        ]
+      }
+    end
 
     send_template_message(
       to: to,

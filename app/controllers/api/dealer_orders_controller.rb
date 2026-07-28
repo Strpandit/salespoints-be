@@ -216,7 +216,7 @@ module Api
         delivery_confirmation: order.delivery_confirmation&.as_json(only: [:token, :status, :submitted_at, :completed_at]),
         can_accept: order.pending_request? && !order.expired? && order.seller_dealer_id == current_dealer.id,
         can_reject: order.pending_request? && !order.expired? && order.seller_dealer_id == current_dealer.id,
-        can_update: (order.can_transition_to?("shipped") || order.can_transition_to?("delivered")) && order.seller_dealer_id == current_dealer.id,
+        can_update: order.can_transition_to?("shipped") && order.seller_dealer_id == current_dealer.id,
         next_status: b2b_next_status(order)
       }
     end
@@ -382,7 +382,6 @@ module Api
 
     def b2b_next_status(order)
       return "shipped" if order.can_transition_to?("shipped")
-      return "delivered" if order.can_transition_to?("delivered")
 
       nil
     end

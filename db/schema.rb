@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_07_27_035020) do
+ActiveRecord::Schema[8.0].define(version: 2026_07_28_093704) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -188,12 +188,14 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_27_035020) do
     t.text "failure_reason"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "shipped_token"
     t.index ["accept_token"], name: "index_b2b_order_offers_on_accept_token", unique: true
     t.index ["b2b_order_id", "dealer_id"], name: "index_b2b_order_offers_on_b2b_order_id_and_dealer_id"
     t.index ["b2b_order_id"], name: "index_b2b_order_offers_on_b2b_order_id"
     t.index ["dealer_id"], name: "index_b2b_order_offers_on_dealer_id"
     t.index ["notification_id"], name: "index_b2b_order_offers_on_notification_id"
     t.index ["reject_token"], name: "index_b2b_order_offers_on_reject_token", unique: true
+    t.index ["shipped_token"], name: "index_b2b_order_offers_on_shipped_token", unique: true
     t.index ["status"], name: "index_b2b_order_offers_on_status"
     t.index ["whatsapp_status"], name: "index_b2b_order_offers_on_whatsapp_status"
   end
@@ -238,12 +240,19 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_27_035020) do
     t.text "status_note"
     t.jsonb "billing_address", default: {}, null: false
     t.jsonb "shipping_address", default: {}, null: false
+    t.string "payment_gateway"
+    t.string "payment_session_id"
+    t.string "payment_reference"
+    t.string "gateway_order_reference"
+    t.jsonb "payment_gateway_payload", default: {}
     t.index ["broadcast_attempts"], name: "index_b2b_orders_on_broadcast_attempts"
     t.index ["buyer_dealer_id"], name: "index_b2b_orders_on_buyer_dealer_id"
     t.index ["buyer_payment_attempt_id"], name: "index_b2b_orders_on_buyer_payment_attempt_id"
     t.index ["current_broadcast_radius"], name: "index_b2b_orders_on_current_broadcast_radius"
+    t.index ["gateway_order_reference"], name: "idx_b2b_orders_on_gateway_order_reference"
     t.index ["is_direct_buy"], name: "index_b2b_orders_on_is_direct_buy"
     t.index ["payment_method"], name: "index_b2b_orders_on_payment_method"
+    t.index ["payment_reference"], name: "idx_b2b_orders_on_payment_reference"
     t.index ["payment_status"], name: "index_b2b_orders_on_payment_status"
     t.index ["payment_token"], name: "index_b2b_orders_on_payment_token", unique: true
     t.index ["reference_number"], name: "index_b2b_orders_on_reference_number", unique: true
@@ -612,12 +621,14 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_27_035020) do
     t.text "failure_reason"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "shipped_token"
     t.index ["accept_token"], name: "index_order_offers_on_accept_token", unique: true
     t.index ["dealer_id"], name: "index_order_offers_on_dealer_id"
     t.index ["notification_id"], name: "index_order_offers_on_notification_id"
     t.index ["order_id", "dealer_id"], name: "index_order_offers_on_order_id_and_dealer_id"
     t.index ["order_id"], name: "index_order_offers_on_order_id"
     t.index ["reject_token"], name: "index_order_offers_on_reject_token", unique: true
+    t.index ["shipped_token"], name: "index_order_offers_on_shipped_token", unique: true
     t.index ["status"], name: "index_order_offers_on_status"
     t.index ["whatsapp_status"], name: "index_order_offers_on_whatsapp_status"
   end

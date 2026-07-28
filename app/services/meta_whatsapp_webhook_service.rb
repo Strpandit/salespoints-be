@@ -53,6 +53,8 @@ class MetaWhatsappWebhookService
           process_text_accept(message["from"].to_s)
         elsif text_body == "reject" || text_body == "rejects"
           process_text_reject(message["from"].to_s)
+        elsif text_body == "shipped" || text_body == "mark shipped" || text_body == "mark as shipped"
+          process_text_shipped(message["from"].to_s)
         else
           Rails.logger.info "Unknown text message: #{text_body}"
         end
@@ -94,6 +96,143 @@ class MetaWhatsappWebhookService
     handle_reject(offer, order, offer.dealer, from)
   end
 
+  def process_text_shipped(from)
+    dealer = find_dealer_by_phone(from)
+    return send_text_acknowledgement(to: from, message: "Dealer not found.") if dealer.nil?
+
+    order = find_latest_accepted_order_for_dealer(dealer)
+    
+    if order.nil?
+      send_text_acknowledgement(to: from, message: "No accepted order found to mark as shipped.")
+      return
+    end
+
+    unless can_mark_shipped?(order)
+      send_text_acknowledgement(to: from, message: "This order cannot be marked as shipped at this time.")
+      return
+    end
+
+    handle_shipped(order, dealer, from)
+  end
+
+  def find_latest_accepted_order_for_dealer(dealer)
+    order = B2bOrder
+      .where(seller_dealer_id: dealer.id)
+      .where(status: ["confirmed"])
+      .where(shipped_at: nil)
+      .where(delivered_at: nil)
+      .order(accepted_at: :desc)
+      .first
+
+      if order.nil?
+      order = Order
+        .where(seller_dealer_id: dealer.id)
+        .where(status: ["processing", "confirmed"])
+        .where(shipped_at: nil)
+        .where(delivered_at: nil)
+        .order(accepted_at: :desc)
+        .first
+    end
+
+    order
+  end
+
+  def can_mark_shipped?(order)
+    return false if order.nil?
+    
+    if order.is_a?(Order)
+      return false unless order.status.in?(["processing", "confirmed"])
+      return false if order.shipped_at.present?
+      return false if order.delivered_at.present?
+      return true
+    end
+
+    if order.is_a?(B2bOrder)
+      return false unless order.status.in?(["confirmed"])
+      return false if order.shipped_at.present?
+      return false if order.delivered_at.present?
+      return true
+    end
+
+    false
+  end
+
+  def handle_shipped(order, dealer, from)
+    begin
+      if order.is_a?(B2bOrder)
+        order.mark_shipped!
+        
+        EmailDispatcherService.b2b_order_shipped(order)
+        
+        delivery_confirmation = DeliveryConfirmationService.new(
+          deliverable: order, 
+          actor: dealer
+        ).create_or_refresh!
+
+        send_text_acknowledgement(
+          to: from,
+          message: "✅ Order ##{order.reference_number} has been marked as shipped! Delivery confirmation form sent to you."
+        )
+      elsif order.is_a?(Order)
+        order.update!(
+          status: "shipped",
+          shipped_at: Time.current
+        )
+        
+        EmailDispatcherService.retail_order_shipped(order)
+
+        elivery_confirmation = DeliveryConfirmationService.new(
+          deliverable: order,
+          actor: dealer
+        ).create_or_refresh!
+        
+        send_text_acknowledgement(
+          to: from,
+          message: "✅ Order ##{order.order_number} has been marked as shipped! Delivery confirmation form sent to you."
+        )
+      end
+
+      update_offer_status_for_order(order, "shipped")
+      
+      create_shipped_webhook_event(order, from, dealer)
+      
+    rescue StandardError => e
+      send_text_acknowledgement(to: from, message: "❌ Failed to mark as shipped: #{e.message}")
+      Rails.logger.error "Failed to mark order as shipped via WhatsApp: #{e.message}"
+    end
+  end
+
+  def update_offer_status_for_order(order, status)
+    if order.is_a?(B2bOrder)
+      order.b2b_order_offers.where(status: "accepted").each do |offer|
+        offer.update!(whatsapp_status: status)
+      end
+    elsif order.is_a?(Order)
+      order.order_offers.where(status: "accepted").each do |offer|
+        offer.update!(whatsapp_status: status)
+      end
+    end
+  end
+
+  def create_shipped_webhook_event(order, from, dealer)
+    WhatsappWebhookEvent.create!(
+      provider: "meta",
+      event_type: "order_shipped",
+      event_key: "shipped:#{SecureRandom.uuid}",
+      direction: "inbound",
+      from_number: from,
+      status: "shipped",
+      processed_at: Time.current,
+      payload: {
+        dealer_id: dealer.id,
+        order_id: order.id,
+        order_type: order.is_a?(Order) ? "b2c" : "b2b",
+        order_number: order.is_a?(Order) ? order.order_number : order.reference_number,
+        shipped_at: Time.current
+      }
+    )
+  end
+
   def find_latest_open_offer_for_phone(from)
     dealer = find_dealer_by_phone(from)
     return nil if dealer.nil?
@@ -127,6 +266,28 @@ class MetaWhatsappWebhookService
   end
 
   def process_button_reply(button_id:, from:)
+
+    offer = OrderOffer.order(created_at: :desc).find_by(shipped_token: button_id) ||
+            B2bOrderOffer.order(created_at: :desc).find_by(shipped_token: button_id)
+
+    if offer.present?
+      dealer = offer.dealer
+      order = get_order_from_offer(offer)
+
+      unless sender_matches_dealer?(from: from, dealer: dealer)
+        send_text_acknowledgement(to: from, message: "Your WhatsApp number is not authorized.")
+        return
+      end
+
+      unless can_mark_shipped?(order)
+        send_text_acknowledgement(to: from, message: "This order cannot be marked as shipped at this time.")
+        return
+      end
+
+      handle_shipped(order, dealer, from)
+      return
+    end
+
     offer = OrderOffer.order(created_at: :desc).find_by(accept_token: button_id) ||
             OrderOffer.order(created_at: :desc).find_by(reject_token: button_id)
 

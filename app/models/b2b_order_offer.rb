@@ -9,7 +9,9 @@ class B2bOrderOffer < ApplicationRecord
 
   validates :status, inclusion: { in: STATUSES }
   validates :whatsapp_status, inclusion: { in: WHATSAPP_STATUSES }
-  validates :accept_token, :reject_token, presence: true, uniqueness: true
+  validates :accept_token, :reject_token, :shipped_token, presence: true, uniqueness: true
+
+  before_create :generate_token
 
   scope :open_state, -> { where(status: "open") }
   scope :active_state, -> { where(status: %w[open accepted]) }
@@ -25,5 +27,11 @@ class B2bOrderOffer < ApplicationRecord
 
   def expired?
     status == "expired" || (open? && expires_at.present? && expires_at <= Time.current)
+  end
+
+  private
+
+  def generate_tokens
+    self.shipped_token ||= SecureRandom.hex(8)
   end
 end

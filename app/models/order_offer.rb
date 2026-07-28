@@ -9,9 +9,11 @@ class OrderOffer < ApplicationRecord
 
   validates :status, inclusion: { in: STATUSES }
   validates :whatsapp_status, inclusion: { in: WHATSAPP_STATUSES }
-  validates :accept_token, :reject_token, presence: true, uniqueness: true
+  validates :accept_token, :reject_token, :shipped_token, presence: true, uniqueness: true
   validates :order_id, uniqueness: { scope: :dealer_id }
 
+  before_create :generate_token
+  
   scope :open_state, -> { where(status: "open") }
   scope :active_state, -> { where(status: %w[open accepted]) }
   scope :expirable, -> { open_state.where.not(expires_at: nil).where("expires_at <= ?", Time.current) }
@@ -26,5 +28,11 @@ class OrderOffer < ApplicationRecord
 
   def expired?
     expires_at.present? && expires_at <= Time.current
+  end
+
+  private
+
+  def generate_tokens
+    self.shipped_token ||= SecureRandom.hex(8)
   end
 end

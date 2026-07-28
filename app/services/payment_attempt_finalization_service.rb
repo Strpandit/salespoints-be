@@ -258,6 +258,9 @@ class PaymentAttemptFinalizationService
     buyer = order.buyer_dealer
     latitude, longitude, location_name, address = get_buyer_location(buyer)
 
+    offer = order.b2b_order_offers.find_by(dealer: order.seller_dealer, status: "accepted")
+    shipped_token = offer&.shipped_token
+
     MetaWhatsappCloudService.new.send_order_accept(
       to: formatted_phone_for(seller),
       dealer_code: buyer.dealer_code.to_s,
@@ -266,7 +269,8 @@ class PaymentAttemptFinalizationService
       order_id: order.reference_number,
       latitude: latitude,
       longitude: longitude,
-      location_name: location_name
+      location_name: location_name,
+      shipped_token: shipped_token
     )
   end
 

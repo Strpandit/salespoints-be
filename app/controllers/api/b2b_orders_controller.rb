@@ -116,7 +116,7 @@ module Api
     end
 
     def accept
-      order = B2bOrder.find_by(id: params[:id], seller_dealer_id: current_dealer.id)
+      order = find_order(params[:id])
       return render json: { error: "Request not found or already processed" }, status: :not_found unless order
 
       unless acceptable_order?(order)
@@ -137,7 +137,7 @@ module Api
     end
 
     def reject
-      order = B2bOrder.find_by(id: params[:id], seller_dealer_id: current_dealer.id)
+      order = find_order(params[:id])
       return render json: { error: "Request not found or already processed" }, status: :not_found unless order
 
       unless acceptable_order?(order)
@@ -256,6 +256,7 @@ module Api
     end
 
     def update_status
+      order = find_seller_order(params[:id])
       order = current_dealer.seller_b2b_orders.includes(:delivery_confirmation).find_by(id: params[:id])
       return render json: { error: "Order not found" }, status: :not_found unless order
 
@@ -266,8 +267,18 @@ module Api
 
       case next_status
       when "shipped"
-        order.mark_shipped!(note: params[:status_note])
-        EmailDispatcherService.b2b_order_shipped(order)
+        if order.is_a?(B2bOrder)
+          order.mark_shipped!(note: "params[:status_note]")
+          EmailDispatcherService.b2b_order_shipped(order)
+        elsif order.is_a?(Order)
+          order.update!(
+            status: "shipped",
+            shipped_at: Time.current,
+            status_note: params[:status_note] || "Marked as shipped"
+          )
+          EmailDispatcherService.retail_order_shipped(order)
+        end
+
         delivery_confirmation = DeliveryConfirmationService.new(deliverable: order, actor: current_dealer).create_or_refresh!
       else
         return render json: { error: "Unsupported status update" }, status: :unprocessable_entity
@@ -340,13 +351,50 @@ module Api
       end
     end
 
+    def find_order(id)
+      b2b_order = B2bOrder.joins(:b2b_order_offers)
+                       .where(b2b_order_offers: { dealer_id: current_dealer.id, status: "open" })
+                       .find_by(id: id)
+      return b2b_order if b2b_order.present?
+
+      retail_order = Order.joins(:order_offers)
+                          .where(order_offers: { dealer_id: current_dealer.id, status: "open" })
+                          .find_by(id: id)
+      return retail_order if retail_order.present?
+      
+      nil
+    end
+
+    def find_seller_order(id)
+      current_dealer.seller_b2b_orders.find_by(id: id) ||
+      current_dealer.seller_orders.find_by(id: id)
+    end
+
     def acceptable_order?(order)
-      return false unless order.request_status == "pending_request"
-      order.request_status == "pending_request" && order.status.in?(%w[pending_request pending_payment])
+      return false if order.nil?
+      
+      if order.is_a?(B2bOrder)
+        return false unless order.request_status == "pending_request"
+        return false unless order.status.in?(%w[pending_request pending_payment])
+        return false if order.seller_dealer_id.present?
+        return false if order.expires_at.present? && Time.current > order.expires_at
+        true
+      elsif order.is_a?(Order)
+        return false unless order.status == "pending"
+        return false if order.seller_dealer_id.present?
+        return false if order.expires_at.present? && Time.current > order.expires_at
+        true
+      else
+        false
+      end
     end
 
     def matching_open_offer(order:)
-      order.b2b_order_offers.where(dealer: current_dealer, status: "open").order(created_at: :desc).first
+      if order.is_a?(B2bOrder)
+        order.b2b_order_offers.where(dealer: current_dealer, status: "open").order(created_at: :desc).first
+      elsif order.is_a?(Order)
+        order.order_offers.where(dealer: current_dealer, status: "open").order(created_at: :desc).first
+      end 
     end
   end
 end
