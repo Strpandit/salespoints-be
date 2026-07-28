@@ -12,7 +12,7 @@ class OrderOffer < ApplicationRecord
   validates :accept_token, :reject_token, :shipped_token, presence: true, uniqueness: true
   validates :order_id, uniqueness: { scope: :dealer_id }
 
-  before_create :generate_token
+  before_validation :generate_token, on: :create
   
   scope :open_state, -> { where(status: "open") }
   scope :active_state, -> { where(status: %w[open accepted]) }
@@ -32,7 +32,7 @@ class OrderOffer < ApplicationRecord
 
   private
 
-  def generate_tokens
+  def generate_token
     self.shipped_token ||= SecureRandom.hex(8)
   end
 end

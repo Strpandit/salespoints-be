@@ -11,7 +11,7 @@ class B2bOrderOffer < ApplicationRecord
   validates :whatsapp_status, inclusion: { in: WHATSAPP_STATUSES }
   validates :accept_token, :reject_token, :shipped_token, presence: true, uniqueness: true
 
-  before_create :generate_token
+  before_validation :generate_token, on: :create
 
   scope :open_state, -> { where(status: "open") }
   scope :active_state, -> { where(status: %w[open accepted]) }
@@ -31,7 +31,7 @@ class B2bOrderOffer < ApplicationRecord
 
   private
 
-  def generate_tokens
+  def generate_token
     self.shipped_token ||= SecureRandom.hex(8)
   end
 end
