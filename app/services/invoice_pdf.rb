@@ -370,7 +370,7 @@ class InvoicePdf
       left = <<~TEXT
       <b>#{product&.name || item&.wholesaler_post&.title || 'Product'}</b>
 
-      #{item.product_variant&.variant_sku || product&.modal_no || 'Standard'}
+      #{item.product_variant&.variant_sku || item&.wholesaler_post&.modal_no || 'Standard'}
 
       1. [IMEI/Serial No:
       #{SecureRandom.random_number(999999999999999)}]
@@ -410,17 +410,18 @@ class InvoicePdf
         leading: 2,
         inline_format: true,
         valign: :center,
+        align: :center,
         border_width: 0.5,
         border_color: "999999"
       },
       column_widths: {
-        0 => 60,
-        1 => 160,
+        0 => 160,
+        1 => 50,
         2 => 30,
         3 => 55,
         4 => 55,
         5 => 60,
-        6 => 60,
+        6 => 70,
         7 => 55,
       }
     ) do
@@ -431,18 +432,24 @@ class InvoicePdf
       row(0).valign = :center
 
       columns(0).overflow = :shrink_to_fit
-      columns(0).min_font_size = 7
+      columns(0).min_font_size = 6
+      columns(0).align = :left
+      columns(0).valign = :center
+      columns(0).padding = [8,8]
 
       columns(1).padding = [8,8]
       columns(1).valign = :center
       columns(1).overflow = :shrink_to_fit
       columns(1).min_font_size = 6
 
-      columns(2..7).align = :right
-      columns(2..7).valign = :center
+      columns(2..7).align = :center
+      columns(2..7).valign = :top
+      columns(2..7).padding = [4, 4]
 
       row(-1).font_style = :bold
       row(-1).background_color = "F8F8F8"
+      row(-1).align = :center
+      row(-1).valign = :center
     end
   end
 
@@ -450,7 +457,7 @@ class InvoicePdf
     pdf.move_down 12
 
     pdf.text(
-      "<b>Grand Total     #{currency(total_amount)}</b>",
+      "<b>Grand Total:     #{currency(total_amount)}</b>",
       inline_format: true,
       align: :right,
       size: 11
