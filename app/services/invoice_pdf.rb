@@ -409,7 +409,7 @@ class InvoicePdf
         padding: [6, 6],
         leading: 2,
         inline_format: true,
-        valign: :top,
+        valign: :center,
         border_width: 0.5,
         border_color: "999999"
       },
@@ -434,11 +434,12 @@ class InvoicePdf
       columns(0).min_font_size = 7
 
       columns(1).padding = [8,8]
-      columns(1).valign = :top
+      columns(1).valign = :center
       columns(1).overflow = :shrink_to_fit
       columns(1).min_font_size = 6
 
       columns(2..7).align = :right
+      columns(2..7).valign = :center
 
       row(-1).font_style = :bold
       row(-1).background_color = "F8F8F8"
