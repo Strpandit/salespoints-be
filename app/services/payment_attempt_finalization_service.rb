@@ -261,6 +261,8 @@ class PaymentAttemptFinalizationService
     offer = order.b2b_order_offers.find_by(dealer: order.seller_dealer, status: "accepted")
     shipped_token = offer&.shipped_token
 
+    total_amount = order.b2b_order_items.sum(:total_price).to_f.round(2).to_s
+
     MetaWhatsappCloudService.new.send_order_accept(
       to: formatted_phone_for(seller),
       dealer_code: buyer.dealer_code.to_s,
@@ -268,7 +270,7 @@ class PaymentAttemptFinalizationService
       address: address,
       order_id: order.reference_number,
       payment_mode: order.payment_method.to_s.upcase,
-      total_amount: order&.b2b_order_items&.total_price.to_f.round(2).to_s || 'N/A',
+      total_amount: total_amount,
       latitude: latitude,
       longitude: longitude,
       location_name: location_name,
