@@ -134,6 +134,6 @@ class B2bOrderMailer < ApplicationMailer
 
   def generate_payment_link(order)
     base = ENV["FRONTEND_URL"].to_s.presence || "https://salespoints.in"
-    "#{base}/b2b/payment/#{order.payment_token}"
+    "#{base}/payment/#{order.payment_token}"
   end
 end

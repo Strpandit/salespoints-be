@@ -506,9 +506,9 @@ class InvoicePdf
     pdf.move_down 8
 
     pdf.text(
-      "Open Box Delivery Policy: Open Box Delivery is mandatory. Please inspect " \
-      "the product for damage, defects, or missing accessories before acceptance. " \
-      "No claims will be accepted after delivery.",
+      "Return/Replacement: Returns/Replacement accepted within 48 hours of delivery. Product must be unused with original packaging. " \
+      "For disputes, contact support@salespoints.in",
+      "Refund processed within 5-7 working days post-quality check. Contact support@salespoints.in directly for replacement initiation. " ,
       size: 7,
       color: "666666"
     )
@@ -516,9 +516,10 @@ class InvoicePdf
     pdf.move_down 4
 
     pdf.text(
-      "Warranty Details: All products sold are covered under the manufacturer's warranty " \
-      "as applicable. SalesPoints India Pvt Ltd acts as a marketplace facilitator " \
-      "the seller is solely responsible for product quality and warranty claims. " \
+      "Warranty Details: All products sold are covered under the manufacturer's warranty as applicable. " \
+      "SalesPoints India Pvt Ltd acts as a marketplace facilitator and is not liable for " \
+      "product quality, performance, or warranty claims beyond the scope of marketplace intermediation. " \
+      "The seller is solely responsible for product quality and warranty claims. " \
       "Please keep the original invoice and manufacturer's packaging for warranty.",
       size: 7,
       color: "666666"
@@ -527,7 +528,7 @@ class InvoicePdf
     pdf.move_down 4
 
     pdf.text(
-      "This product is delivered by our verified seller partner #{seller_name}. " \
+      "This product is delivered by our verified seller store seller code - #{seller_name}. " \
       "Salespoints India Pvt. Ltd. is the trusted marketplace intermediator.",
       size: 7,
       color: "666666"
