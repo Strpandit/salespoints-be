@@ -142,8 +142,8 @@ module Api
             # payment_reference: payload.dig("payment", "cf_payment_id") || payload["cf_payment_id"] || payload["payment_id"],
             # payment_gateway_payload: payload,
             payment_confirmed_at: Time.current,
-            payment_token: SecureRandom.hex(32),
-            expires_at: Time.current
+            payment_token: SecureRandom.hex(32)
+            # expires_at: Time.current
           )
 
           return render json: {
