@@ -61,12 +61,12 @@ class InvoicePdf
     financial_year = current_financial_year
     
     count = if @order.is_a?(B2bOrder)
-      B2bOrder.where("reference_number LIKE ?", "SPIN-#{financial_year}-%").count
+      B2bOrder.where("reference_number LIKE ?", "SPIN/#{financial_year}-%").count
     else
-      Order.where("order_number LIKE ?", "SPIN-#{financial_year}-%").count
+      Order.where("order_number LIKE ?", "SPIN/#{financial_year}-%").count
     end
     
-    "SPIN-#{financial_year}-#{(count + 1).to_s.rjust(5, '0')}"
+    "SPIN/#{financial_year}/#{(count + 1).to_s.rjust(5, '0')}"
   end
 
   def current_financial_year
@@ -92,7 +92,7 @@ class InvoicePdf
   end
 
   def seller_name
-    seller&.full_name || seller&.dealer_code || "SalesPoints"
+    seller&.dealer_code || "SalesPoints Seller"
   end
 
   def seller_gstin
@@ -264,7 +264,7 @@ class InvoicePdf
   end
 
   def currency(amount)
-    "₹#{format('%.2f', amount)}"
+    "₹ #{format('%.2f', amount)}"
   end
 
   # ============ PDF METHODS ============
@@ -279,9 +279,8 @@ class InvoicePdf
       # Left Column
       pdf.bounding_box([0, pdf.cursor], width: pdf.bounds.width * 0.65) do
         pdf.text "SALESPOINTS INDIA PRIVATE LIMITED", size: 10, style: :bold
-        pdf.text "H-105, Street No. 13, Karawal Nagar, Bhajanpura, Delhi - 110055, IN-DL", size: 8, color: "666666"
-        pdf.text "GSTIN - 07ACEPO1919N1ZA", size: 10, color: "666666"
-        pdf.text "IRN - #{SecureRandom.hex(20)}", size: 10, color: "666666"
+        pdf.text "GSTIN - 07ACEPO1919N1ZA", size: 8
+        pdf.text "IRN - #{SecureRandom.hex(20)}", size: 8
       end
       
     end
@@ -295,14 +294,14 @@ class InvoicePdf
 
     # Order Details
     order_details = <<~TEXT
-    <b>Order ID:</b>
-    #{order_reference}
-
     <b>Invoice No:</b>
     #{invoice_number}
 
-    <b>Order Date:</b> #{order_date.strftime('%d-%m-%Y')}
     <b>Invoice Date:</b> #{invoice_date.strftime('%d-%m-%Y')}
+    <b>Order Date:</b> #{order_date.strftime('%d-%m-%Y')}
+    <b>Order ID:</b>
+    #{order_reference}
+
     <b>PAN:</b> ABTCS6593H
     <b>CIN:</b> U46524DC2026PTC471107
     TEXT
@@ -357,30 +356,21 @@ class InvoicePdf
   def add_items_table(pdf)
     data = [[
       "Product",
-      "Title",
+      "HSN/SAC",
       "Qty",
-      "Gross\nAmount ₹",
-      "Discount\n₹",
-      "Taxable\nValue ₹",
-      "#{tax_label} ₹",
-      "Total ₹"
+      "Unit Price",
+      "Discount",
+      "Taxable\nValue",
+      "#{tax_label}",
+      "Total"
     ]]
     order_items.each do |item|
       product = item.product_variant&.product
 
       left = <<~TEXT
-      #{product&.sku}
+      <b>#{product&.name || item&.wholesaler_post&.title || 'Product'}</b>
 
-      Handsets
-
-      HSN: 85171300
-      TEXT
-
-      title = <<~TEXT
-      <b>#{product&.name}</b>
-
-      Warranty: 1 Year (Handset)
-      6 Months (Accessories)
+      #{item.product_variant&.variant_sku || product&.modal_no || 'Standard'}
 
       1. [IMEI/Serial No:
       #{SecureRandom.random_number(999999999999999)}]
@@ -390,9 +380,9 @@ class InvoicePdf
       
       data << [
         left,
-        title,
+        "85171300",
         item.quantity,
-        format('%.2f', item.total_price),
+        format('%.2f', item.unit_price),
         format('%.2f', discount),
         format('%.2f', taxable_value),
         format('%.2f', tax_amount),
@@ -401,12 +391,12 @@ class InvoicePdf
     end
 
     data << [
-      "",
       "<b>Total</b>",
       order_items.sum(&:quantity),
       format('%.2f', subtotal),
       format('%.2f', discount),
       format('%.2f', taxable_value),
+      format('%.2f', " "),
       format('%.2f', tax_amount),
       format('%.2f', total_amount)
     ]
@@ -472,7 +462,7 @@ class InvoicePdf
 
     pdf.bounding_box([pdf.bounds.right-170,pdf.cursor],width:170) do
 
-      pdf.text "SalesPoints India Pvt Ltd",
+      pdf.text "For SalesPoints India Pvt Ltd",
         align: :center,
         style: :bold,
         size: 9
@@ -508,16 +498,9 @@ class InvoicePdf
     pdf.move_down 8
 
     pdf.text(
-      "Returns Policy: At SalesPoints we try to deliver perfectly every time. " \
-      "Please keep the original invoice and manufacturer's packaging for warranty and returns.",
-      size: 7,
-      color: "666666"
-    )
-
-    pdf.move_down 6
-
-    pdf.text(
-      "Registered Office: H-105, Street No. 13, Karawal Nagar, Bhajanpura, Delhi - 110055",
+      "Open Box Delivery Policy: Open Box Delivery is mandatory. Please inspect " \
+      "the product for damage, defects, or missing accessories before acceptance. " \
+      "No claims will be accepted after delivery."
       size: 7,
       color: "666666"
     )
@@ -525,7 +508,35 @@ class InvoicePdf
     pdf.move_down 4
 
     pdf.text(
-      "Contact: support@salespoints.in | www.salespoints.in",
+      "Warranty Details: All products sold are covered under the manufacturer's warranty " \
+      "as applicable. SalesPoints India Pvt Ltd acts as a marketplace facilitator " \
+      "the seller is solely responsible for product quality and warranty claims. " \
+      "Please keep the original invoice and manufacturer's packaging for warranty.",
+      size: 7,
+      color: "666666"
+    )
+
+    pdf.move_down 4
+
+    pdf.text(
+      "This product is delivered by our verified seller partner #{seller_name}. " \
+      "Salespoints India Pvt. Ltd. is the trusted marketplace intermediator.",
+      size: 7,
+      color: "666666"
+    )
+
+    pdf.move_down 5
+
+    pdf.text(
+      "Registered Office: H-105, Street No. 13, Karawal Nagar, Bhajanpura, Delhi - 110055, IN-DL",
+      size: 7,
+      color: "666666"
+    )
+
+    pdf.move_down 4
+
+    pdf.text(
+      "Contact: support@salespoints.in | +91-8368835228 | www.salespoints.in",
       size: 7,
       color: "666666"
     )

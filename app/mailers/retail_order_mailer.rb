@@ -47,10 +47,12 @@ class RetailOrderMailer < ApplicationMailer
     @buyer = @order.buyer
     @seller = @order.seller_dealer
 
-    attachments["Invoice_#{@order.order_number}.pdf"] = {
-      mime_type: "application/pdf",
-      content: InvoicePdf.new(@order).generate
-    }
+    if recipient_type.to_s == "buyer" || recipient_type.to_s == "admin"
+      attachments["Invoice_#{invoice_number}.pdf"] = {
+        mime_type: "application/pdf",
+        content: InvoicePdf.new(@order).generate
+      }
+    end
 
     case recipient_type.to_s
     when "buyer"
