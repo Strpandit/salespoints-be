@@ -507,7 +507,6 @@ class InvoicePdf
 
     pdf.text(
       "Return/Replacement: Returns/Replacement accepted within 48 hours of delivery. Product must be unused with original packaging. " \
-      "For disputes, contact support@salespoints.in",
       "Refund processed within 5-7 working days post-quality check. Contact support@salespoints.in directly for replacement initiation. " ,
       size: 7,
       color: "666666"
