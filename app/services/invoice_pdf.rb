@@ -391,12 +391,12 @@ class InvoicePdf
     end
 
     data << [
+      "",
       "<b>Total</b>",
       order_items.sum(&:quantity),
       format('%.2f', subtotal),
       format('%.2f', discount),
       format('%.2f', taxable_value),
-      format('%.2f', " "),
       format('%.2f', tax_amount),
       format('%.2f', total_amount)
     ]
