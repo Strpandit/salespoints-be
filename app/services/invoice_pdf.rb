@@ -501,7 +501,7 @@ class InvoicePdf
     pdf.text(
       "Open Box Delivery Policy: Open Box Delivery is mandatory. Please inspect " \
       "the product for damage, defects, or missing accessories before acceptance. " \
-      "No claims will be accepted after delivery."
+      "No claims will be accepted after delivery.",
       size: 7,
       color: "666666"
     )
