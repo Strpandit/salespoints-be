@@ -67,7 +67,7 @@ class MetaWhatsappCloudService
     )
   end
 
-  def send_order_accept(to:, dealer_code:, phone:, address:, order_id:, latitude:, longitude:, location_name:, shipped_token: nil)
+  def send_order_accept(to:, dealer_code:, phone:, address:, order_id:, payment_mode:, total_amount:, latitude:, longitude:, location_name:, shipped_token: nil)
     name = "Salespoints Dealer Point #{dealer_code.presence || 'N/A'}"
     components = [
       {
@@ -90,7 +90,9 @@ class MetaWhatsappCloudService
           { type: "text", text: dealer_code.to_s },
           { type: "text", text: phone.to_s },      
           { type: "text", text: address.to_s },    
-          { type: "text", text: order_id.to_s }    
+          { type: "text", text: order_id.to_s },
+          { type: "text", text: payment_mode.to_s },
+          { type: "text", text: total_amount.to_s }
         ]
       }
     ]

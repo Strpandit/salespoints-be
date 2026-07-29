@@ -267,6 +267,8 @@ class PaymentAttemptFinalizationService
       phone: formatted_phone_for(buyer) || "N/A",
       address: address,
       order_id: order.reference_number,
+      payment_mode: order.payment_method.to_s.upcase,
+      total_amount: order&.b2b_order_items&.total_price.to_f.round(2).to_s || 'N/A',
       latitude: latitude,
       longitude: longitude,
       location_name: location_name,
