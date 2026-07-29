@@ -415,13 +415,13 @@ class InvoicePdf
         border_color: "999999"
       },
       column_widths: {
-        0 => 160,
-        1 => 50,
+        0 => 155,
+        1 => 60,
         2 => 30,
         3 => 55,
         4 => 55,
         5 => 60,
-        6 => 70,
+        6 => 65,
         7 => 55,
       }
     ) do
@@ -443,7 +443,7 @@ class InvoicePdf
       columns(1).min_font_size = 6
 
       columns(2..7).align = :center
-      columns(2..7).valign = :top
+      columns(2..7).valign = :center
       columns(2..7).padding = [4, 4]
 
       row(-1).font_style = :bold
