@@ -73,9 +73,10 @@ class B2bOrderMailer < ApplicationMailer
     @seller = @order.seller_dealer
 
     if recipient_type.to_s == "buyer" || recipient_type.to_s == "admin"
-      attachments["Invoice_#{invoice_number}.pdf"] = {
+      generator = InvoicePdf.new(@order)
+      attachments["Invoice_#{generator.invoice_number}.pdf"] = {
         mime_type: "application/pdf",
-        content: InvoicePdf.new(@order).generate
+        content: generator.generate
       }
     end
 

@@ -1,6 +1,6 @@
 module Api
   class OrdersController < ApplicationController
-    before_action :require_buyer!, only: [:buy_now]
+    before_action :require_buyer!, only: [:buy_now, :download_invoice]
 
     def buy_now
       billing_address = params[:billing_address].presence || checkout_address_payload
@@ -46,25 +46,23 @@ module Api
     end
 
     def download_invoice
-      begin
-        order = Order.includes(:buyer, :seller_dealer, order_items: { product_variant: :product })
-                     .find_by(id: params[:id])
+      return render json: { error: "Unauthorized" }, status: :unauthorized unless current_buyer.present?
+      
+      order = Order.includes(:buyer, :seller_dealer, order_items: { product_variant: :product }).find_by(id: params[:id], buyer: current_buyer)
         
-        if order.blank?
-          return render json: { error: "Order not found" }, status: :not_found
-        end
+      return render json: { error: "Order not found" }, status: :not_found unless order
         
-        pdf = InvoicePdf.new(order).generate
-        
-        send_data pdf,
-          filename: "Invoice_#{order.order_number}.pdf",
-          type: "application/pdf",
-          disposition: "attachment",
-          status: :ok
+      generator = InvoicePdf.new(order)
+      pdf = generator.generate
+      
+      send_data pdf,
+        filename: "Invoice_#{generator.invoice_number}.pdf",
+        type: "application/pdf",
+        disposition: "attachment",
+        status: :ok
 
-      rescue => e
-        render json: { error: "Failed to generate invoice: #{e.message}" }, status: :internal_server_error
-      end
+    rescue => e
+      render json: { error: "Failed to generate invoice" }, status: :internal_server_error
     end
 
     def show

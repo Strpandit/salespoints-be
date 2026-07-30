@@ -1,7 +1,7 @@
 class ReturnRequestSerializer < ApplicationSerializer
   attributes :request_type, :status, :reason, :details, :refund_amount, :seller_adjustment_amount,
-             :resolution_notes, :approved_at, :received_at, :completed_at, :rejected_at, :cancelled_at,
-             :created_at, :updated_at, :requester_name
+             :resolution_notes, :approved_at, :shipped_at, :received_at, :completed_at, :rejected_at, :cancelled_at,
+             :created_at, :updated_at, :requester_name, :media
 
   def refund_amount
     object.refund_amount.to_f
@@ -17,5 +17,21 @@ class ReturnRequestSerializer < ApplicationSerializer
     else
       object.requester.try(:first_name).presence || object.requester.try(:email) || object.requester_type
     end
+  end
+
+  def media
+    object.media.map { |file| file_payload(file) }
+  end
+
+  private
+
+  def file_payload(file)
+    host = options[:base_url] || Rails.application.config.active_storage.default_url_options&.dig(:host)
+    {
+      id: file.id,
+      url: Rails.application.routes.url_helpers.rails_blob_url(file, host: host),
+      filename: file.filename.to_s,
+      content_type: file.content_type.to_s
+    }
   end
 end

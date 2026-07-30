@@ -1,18 +1,23 @@
 class ReturnRequestTransitionService
-  def initialize(return_request:, actor:, resolution_notes: nil, refund_amount: nil)
+  def initialize(return_request:, actor:, resolution_notes: nil)
     @return_request = return_request
     @actor = actor
     @resolution_notes = resolution_notes
-    @refund_amount = refund_amount.present? ? BigDecimal(refund_amount.to_s).round(2) : nil
   end
 
   def transition!(next_status:)
+    raise StandardError, "Unauthorized" if @actor.blank?
     next_status = next_status.to_s
     raise StandardError, "Invalid return request status" unless ReturnRequest::STATUSES.include?(next_status)
     raise StandardError, "Invalid return request transition" unless allowed_statuses.include?(next_status)
 
     ReturnRequest.transaction do
-      request = ReturnRequest.lock.includes(order: [:order_items, :seller_dealer]).find(@return_request.id)
+      request = ReturnRequest.lock.find(@return_request.id)
+      requestable = request.requestable
+
+      raise StandardError, "Replacement request not found" unless requestable
+      raise StandardError, "Only replacement requests are supported" unless request.replacement_request?
+
       attrs = {
         status: next_status,
         resolution_notes: @resolution_notes.presence || request.resolution_notes
@@ -21,7 +26,9 @@ class ReturnRequestTransitionService
       case next_status
       when "approved"
         attrs[:approved_at] = request.approved_at || Time.current
-        reserve_replacement_inventory!(request) if request.replacement_request?
+      when "in_transit"
+        attrs[:shipped_at] = request.shipped_at || Time.current
+        reserve_replacement_inventory!(request)
       when "received"
         attrs[:received_at] = request.received_at || Time.current
       when "completed"
@@ -33,8 +40,7 @@ class ReturnRequestTransitionService
       end
 
       request.update!(attrs.compact)
-      sync_order_status!(request)
-      complete_return_actions!(request) if next_status == "completed"
+      sync_order_status!(request, next_status)
       request
     end
   end
@@ -45,7 +51,7 @@ class ReturnRequestTransitionService
     {
       "requested" => %w[approved rejected cancelled],
       "approved" => %w[in_transit cancelled],
-      "in_transit" => %w[received completed cancelled],
+      "in_transit" => %w[received cancelled],
       "received" => %w[completed],
       "completed" => [],
       "rejected" => [],
@@ -53,50 +59,54 @@ class ReturnRequestTransitionService
     }.fetch(@return_request.status.to_s, [])
   end
 
-  def sync_order_status!(request)
+  def sync_order_status!(request, next_status)
+    requestable = request.requestable
+
     order_status =
-      case [request.request_type, request.status]
-      when ["return", "requested"] then "return_requested"
-      when ["return", "approved"] then "return_approved"
-      when ["return", "in_transit"] then "return_in_transit"
-      when ["return", "received"], ["return", "completed"] then "returned"
-      when ["replacement", "requested"] then "replacement_requested"
-      when ["replacement", "approved"] then "replacement_approved"
-      when ["replacement", "in_transit"] then "replacement_shipped"
-      when ["replacement", "received"], ["replacement", "completed"] then "replacement_delivered"
-      else
+      case next_status
+      when "requested"
+        "replacement_requested"
+      when "approved"
+        "replacement_approved"
+      when "in_transit"
+        "replacement_shipped"
+      when "received", "completed"
+        "replacement_delivered"
+      when "rejected", "cancelled"
         "delivered"
+      else
+        requestable.status
       end
 
-    request.order.update!(status: order_status, status_note: @resolution_notes.presence || request.order.status_note)
+    requestable.update!(status: order_status, status_note: @resolution_notes.presence || requestable.status_note)
   end
 
-  def complete_return_actions!(request)
-    if request.return_request?
-      restock_original_inventory!(request.order)
-      OrderRefundService.new(
-        order: request.order,
-        actor: @actor,
-        amount: @refund_amount || request.order.refundable_amount_remaining,
-        reason: @resolution_notes.presence || request.reason.presence || "Return completed",
-        return_request: request
-      ).call
+  def request_items(requestable)
+    case requestable
+    when Order
+      requestable.order_items
+    when B2bOrder
+      requestable.b2b_order_items
+    else
+      raise StandardError, "Unsupported requestable type"
     end
   end
 
   def reserve_replacement_inventory!(request)
-    request.order.order_items.includes(:dealer_product).find_each do |item|
-      dealer_product = DealerProduct.lock.find(item.dealer_product_id)
-      raise StandardError, "Insufficient stock for replacement" if dealer_product.stock_quantity.to_i < item.quantity.to_i
+    request_items(request.requestable)
+      .includes(:dealer_product)
+      .find_each do |item|
 
-      dealer_product.update!(stock_quantity: dealer_product.stock_quantity.to_i - item.quantity.to_i)
-    end
-  end
+      dealer_product = DealerProduct.lock.find_by(id: item.dealer_product_id)
+      raise StandardError, "Dealer product not found" unless dealer_product
 
-  def restock_original_inventory!(order)
-    order.order_items.includes(:dealer_product).find_each do |item|
-      dealer_product = DealerProduct.lock.find(item.dealer_product_id)
-      dealer_product.update!(stock_quantity: dealer_product.stock_quantity.to_i + item.quantity.to_i)
+      if dealer_product.stock_quantity.to_i < item.quantity.to_i
+        raise StandardError, "Insufficient stock for replacement"
+      end
+
+      dealer_product.update!(
+        stock_quantity: dealer_product.stock_quantity.to_i - item.quantity.to_i
+      )
     end
   end
 end

@@ -54,19 +54,48 @@ class InvoicePdf
   private
 
   def invoice_number
-    @invoice_number ||= @order.respond_to?(:invoice_number) && @order.invoice_number.present? ? @order.invoice_number : generate_invoice_number
+    @invoice_number ||= begin
+      if @order.invoice_number.present?
+        @order.invoice_number
+      else
+        generated_number = nil
+
+        5.times do
+          number = generate_invoice_number
+
+          begin
+            @order.update!(invoice_number: number)
+            generated_number = number
+            break
+          rescue ActiveRecord::RecordNotUnique
+            next
+          end
+        end
+
+        raise "Unable to generate unique invoice number" unless generated_number
+
+        generated_number
+      end
+    end
   end
 
   def generate_invoice_number
     financial_year = current_financial_year
-    
-    count = if @order.is_a?(B2bOrder)
-      B2bOrder.where("reference_number LIKE ?", "SPIN/#{financial_year}-%").count
-    else
-      Order.where("order_number LIKE ?", "SPIN/#{financial_year}-%").count
-    end
-    
-    "SPIN/#{financial_year}/#{(count + 1).to_s.rjust(5, '0')}"
+    klass = @order.is_a?(B2bOrder) ? B2bOrder : Order
+
+    last_invoice = klass
+                    .where("invoice_number LIKE ?", "SPIN/#{financial_year}/%")
+                    .order(invoice_number: :desc)
+                    .first
+
+    serial =
+      if last_invoice&.invoice_number.present?
+        last_invoice.invoice_number.split("/").last.to_i + 1
+      else
+        1
+      end
+
+    "SPIN/#{financial_year}/#{serial.to_s.rjust(5, '0')}"
   end
 
   def current_financial_year

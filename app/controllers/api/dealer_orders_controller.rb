@@ -172,6 +172,14 @@ module Api
 
     def transform_b2b_order(order, source_tab)
       meta = b2b_order_meta(order)
+
+      replacement_request = order.return_requests
+                           .where(request_type: "replacement")
+                           .order(created_at: :desc)
+                           .first
+      
+      is_buyer = order.buyer_dealer_id == current_dealer.id
+      is_seller = order.seller_dealer_id == current_dealer.id
       
       source_type = if order.is_direct_buy? && order.source_type == "WholesalerPost"
         "wholesale"
@@ -217,12 +225,23 @@ module Api
         can_accept: order.pending_request? && !order.expired? && order.seller_dealer_id == current_dealer.id,
         can_reject: order.pending_request? && !order.expired? && order.seller_dealer_id == current_dealer.id,
         can_update: order.can_transition_to?("shipped") && order.seller_dealer_id == current_dealer.id,
+        can_download_invoice: order.buyer_dealer_id == current_dealer.id,
+        can_request_replacement: is_buyer && order.status == "delivered" && source_tab == "outgoing" && replacement_request.blank?,
+        can_manage_replacement: is_seller && source_tab == "accepted" && replacement_request.present? && replacement_request.pending?,
         next_status: b2b_next_status(order)
       }
     end
 
     def transform_retail_order(order, source_tab)
       meta = retail_order_meta(order)
+
+      replacement_request = order.return_requests
+                           .where(request_type: "replacement")
+                           .order(created_at: :desc)
+                           .first
+
+      is_buyer = order.buyer_id == current_dealer.id
+      is_seller = order.seller_dealer_id == current_dealer.id
       
       buyer_name = if order.buyer_type == "Account"
         order.buyer&.full_name || order.buyer&.first_name || "Customer"
@@ -262,6 +281,8 @@ module Api
         refund_status: order.refund_status || "none",
         items: order.order_items.map { |item| transform_retail_item(item) },
         delivery_confirmation: order.delivery_confirmation&.as_json(only: [:token, :status, :submitted_at, :completed_at]),
+        can_request_replacement: false,
+        can_manage_replacement: is_seller && source_tab == "accepted" && replacement_request.present? && replacement_request.pending?,
         can_update: (order.can_transition_to?("processing") || order.can_transition_to?("shipped")) && order.seller_dealer_id == current_dealer.id,
         next_status: order.status == "pending" ? "processing" : (order.status == "processing" ? "shipped" : nil)
       }

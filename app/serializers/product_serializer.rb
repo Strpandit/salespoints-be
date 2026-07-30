@@ -3,7 +3,7 @@ class ProductSerializer < ApplicationSerializer
   attributes :name, :slug, :sku, :desc, :material, :features, :care_instructions,
              :is_featured, :is_new, :is_active, :tax_rate, :deleted_at, :specifications, 
              :media, :price, :selling_price, :dealer_price, :dealer_selling_price, :discount_percentage,
-             :price_source, :tax_inclusive
+             :price_source, :tax_inclusive, :hsn_code
 
   belongs_to :category
   belongs_to :brand

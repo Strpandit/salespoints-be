@@ -15,6 +15,10 @@ class ProductVariant < ApplicationRecord
 
   scope :active, -> { where(is_active: true, deleted_at: nil) }
 
+  def effective_hsn_code
+    hsn_code.presence || product&.hsn_code
+  end
+
   def unit_price_for(user_type)
     case user_type.to_sym
     when :dealer

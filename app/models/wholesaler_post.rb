@@ -24,7 +24,13 @@ class WholesalerPost < ApplicationRecord
   }
   scope :by_pincode, ->(pincode) { where("? = ANY(pincodes)", pincode) }
   scope :by_pincodes, ->(pincodes) { where("pincodes && ARRAY[?]::varchar[]", pincodes) }
-
+  
+  def effective_hsn_code
+    return hsn_code if hsn_code.present?
+    return dealer_product&.effective_hsn_code if dealer_product.present?
+    nil
+  end
+  
   def visible_to_others?
     approve_status == "approved" && !is_expired?
   end

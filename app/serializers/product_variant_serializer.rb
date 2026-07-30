@@ -1,7 +1,7 @@
 class ProductVariantSerializer < ApplicationSerializer
   include MediaPayloadBuilder
   attributes :product_id, :variant_sku, :price, :selling_price, :dealer_price, :dealer_selling_price, :consumer_discount_percentage,
-             :dealer_discount_percentage, :is_active, :formatted_variant_attributes, :deleted_at, :media, :own_media, :tax_rate, :tax_inclusive
+             :dealer_discount_percentage, :is_active, :formatted_variant_attributes, :deleted_at, :media, :own_media, :tax_rate, :tax_inclusive, :hsn_code
 
   def media
     build_media_payloads(object.display_media_attachments, primary_blob_id: object.display_primary_blob_id)

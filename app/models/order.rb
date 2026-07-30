@@ -3,7 +3,7 @@ class Order < ApplicationRecord
   belongs_to :seller_dealer, class_name: "Dealer", optional: true
   has_many :order_items, dependent: :destroy
   has_many :notifications, as: :notifiable, dependent: :nullify
-  has_many :return_requests, dependent: :destroy
+  has_many :return_requests, as: :requestable, dependent: :destroy
   has_many :dealer_ledger_entries, dependent: :nullify
   has_one :delivery_confirmation, as: :deliverable, dependent: :destroy
   has_many :order_offers, dependent: :destroy
@@ -121,11 +121,39 @@ class Order < ApplicationRecord
   end
 
   def active_return_request?
-    return_requests.where(status: ReturnRequest::ACTIVE_STATUSES).exists?
+    return_requests.where(request_type: "return", status: ReturnRequest::ACTIVE_STATUSES).exists?
   end
 
   def expired?
     expires_at.present? && expires_at <= Time.current
+  end
+
+  def replacement_window_open?
+    return false if delivered_at.blank?
+
+    Time.current <= delivered_at + 48.hours
+  end
+
+  def payment_completed?
+    payment_status == "paid"
+  end
+
+  def replacement_requested?
+    return_requests.where(request_type: "replacement").exists?
+  end
+
+  def replacement_allowed?
+    payment_completed? &&
+      delivered? &&
+      replacement_window_open? &&
+      !replacement_requested?
+  end
+
+  def replacement_request
+    return_requests
+      .where(request_type: "replacement")
+      .order(created_at: :desc)
+      .first
   end
 
   private

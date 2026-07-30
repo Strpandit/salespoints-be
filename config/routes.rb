@@ -42,9 +42,10 @@ Rails.application.routes.draw do
         post :release_settlement
         get :download_invoice
       end
-
-      resources :return_requests, only: [:index, :create, :update]
     end
+
+    resources :return_requests, only: [:index, :create, :update]
+
     resources :delivery_confirmations, only: [:show], param: :token do
       member do
         post :submit

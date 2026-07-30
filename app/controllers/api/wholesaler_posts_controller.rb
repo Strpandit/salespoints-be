@@ -336,11 +336,11 @@ module Api
     end
 
     def admin_wholesaler_post_params
-      params.require(:wholesaler_post).permit(:title, :body, :price, :stock_quantity, :modal_no, pincodes: [])
+      params.require(:wholesaler_post).permit(:title, :body, :price, :stock_quantity, :modal_no, :hsn_code, pincodes: [])
     end
 
     def wholesaler_post_params
-      params.require(:wholesaler_post).permit(:title, :body, :price, :stock_quantity, :modal_no, :dealer_product_id, media: [], pincodes: [])
+      params.require(:wholesaler_post).permit(:title, :body, :price, :stock_quantity, :modal_no, :hsn_code, :dealer_product_id, media: [], pincodes: [])
     end
 
     def invalid_dealer_product?(dealer_product_id)
@@ -396,6 +396,7 @@ module Api
         price: post.price,
         stock_quantity: post.stock_quantity,
         modal_no: post.modal_no,
+        hsn_code: post.effective_hsn_code,
         rating: post.rating.to_f,
         rating_count: post.rating_count.to_i,
         current_user_rating: current_user_rating&.to_f,

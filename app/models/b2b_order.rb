@@ -6,11 +6,12 @@ class B2bOrder < ApplicationRecord
   has_many :notifications, as: :notifiable, dependent: :destroy
   has_many :b2b_order_items, dependent: :destroy
   has_many :b2b_order_offers, dependent: :destroy
+  has_many :return_requests, as: :requestable, dependent: :destroy
   has_many :dealer_broadcast_trackers, dependent: :destroy
   has_one :delivery_confirmation, as: :deliverable, dependent: :destroy
 
   REQUEST_STATUSES = %w[pending_request accepted_request rejected_request expired_request].freeze
-  ORDER_STATUSES = %w[pending_request pending_payment paid confirmed shipped delivered cancelled].freeze
+  ORDER_STATUSES = %w[pending_request pending_payment paid confirmed shipped delivered cancelled return_requested return_approved return_in_transit returned replacement_requested replacement_approved replacement_shipped replacement_delivered].freeze
   PAYMENT_METHODS = %w[cod online].freeze
   PAYMENT_STATUSES = %w[pending paid failed].freeze
 
@@ -59,7 +60,7 @@ class B2bOrder < ApplicationRecord
   end
 
   def final_order?
-    %w[paid confirmed shipped delivered cancelled].include?(status)
+    %w[paid confirmed shipped delivered replacement_requested replacement_approved replacement_shipped replacement_delivered cancelled].include?(status)
   end
 
   def paid?
@@ -78,11 +79,23 @@ class B2bOrder < ApplicationRecord
     status == "delivered"
   end
 
+  def payment_completed?
+    payment_status == "paid"
+  end
+
   def can_transition_to?(next_status)
     allowed = {
       "confirmed" => %w[shipped cancelled],
       "shipped" => %w[delivered cancelled],
-      "delivered" => [],
+      "delivered" => %w[return_requested replacement_requested],
+      "return_requested" => %w[return_approved cancelled],
+      "return_approved" => %w[return_in_transit cancelled],
+      "return_in_transit" => %w[returned cancelled],
+      "returned" => [],
+      "replacement_requested" => %w[replacement_approved cancelled],
+      "replacement_approved" => %w[replacement_shipped cancelled],
+      "replacement_shipped" => %w[replacement_delivered cancelled],
+      "replacement_delivered" => [],
       "cancelled" => []
     }
 
@@ -210,6 +223,30 @@ class B2bOrder < ApplicationRecord
     self.tax_amount = tax
     self.total_amount = subtotal - discount_amount.to_d
     save!
+  end
+
+  def replacement_window_open?
+    return false if delivered_at.blank?
+
+    Time.current <= delivered_at + 48.hours
+  end
+
+  def replacement_requested?
+    return_requests.where(request_type: "replacement").exists?
+  end
+
+  def replacement_allowed?
+    payment_completed? &&
+      delivered? &&
+      replacement_window_open? &&
+      !replacement_requested?
+  end
+
+  def replacement_request
+    return_requests
+      .where(request_type: "replacement")
+      .order(created_at: :desc)
+      .first
   end
 
   private

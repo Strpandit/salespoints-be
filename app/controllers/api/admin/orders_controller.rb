@@ -1,8 +1,7 @@
 module Api
   module Admin
     class OrdersController < ApplicationController
-      before_action :require_admin!, except: [:download_invoice]
-      skip_before_action :authenticate_request!, only: [:download_invoice]
+      before_action :require_admin!
 
       def index
         # Start with base queries
@@ -134,34 +133,23 @@ module Api
       end
 
       def download_invoice
-        order = Order.includes(:buyer, :seller_dealer, order_items: { product_variant: :product })
-                .find_by(id: params[:id])
+        begin
+          return render json: { error: "Unauthorized" }, status: :unauthorized unless current_admin.present?
+          order = Order.includes(:buyer, :seller_dealer, order_items: { product_variant: :product }).find_by(id: params[:id])
+          order ||= B2bOrder.includes(:buyer_dealer, :seller_dealer, b2b_order_items: { product_variant: :product }).find_by(id: params[:id])
 
-        if order.present?
-          pdf = ::InvoicePdf.new(order).generate
+          return render json: { error: "Order not found" }, status: :not_found unless order
 
-          send_data pdf,
-            filename: "Invoice_#{order.order_number}.pdf",
-            type: "application/pdf",
-            disposition: "attachment",
-            status: :ok
-          return
+          generator = ::InvoicePdf.new(order)
+
+          send_data generator.generate,
+                    filename: "Invoice_#{generator.invoice_number}.pdf",
+                    type: "application/pdf",
+                    disposition: "attachment"
+
+        rescue StandardError => e
+          render json: { error: "Failed to generate invoice" }, status: :internal_server_error
         end
-
-        b2b_order = B2bOrder.includes(:buyer_dealer, :seller_dealer, b2b_order_items: { product_variant: :product }).find_by(id: params[:id])
-
-        if b2b_order.present?
-            pdf = ::InvoicePdf.new(b2b_order).generate
-
-            send_data pdf,
-              filename: "Invoice_#{b2b_order.reference_number}.pdf",
-              type: "application/pdf",
-              disposition: "attachment",
-              status: :ok
-            return
-        end
-
-        render json: { error: "Order not found" }, status: :not_found
       end
 
       private

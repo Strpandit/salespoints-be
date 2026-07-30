@@ -405,12 +405,12 @@ module Api
         product_attributes: [
           :name, :slug, :sku, :desc, :material, :brand_id, :category_id,
           :is_featured, :is_new, :tax_rate, :price, :selling_price, :dealer_price,
-          :dealer_selling_price, :discount_percentage, :variant_sku,
+          :dealer_selling_price, :discount_percentage, :variant_sku, :hsn_code,
           media: [],
           features: [], care_instructions: [],
           product_specifications_attributes: [:id, :key, :value, :_destroy],
           product_variants_attributes: [
-            :id, :variant_sku, :price, :selling_price, :dealer_price,
+            :id, :variant_sku, :price, :selling_price, :dealer_price, :hsn_code,
             :dealer_selling_price, :discount_percentage, :is_active, :_destroy,
             { media: [], variant_attributes: [:key, :value] }
           ]

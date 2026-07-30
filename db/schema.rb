@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_07_28_093704) do
+ActiveRecord::Schema[8.0].define(version: 2026_07_30_013332) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -245,11 +245,14 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_28_093704) do
     t.string "payment_reference"
     t.string "gateway_order_reference"
     t.jsonb "payment_gateway_payload", default: {}
+    t.string "invoice_number"
+    t.string "tracking_id"
     t.index ["broadcast_attempts"], name: "index_b2b_orders_on_broadcast_attempts"
     t.index ["buyer_dealer_id"], name: "index_b2b_orders_on_buyer_dealer_id"
     t.index ["buyer_payment_attempt_id"], name: "index_b2b_orders_on_buyer_payment_attempt_id"
     t.index ["current_broadcast_radius"], name: "index_b2b_orders_on_current_broadcast_radius"
     t.index ["gateway_order_reference"], name: "idx_b2b_orders_on_gateway_order_reference"
+    t.index ["invoice_number"], name: "index_b2b_orders_on_invoice_number", unique: true
     t.index ["is_direct_buy"], name: "index_b2b_orders_on_is_direct_buy"
     t.index ["payment_method"], name: "index_b2b_orders_on_payment_method"
     t.index ["payment_reference"], name: "idx_b2b_orders_on_payment_reference"
@@ -261,6 +264,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_28_093704) do
     t.index ["seller_dealer_id"], name: "index_b2b_orders_on_seller_dealer_id"
     t.index ["source_type", "source_id"], name: "index_b2b_orders_on_source_type_and_source_id"
     t.index ["status"], name: "index_b2b_orders_on_status"
+    t.index ["tracking_id"], name: "index_b2b_orders_on_tracking_id", unique: true
   end
 
   create_table "brand_categories", force: :cascade do |t|
@@ -677,9 +681,11 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_28_093704) do
     t.datetime "return_window_closes_at"
     t.datetime "expires_at"
     t.datetime "accepted_at"
+    t.string "invoice_number"
     t.index ["buyer_type", "buyer_id"], name: "index_orders_on_buyer_type_and_buyer_id"
     t.index ["expires_at"], name: "index_orders_on_expires_at"
     t.index ["gateway_order_reference"], name: "index_orders_on_gateway_order_reference"
+    t.index ["invoice_number"], name: "index_orders_on_invoice_number", unique: true
     t.index ["order_number"], name: "index_orders_on_order_number", unique: true
     t.index ["payment_reference"], name: "index_orders_on_payment_reference"
     t.index ["refund_status"], name: "index_orders_on_refund_status"
@@ -762,6 +768,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_28_093704) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.bigint "primary_media_blob_id"
+    t.string "hsn_code"
     t.index ["primary_media_blob_id"], name: "index_product_variants_on_primary_media_blob_id"
     t.index ["product_id"], name: "index_product_variants_on_product_id"
     t.index ["variant_sku"], name: "index_product_variants_on_variant_sku", unique: true, where: "(deleted_at IS NULL)"
@@ -790,6 +797,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_28_093704) do
     t.decimal "dealer_selling_price", precision: 15, scale: 2
     t.integer "discount_percentage", default: 0
     t.bigint "primary_media_blob_id"
+    t.string "hsn_code"
     t.index ["brand_id"], name: "index_products_on_brand_id"
     t.index ["category_id"], name: "index_products_on_category_id"
     t.index ["is_featured"], name: "index_products_on_is_featured"
@@ -810,7 +818,6 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_28_093704) do
   end
 
   create_table "return_requests", force: :cascade do |t|
-    t.bigint "order_id", null: false
     t.string "requester_type", null: false
     t.bigint "requester_id", null: false
     t.string "request_type", null: false
@@ -827,8 +834,11 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_28_093704) do
     t.datetime "cancelled_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.index ["order_id"], name: "index_return_requests_on_order_id"
+    t.datetime "shipped_at"
+    t.string "requestable_type", null: false
+    t.bigint "requestable_id", null: false
     t.index ["request_type"], name: "index_return_requests_on_request_type"
+    t.index ["requestable_type", "requestable_id"], name: "index_return_requests_on_requestable"
     t.index ["requester_type", "requester_id"], name: "index_return_requests_on_requester"
     t.index ["status"], name: "index_return_requests_on_status"
   end
@@ -961,6 +971,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_28_093704) do
     t.bigint "reviewed_by_admin_id"
     t.string "pincodes", default: [], array: true
     t.datetime "reuploaded_at"
+    t.string "hsn_code"
     t.index ["approve_status"], name: "index_wholesaler_posts_on_approve_status"
     t.index ["dealer_id"], name: "index_wholesaler_posts_on_dealer_id"
     t.index ["dealer_product_id"], name: "index_wholesaler_posts_on_dealer_product_id"
@@ -1020,7 +1031,6 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_28_093704) do
   add_foreign_key "product_variants", "products"
   add_foreign_key "products", "brands"
   add_foreign_key "products", "categories"
-  add_foreign_key "return_requests", "orders"
   add_foreign_key "reviews", "accounts"
   add_foreign_key "reviews", "dealer_products"
   add_foreign_key "reviews", "products"

@@ -24,6 +24,12 @@ class DealerProduct < ApplicationRecord
   scope :for_b2b, -> { where(sell_in_b2b: true) }
   scope :for_b2c, -> { where(sell_in_b2c: true) }
   
+  def effective_hsn_code
+    return product_variant&.effective_hsn_code if product_variant.present?
+    return product&.hsn_code if product.present?
+    nil
+  end
+
   def ranking_score
     variant = product_variant
     price = variant.unit_price_for(:dealer)
