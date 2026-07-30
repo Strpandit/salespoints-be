@@ -226,6 +226,7 @@ module Api
         can_reject: order.pending_request? && !order.expired? && order.seller_dealer_id == current_dealer.id,
         can_update: order.can_transition_to?("shipped") && order.seller_dealer_id == current_dealer.id,
         can_download_invoice: order.buyer_dealer_id == current_dealer.id,
+        replacement_request: replacement_request.present? ? ReturnRequestSerializer.new(replacement_request, base_url: request.base_url).serializable_hash : nil,
         can_request_replacement: is_buyer && order.status == "delivered" && replacement_request.blank?,
         can_manage_replacement: is_seller && replacement_request.present? && replacement_request.status == "requested",
         next_status: b2b_next_status(order)
@@ -281,6 +282,7 @@ module Api
         refund_status: order.refund_status || "none",
         items: order.order_items.map { |item| transform_retail_item(item) },
         delivery_confirmation: order.delivery_confirmation&.as_json(only: [:token, :status, :submitted_at, :completed_at]),
+        replacement_request: replacement_request.present? ? ReturnRequestSerializer.new(replacement_request, base_url: request.base_url).serializable_hash : nil,
         can_request_replacement: false,
         can_manage_replacement: is_seller && replacement_request.present? && replacement_request.status == "requested",
         can_update: (order.can_transition_to?("processing") || order.can_transition_to?("shipped")) && order.seller_dealer_id == current_dealer.id,
