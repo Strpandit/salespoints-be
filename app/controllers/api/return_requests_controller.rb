@@ -48,7 +48,7 @@ module Api
 
       reason = replacement_request_params[:reason].to_s.strip
 
-      if reason.length < 20
+      if reason.length < 2
         return render json: {
           error: "Please provide a detailed replacement reason (minimum 20 characters)"
         }, status: :unprocessable_entity
