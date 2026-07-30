@@ -160,10 +160,12 @@ module Api
     def download_invoice
       return render json: { error: "Unauthorized" }, status: :unauthorized unless current_dealer.present?
       
-      order = Order.includes(:buyer, :seller_dealer, order_items: { product_variant: :product })
-                .find_by(id: params[:id], buyer: current_dealer)
+      order = Order.find_by(id: params[:id], buyer_id: current_dealer.id, buyer_type: 'Dealer')
+      order ||= B2bOrder.find_by(id: params[:id], buyer_dealer_id: current_dealer.id)
+      # order = Order.includes(:buyer, :seller_dealer, order_items: { product_variant: :product })
+      #           .find_by(id: params[:id], buyer: current_dealer)
 
-      order ||= B2bOrder.includes(:buyer_dealer, :seller_dealer, b2b_order_items: { product_variant: :product }).find_by(id: params[:id], buyer_dealer_id: current_dealer.id)
+      # order ||= B2bOrder.includes(:buyer_dealer, :seller_dealer, b2b_order_items: { product_variant: :product }).find_by(id: params[:id], buyer_dealer_id: current_dealer.id)
         
       return render json: { error: "Order not found" }, status: :not_found unless order
           
