@@ -56,7 +56,7 @@ module Api
       pdf = generator.generate
       
       send_data pdf,
-        filename: "Invoice_#{generator.invoice_number}.pdf",
+        filename: "Invoice_#{order.reload.invoice_number}.pdf",
         type: "application/pdf",
         disposition: "attachment",
         status: :ok

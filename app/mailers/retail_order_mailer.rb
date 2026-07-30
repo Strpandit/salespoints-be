@@ -49,7 +49,7 @@ class RetailOrderMailer < ApplicationMailer
 
     if recipient_type.to_s == "buyer" || recipient_type.to_s == "admin"
       generator = InvoicePdf.new(@order)
-      attachments["Invoice_#{generator.invoice_number}.pdf"] = {
+      attachments["Invoice_#{@order.reload.invoice_number}.pdf"] = {
         mime_type: "application/pdf",
         content: generator.generate
       }

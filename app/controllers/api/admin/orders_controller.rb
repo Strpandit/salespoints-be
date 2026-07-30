@@ -145,7 +145,7 @@ module Api
           generator = ::InvoicePdf.new(order)
 
           send_data generator.generate,
-                    filename: "Invoice_#{generator.invoice_number}.pdf",
+                    filename: "Invoice_#{order.reload.invoice_number}.pdf",
                     type: "application/pdf",
                     disposition: "attachment"
 
