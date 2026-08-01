@@ -3,7 +3,7 @@ class CashfreeService
 
   DEFAULT_API_VERSION = "2023-08-01".freeze
   PAYOUT_API_VERSION = "2023-08-01".freeze
-  WEBHOOK_TOLERANCE_SECONDS = 5.minutes.to_i
+  WEBHOOK_TOLERANCE_SECONDS = 10.minutes.to_i
   REQUEST_TIMEOUT = 30.freeze
 
   def initialize
@@ -234,7 +234,7 @@ class CashfreeService
       raise StandardError, "Webhook timestamp expired"
     end
 
-    signature_string = "#{timestamp}#{raw_body}"
+    signature_string = "#{timestamp}.#{raw_body}"
     computed_signature = Base64.strict_encode64(
       OpenSSL::HMAC.digest("sha256", @webhook_secret, signature_string)
     )
