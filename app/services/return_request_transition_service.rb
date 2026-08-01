@@ -109,4 +109,31 @@ class ReturnRequestTransitionService
       )
     end
   end
+
+  def reserve_replacement_inventory!(request)
+    request_items(request.requestable).find_each do |item|
+
+      if item.dealer_product_id.present?
+        dealer_product = DealerProduct.lock.find(item.dealer_product_id)
+
+        raise StandardError, "Insufficient stock for replacement" if dealer_product.stock_quantity < item.quantity
+
+        dealer_product.update!(
+          stock_quantity: dealer_product.stock_quantity.to_i - item.quantity.to_i
+        )
+
+      elsif item.wholesaler_post_id.present?
+        post = WholesalerPost.lock.find(item.wholesaler_post_id)
+
+        raise StandardError, "Insufficient stock for replacement" if post.stock_quantity < item.quantity
+
+        post.update!(
+          stock_quantity: post.stock_quantity.to_i - item.quantity.to_i
+        )
+
+      else
+        raise StandardError, "No inventory source found"
+      end
+    end
+  end
 end
