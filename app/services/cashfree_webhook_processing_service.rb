@@ -36,6 +36,12 @@ class CashfreeWebhookProcessingService
     signature = headers["x-webhook-signature"]
     timestamp = headers["x-webhook-timestamp"]
 
+    Rails.logger.info "========== CASHFREE WEBHOOK =========="
+    Rails.logger.info "Headers: #{headers.inspect}"
+    Rails.logger.info "Signature: #{signature}"
+    Rails.logger.info "Timestamp: #{timestamp}"
+    Rails.logger.info "Raw Body: #{raw_body}"
+
     if signature.blank?
       raise StandardError, "Missing webhook signature"
     end
@@ -50,6 +56,10 @@ class CashfreeWebhookProcessingService
       timestamp: timestamp
     )
   rescue StandardError => e
+    Rails.logger.error "VERIFY SIGNATURE ERROR"
+    Rails.logger.error e.class
+    Rails.logger.error e.message
+    Rails.logger.error e.backtrace.first(10)
     raise StandardError, "Invalid webhook signature: #{e.message}"
   end
 
