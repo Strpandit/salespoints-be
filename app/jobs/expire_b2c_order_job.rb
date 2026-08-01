@@ -42,7 +42,7 @@ class ExpireB2cOrderJob < ApplicationJob
     )
 
     MetaWhatsappCloudService.new.send_text_message(
-      to: formatted_phone_for(order.buyer),
+      to: formatted_phone_for(order.buyer, order),
       body: "⏰ Your order ##{order.order_number} has expired as not accepted it within time. You can try again."
     )
 
@@ -67,9 +67,20 @@ class ExpireB2cOrderJob < ApplicationJob
 
   private
 
-  def formatted_phone_for(user)
-    return nil if user.phone.blank?
-    cc = user.country_code.presence || "+91"
-    "#{cc}#{user.phone}".gsub(/\s+/, "")
+  def formatted_phone_for(user, order = nil)
+    phone = user.phone.presence
+
+    if phone.blank? && order.present?
+      phone = order.shipping_address&.dig("phone")
+    end
+
+    return nil if phone.blank?
+
+    cc =
+      user.country_code.presence ||
+      order&.shipping_address&.dig("country_code") ||
+      "+91"
+
+    "#{cc}#{phone}".gsub(/\s+/, "")
   end
 end

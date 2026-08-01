@@ -259,9 +259,17 @@ class DeliveryConfirmationService
   end
 
   def phone_for(record)
-    return nil if record.blank? || record.phone.blank?
+    return nil if record.blank?
 
-    cc = record.try(:country_code).presence || "+91"
+    phone = record.phone.presence
+
+    if phone.blank? && @deliverable.is_a?(Order) && record == buyer
+      phone = @deliverable.shipping_address&.dig("phone")
+    end
+
+    return nil if phone.blank?
+
+    cc = record.try(:country_code).presence || @deliverable.shipping_address&.dig("country_code").presence || "+91"
     "#{cc}#{record.phone}".gsub(/\s+/, "")
   end
 end

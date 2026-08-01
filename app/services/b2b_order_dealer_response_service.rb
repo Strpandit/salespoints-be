@@ -168,11 +168,12 @@ class B2bOrderDealerResponseService
     shipped_token = offer&.shipped_token
 
     total_amount = order.order_items.sum(:total_price).to_f.round(2).to_s
+    phone = buyer.phone.presence || order.shipping_address&.dig("phone")
 
     MetaWhatsappCloudService.new.send_order_accept(
       to: formatted_phone_for(seller),
       dealer_code: buyer.full_name.to_s,
-      phone: formatted_phone_for(buyer) || "N/A",
+      phone: formatted_phone(phone, buyer.country_code) || "N/A",
       address: delivery_location,
       order_id: order.order_number,
       payment_mode: order.payment_method.to_s.upcase,
@@ -190,9 +191,10 @@ class B2bOrderDealerResponseService
     first_item = items.first
     variant = first_item&.product_variant
     product = variant&.product
+    phone = buyer.phone.presence || order.shipping_address&.dig("phone")
 
     MetaWhatsappCloudService.new.send_payment_success(
-      to: formatted_phone_for(buyer),
+      to: formatted_phone(phone, buyer.country_code),
       product: product&.name || "Product",
       variant: variant&.variant_sku || "Standard",
       quantity: items.sum(&:quantity).to_s,
@@ -262,8 +264,9 @@ class B2bOrderDealerResponseService
 
   def notify_b2c_buyer_of_rejection(order)
     buyer = order.buyer
+    phone = buyer.phone.presence || order.shipping_address&.dig("phone")
     MetaWhatsappCloudService.new.send_text_message(
-      to: formatted_phone_for(buyer),
+      to: formatted_phone(phone, buyer.country_code),
       body: "❌ Your order ##{order.order_number} was rejected. You can try again."
     )
   end
@@ -490,9 +493,10 @@ class B2bOrderDealerResponseService
     product = variant&.product
     
     payment_url = "#{order.payment_token}"
+    phone = buyer.phone.presence || order.shipping_address&.dig("phone")
     
     MetaWhatsappCloudService.new.send_payment_request(
-      to: formatted_phone_for(buyer),
+      to: formatted_phone(phone, buyer.country_code),
       product: product&.name || "Product",
       variant: variant&.variant_sku || "Standard",
       unit_price: first_item&.unit_price.to_f.round(2).to_s,
@@ -555,6 +559,7 @@ class B2bOrderDealerResponseService
 
   def notify_buyer_of_rejection(order)
     buyer = order.buyer_dealer
+    phone = buyer.phone.presence || order.shipping_address&.dig("phone")
 
     message = <<~TEXT
       ❌ *Request Rejected*
@@ -565,7 +570,7 @@ class B2bOrderDealerResponseService
     TEXT
 
     MetaWhatsappCloudService.new.send_text_message(
-      to: formatted_phone_for(buyer),
+      to: formatted_phone(phone, buyer.country_code),
       body: message
     )
   end
@@ -586,11 +591,12 @@ class B2bOrderDealerResponseService
     shipped_token = offer&.shipped_token
 
     total_amount = order.b2b_order_items.sum(:total_price).to_f.round(2).to_s
+    phone = buyer.phone.presence || order.shipping_address&.dig("phone")
     
     MetaWhatsappCloudService.new.send_order_accept(
       to: formatted_phone_for(seller),
       dealer_code: buyer.dealer_code.to_s,
-      phone: formatted_phone_for(buyer) || "N/A",
+      phone: formatted_phone(phone, buyer.country_code) || "N/A",
       address: address,
       order_id: order.reference_number,
       payment_mode: order.payment_method.to_s.upcase,
@@ -668,6 +674,11 @@ class B2bOrderDealerResponseService
     return nil if dealer.phone.blank?
     cc = dealer.country_code.presence || "+91"
     "#{cc}#{dealer.phone}".gsub(/\s+/, "")
+  end
+
+  def formatted_phone(phone, country_code = "+91")
+    return nil if phone.blank?
+    "#{country_code.presence || '+91'}#{phone}".gsub(/\s+/, "")
   end
 
   def deduct_b2b_stock!(item)

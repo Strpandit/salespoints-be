@@ -224,34 +224,27 @@ class CashfreeService
   end
 
   def verify_webhook_signature!(raw_body:, signature:, timestamp:)
-    Rails.logger.info "========== CASHFREE SIGNATURE =========="
-    Rails.logger.info "WEBHOOK_SECRET PRESENT?: #{@webhook_secret.present?}"
-    Rails.logger.info "WEBHOOK_SECRET LENGTH: #{@webhook_secret.to_s.length}"
-    Rails.logger.info "TIMESTAMP: #{timestamp}"
-    Rails.logger.info "SIGNATURE RECEIVED: #{signature}"
     raise StandardError, "Cashfree webhook secret is not configured" if @webhook_secret.blank?
     raise StandardError, "Missing webhook signature header" if signature.blank?
     raise StandardError, "Missing webhook timestamp header" if timestamp.blank?
     
     timestamp_i = timestamp.to_i
 
+    timestamp_i /= 1000 if timestamp_i > 9_999_999_999
+
     if (Time.current.to_i - timestamp_i).abs > WEBHOOK_TOLERANCE_SECONDS
       raise StandardError, "Webhook timestamp expired"
     end
 
-    signature_string = "#{timestamp}.#{raw_body}"
+    signature_string = "#{timestamp}#{raw_body}"
     computed_signature = Base64.strict_encode64(
       OpenSSL::HMAC.digest("sha256", @webhook_secret, signature_string)
     )
 
-    Rails.logger.info "SIGNATURE COMPUTED: #{computed_signature}"
-
     unless ActiveSupport::SecurityUtils.secure_compare(computed_signature, signature.to_s)
-      Rails.logger.error "SIGNATURE MISMATCH"
       raise StandardError, "Invalid webhook signature"
     end
-    
-    Rails.logger.info "SIGNATURE VERIFIED"
+
     true
   end
 

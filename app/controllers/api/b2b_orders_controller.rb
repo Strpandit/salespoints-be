@@ -236,7 +236,6 @@ module Api
         }, status: :ok
       end
     rescue StandardError => e
-      Rails.logger.error e.full_message
       render json: { error: e.message }, status: :unprocessable_entity
       raise
     end

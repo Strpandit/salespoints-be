@@ -262,11 +262,12 @@ class PaymentAttemptFinalizationService
     shipped_token = offer&.shipped_token
 
     total_amount = order.b2b_order_items.sum(:total_price).to_f.round(2).to_s
+    phone = buyer.phone.presence || order.shipping_address&.dig("phone")
 
     MetaWhatsappCloudService.new.send_order_accept(
       to: formatted_phone_for(seller),
       dealer_code: buyer.dealer_code.to_s,
-      phone: formatted_phone_for(buyer) || "N/A",
+      phone: formatted_phone(phone, buyer.country_code) || "N/A",
       address: address,
       order_id: order.reference_number,
       payment_mode: order.payment_method.to_s.upcase,
@@ -286,9 +287,10 @@ class PaymentAttemptFinalizationService
     variant = first_item&.product_variant
     wholesaler_post = first_item&.wholesaler_post
     product = variant&.product || wholesaler_post&.dealer_product&.product
+    phone = buyer.phone.presence || order.shipping_address&.dig("phone")
 
     MetaWhatsappCloudService.new.send_payment_success(
-      to: formatted_phone_for(buyer),
+      to: formatted_phone(phone, buyer.country_code),
       product: product&.name || wholesaler_post&.title || "Product",
       variant: variant&.variant_sku || wholesaler_post&.modal_no || "Standard",
       quantity: items.sum(&:quantity).to_s,
@@ -463,5 +465,10 @@ class PaymentAttemptFinalizationService
 
     cc = dealer.country_code.presence || "+91"
     "#{cc}#{dealer.phone}".gsub(/\s+/, "")
+  end
+
+  def formatted_phone(phone, country_code = "+91")
+    return nil if phone.blank?
+    "#{country_code.presence || '+91'}#{phone}".gsub(/\s+/, "")
   end
 end

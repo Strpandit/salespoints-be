@@ -90,9 +90,10 @@ class B2bOrderPaymentService
     unit_price = first_item&.unit_price
     quantity = items.sum(&:quantity)
     total_amount = order.total_amount
+    phone = buyer.phone.presence || order.shipping_address&.dig("phone")
 
     MetaWhatsappCloudService.new.send_payment_success(
-      to: formatted_phone_for(buyer),
+      to: formatted_phone(phone, buyer.country_code),
       product: product&.name || wholesaler_post&.title || "Product",
       variant: variant&.variant_sku || wholesaler_post&.modal_no || "Standard",
       quantity: quantity.to_s || 1,
@@ -262,7 +263,7 @@ class B2bOrderPaymentService
     MetaWhatsappCloudService.new.send_order_accept(
       to: formatted_phone_for(seller),
       dealer_code: buyer.dealer_code.to_s,       
-      phone: formatted_phone_for(buyer) || "N/A",
+      phone: formatted_phone(phone, buyer.country_code) || "N/A",
       address: address,
       order_id: order.reference_number,
       payment_mode: order.payment_method.to_s.upcase,

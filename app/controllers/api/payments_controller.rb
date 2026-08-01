@@ -104,112 +104,42 @@ module Api
     private
 
     def verify_payment_attempt!
-      Rails.logger.info "================ VERIFY PAYMENT START ================"
-      Rails.logger.info "PARAMS: #{params.to_unsafe_h}"
-      Rails.logger.info "current_admin: #{current_admin&.id}"
-      Rails.logger.info "current_dealer: #{current_dealer&.id}"
-      Rails.logger.info "current_account: #{current_account&.id}"
-      attempt =
-        if current_admin || current_dealer || current_account
-          Rails.logger.info "Authenticated flow"
-          scoped_payment_attempts.find_by(id: params[:payment_attempt_id])
-          Rails.logger.info "Scoped attempt: #{scoped_attempt&.id}"
-          Rails.logger.info "Scoped attempt payload: #{scoped_attempt&.result_payload.inspect}"
+      attempt = PaymentAttempt.find_by(id: params[:payment_attempt_id])
+      return render json: { error: "Payment attempt not found" }, status: :not_found unless attempt
 
-          scoped_attempt
-        else
-          Rails.logger.info "Guest flow"
-          token = params[:payment_token] || params[:token]
+      checkout_context = attempt.result_payload&.dig("checkout_context")
 
-          Rails.logger.info "Payment token: #{token.inspect}"
+      if checkout_context == "b2b_order"
+        token = params[:payment_token] || params[:token]
+        order = B2bOrder.find_by(payment_token: token)
 
-          order = B2bOrder.find_by(payment_token: token)
+        return render json: { error: "Invalid payment link" }, status: :not_found unless order
+        return render json: { error: "Payment already completed" }, status: :unprocessable_entity if order.payment_status == "paid"
+        return render json: { error: "Payment link expired" }, status: :unprocessable_entity if order.expires_at.present? && order.expires_at <= Time.current
 
-          Rails.logger.info "B2B Order: #{order&.id}"
-
-          unless order
-            Rails.logger.error "Invalid payment link. No B2B order found."
-            return render json: { error: "Invalid payment link" }, status: :not_found
-          end
-
-          Rails.logger.info "Order payment_status: #{order.payment_status}"
-          Rails.logger.info "Order expires_at: #{order.expires_at}"
-
-          attempt = PaymentAttempt.find_by(id: params[:payment_attempt_id])
-
-          Rails.logger.info "PaymentAttempt: #{attempt&.id}"
-          Rails.logger.info "PaymentAttempt payload: #{attempt&.result_payload.inspect}"
-
-          unless attempt
-            Rails.logger.error "Payment attempt not found"
-            return render json: { error: "Payment attempt not found" }, status: :not_found
-          end
-
-          Rails.logger.info "Payload b2b_order_id: #{attempt.result_payload&.dig('b2b_order_id')}"
-          Rails.logger.info "Actual order.id: #{order.id}"
-
-          unless attempt.result_payload.present? &&
-                attempt.result_payload["b2b_order_id"].to_i == order.id
-            Rails.logger.error "Payment attempt does not match order"
-            return render json: { error: "Payment attempt does not match this order" }, status: :not_found
-          end
-
-          attempt
+        unless attempt.result_payload.present? &&
+              attempt.result_payload["b2b_order_id"].to_i == order.id
+          return render json: { error: "Payment attempt does not match this order" }, status: :not_found
         end
+      elsif current_admin || current_dealer || current_account
+        attempt = scoped_payment_attempts.find_by(id: params[:payment_attempt_id])
 
-        Rails.logger.info "Final attempt id: #{attempt&.id}"
+        return render json: { error: "Payment attempt not found" }, status: :not_found unless attempt
+      end
+ 
+      return render json: { error: "Cashfree reference missing" }, status: :unprocessable_entity if attempt.gateway_order_reference.blank?
 
-        unless attempt
-          Rails.logger.error "Attempt is nil"
-          return render json: { error: "Payment attempt not found" }, status: :not_found
-        end
-
-        Rails.logger.info "Gateway reference: #{attempt.gateway_order_reference}"
-
-        if attempt.gateway_order_reference.blank?
-          Rails.logger.error "Gateway reference missing"
-          return render json: { error: "Cashfree reference missing" }, status: :unprocessable_entity
-        end
-
-        payload = CashfreeService.new.fetch_order(attempt.gateway_order_reference)
-
-        Rails.logger.info "Cashfree payload: #{payload.inspect}"
-
-        status = payload["order_status"].to_s.upcase
-
-        Rails.logger.info "Cashfree status: #{status}"
-
-        #   return render json: { error: "Invalid payment link" }, status: :not_found unless order
-        #   return render json: { error: "Payment already completed" }, status: :unprocessable_entity if order.payment_status == "paid"
-        #   return render json: { error: "Payment link expired" }, status: :unprocessable_entity if order.expires_at.present? && order.expires_at <= Time.current
-
-        #   attempt = PaymentAttempt.find_by(id: params[:payment_attempt_id])
-
-        #   unless attempt
-        #     return render json: { error: "Payment attempt not found" }, status: :not_found
-        #   end
-
-        #   unless attempt.result_payload.present? && attempt.result_payload["b2b_order_id"].to_i == order.id
-        #     return render json: { error: "Payment attempt does not match this order" }, status: :not_found
-        #   end
-
-        #   attempt
-        # end
-      # return render json: { error: "Payment attempt not found" }, status: :not_found unless attempt
-      # return render json: { error: "Cashfree reference missing" }, status: :unprocessable_entity if attempt.gateway_order_reference.blank?
-
-      # payload = CashfreeService.new.fetch_order(attempt.gateway_order_reference)
-      # status = payload["order_status"].to_s.upcase
+      payload = CashfreeService.new.fetch_order(attempt.gateway_order_reference)
+      status = payload["order_status"].to_s.upcase
 
       case status
       when "PAID"
-        Rails.logger.info "Processing PAID flow"
         mark_attempt_paid!(attempt, payload)
         finalization = PaymentAttemptFinalizationService.new(payment_attempt: attempt).call
         if finalization.b2b_order.present?
           finalization.b2b_order.update!(
-            # payment_reference: payload.dig("payment", "cf_payment_id") || payload["cf_payment_id"] || payload["payment_id"],
-            # payment_gateway_payload: payload,
+            payment_reference: payload.dig("payment", "cf_payment_id") || payload["cf_payment_id"] || payload["payment_id"],
+            payment_gateway_payload: payload,
             payment_confirmed_at: Time.current,
             payment_token: SecureRandom.hex(32)
             # expires_at: Time.current
@@ -232,7 +162,6 @@ module Api
         }, status: :ok
 
       when "ACTIVE"
-        Rails.logger.info "Processing ACTIVE flow"
         attempt.update!(payment_gateway_payload: (attempt.payment_gateway_payload || {}).merge(payload))
         render json: {
           data: serialize_payment_attempt(attempt.reload),
@@ -241,7 +170,6 @@ module Api
           message: "Payment is still pending"
         }, status: :ok
       else
-        Rails.logger.info "Processing FAILED flow"
         mark_attempt_failed!(attempt, payload, status)
         render json: {
           data: serialize_payment_attempt(attempt.reload),
@@ -259,7 +187,7 @@ module Api
         status: "paid",
         paid_at: attempt.paid_at || Time.current,
         payment_reference: payload.dig("payment", "cf_payment_id") || payload["cf_payment_id"] || payload["payment_id"] || attempt.payment_reference,
-        payment_gateway_payload: attempt.payment_gateway_payload.merge(payload || {})
+        payment_gateway_payload: (attempt.payment_gateway_payload || {}).merge(payload || {})
       )
     end
 
@@ -267,7 +195,7 @@ module Api
       terminal_state = status.in?(%w[CANCELLED USER_DROPPED]) ? "cancelled" : "failed"
       attrs = {
         status: terminal_state,
-        payment_gateway_payload: attempt.payment_gateway_payload.merge(payload || {}),
+        payment_gateway_payload: (attempt.payment_gateway_payload || {}).merge(payload || {}),
         failure_reason: status.presence || "Payment failed"
       }
       attrs[:cancelled_at] = Time.current if terminal_state == "cancelled"
