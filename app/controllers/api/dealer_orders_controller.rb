@@ -291,10 +291,13 @@ module Api
     end
 
     def transform_b2b_item(item)
+      item_product_name = item.product_variant&.product&.name || item.wholesaler_post&.title || "Product"
+      item_variant_sku = item.product_variant&.variant_sku || item.wholesaler_post&.modal_no || "N/A"
+
       {
         id: item.id,
-        product_name: item.product_variant&.product&.name || "Product",
-        variant_sku: item.product_variant&.variant_sku || "N/A",
+        product_name: item_product_name,
+        variant_sku: item_variant_sku,
         quantity: item.quantity,
         unit_price: item.unit_price.to_f,
         total_price: item.total_price.to_f,
