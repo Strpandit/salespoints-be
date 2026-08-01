@@ -228,7 +228,7 @@ module Api
         can_download_invoice: order.buyer_dealer_id == current_dealer.id,
         replacement_request: replacement_request.present? ? ReturnRequestSerializer.new(replacement_request, base_url: request.base_url).serializable_hash : nil,
         can_request_replacement: is_buyer && order.status == "delivered" && replacement_request.blank?,
-        can_manage_replacement: is_seller && replacement_request.present? && replacement_request&.open?,,
+        can_manage_replacement: is_seller && replacement_request.present? && replacement_request&.open?,
         next_status: b2b_next_status(order)
       }
     end
