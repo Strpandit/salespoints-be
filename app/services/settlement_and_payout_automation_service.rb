@@ -137,6 +137,9 @@ class SettlementAndPayoutAutomationService
       
       raise StandardError, "Payout is not in approved status" unless payout.approved?
 
+      DealerPayoutService.new(dealer: dealer).ensure_requestable_settlement_balance!(payout: payout, dealer: dealer)
+      raise StandardError, "Dealer settlement balance is insufficient" if payout.amount.to_d > dealer.reload.settlement_balance.to_d
+
       # Step 1: Ensure beneficiary is onboarded
       ensure_beneficiary_onboarded!(dealer)
 
@@ -153,6 +156,7 @@ class SettlementAndPayoutAutomationService
 
       payout.update!(
         status: "processing",
+        processing_at: Time.current,
         payment_reference: transfer_id,
         payment_mode: "NEFT",
         processed_by_admin: admin,
@@ -161,6 +165,8 @@ class SettlementAndPayoutAutomationService
           processing_started_at: Time.current.iso8601
         })
       )
+
+      DealerPayoutNotificationService.status_updated!(payout.reload, actor: admin)
 
       # Step 3: Schedule status check
       CheckPayoutTransferStatusJob.set(wait: 2.minutes).perform_later(payout.id)
@@ -238,36 +244,40 @@ class SettlementAndPayoutAutomationService
     dealer.update!(
       metadata: (dealer.metadata || {}).merge({
         cashfree_onboarded_at: Time.current.iso8601,
-        cashfree_beneficiary_id: "DEAL-#{dealer.id}-#{dealer.account_id}"
+        cashfree_beneficiary_id: "DEAL-#{dealer.id}-#{dealer.dealer_code.presence || 'SELLER'}"
       })
     )
   end
 
   def mark_payout_as_paid!(payout, transfer_response)
+    DealerPayoutService.new(dealer: payout.dealer).mark_paid!(
+      payout: payout,
+      admin: payout.processed_by_admin,
+      payment_reference: payout.payment_reference,
+      payment_mode: payout.payment_mode.presence || "NEFT",
+      note: transfer_response["message"].presence
+    )
+
     payout.update!(
-      status: "paid",
-      paid_at: Time.current,
       metadata: payout.metadata.merge({
         transfer_success_response: transfer_response,
         paid_at: Time.current.iso8601
       })
     )
-
-    # Notify dealer
-    DealerPayoutNotificationService.status_updated!(payout.reload)
   end
 
   def mark_payout_as_failed!(payout, transfer_response)
     payout.update!(
       status: "failed",
+      processed_by_admin: payout.processed_by_admin,
+      admin_note: [payout.admin_note, transfer_response["message"].presence || "Transfer failed"].compact.join("\n").presence,
       metadata: payout.metadata.merge({
         transfer_failure_response: transfer_response,
         failure_reason: transfer_response["message"].presence || "Transfer failed"
       })
     )
 
-    # Notify admin
-    AdminNotificationService.notify_payout_failure(payout)
+    DealerPayoutNotificationService.status_updated!(payout.reload, actor: payout.processed_by_admin)
   end
 
   def cashfree_payout_enabled?

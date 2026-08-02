@@ -269,7 +269,8 @@ class CashfreeService
   end
 
   def beneficiary_id_for(dealer)
-    "DEAL-#{dealer.id}-#{dealer.account_id}"
+    code = dealer.respond_to?(:dealer_code) ? dealer.dealer_code.to_s.presence : nil
+    "DEAL-#{dealer.id}-#{code || 'SELLER'}"
   end
 
   def format_phone(phone)

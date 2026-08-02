@@ -16,12 +16,27 @@ module Api
       }, status: :ok
     end
 
+    def eligible_orders
+      return render json: { error: "Dealer only" }, status: :forbidden unless current_dealer.present?
+
+      data = DealerPayoutService.new(dealer: current_dealer).eligible_orders
+
+      render json: {
+        data: data,
+        message: "Eligible payout orders fetched successfully"
+      }, status: :ok
+    end
+
     def create
       return render json: { error: "Dealer only" }, status: :forbidden unless current_dealer.present?
 
       payout = DealerPayoutService.new(dealer: current_dealer).request!(
         amount: params[:amount],
-        note: params[:note]
+        note: params[:note],
+        order_id: params[:order_id],
+        order_type: params[:order_type],
+        invoice_number: params[:invoice_number],
+        gst_invoice: params[:gst_invoice]
       )
 
       render json: {
@@ -74,7 +89,17 @@ module Api
       when "reject"
         service.reject!(payout: payout, admin: current_admin, note: params[:admin_note])
       when "processing"
-        service.mark_processing!(payout: payout, admin: current_admin, note: params[:admin_note])
+        if payout.requestable.present?
+          payout = SettlementAndPayoutAutomationService.new.process_cashfree_payout!(
+            payout: payout,
+            admin: current_admin
+          )
+          payout.update!(
+            admin_note: [payout.admin_note, params[:admin_note]].compact.join("\n").presence
+          ) if params[:admin_note].present?
+        else
+          service.mark_processing!(payout: payout, admin: current_admin, note: params[:admin_note])
+        end
       when "paid"
         service.mark_paid!(
           payout: payout,

@@ -259,6 +259,7 @@ class B2bOrderPaymentService
     shipped_token = offer&.shipped_token
 
     total_amount = order.b2b_order_items.sum(:total_price).to_f.round(2).to_s
+    phone = buyer.phone.presence || order.shipping_address&.dig("phone")
     
     MetaWhatsappCloudService.new.send_order_accept(
       to: formatted_phone_for(seller),
@@ -440,5 +441,10 @@ class B2bOrderPaymentService
     return nil if dealer.phone.blank?
     cc = dealer.country_code.presence || "+91"
     "#{cc}#{dealer.phone}".gsub(/\s+/, "")
+  end
+
+  def formatted_phone(phone, country_code = "+91")
+    return nil if phone.blank?
+    "#{country_code.presence || '+91'}#{phone}".gsub(/\s+/, "")
   end
 end

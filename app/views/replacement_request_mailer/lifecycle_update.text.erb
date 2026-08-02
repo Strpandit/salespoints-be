@@ -1,0 +1,18 @@
+Replacement Request <%= @status_label %>
+
+Order Number: <%= @order_reference %>
+Request Type: <%= @return_request.request_type.to_s.humanize %>
+Current Status: <%= @status_label %>
+Seller: <%= @seller&.full_name.presence || @seller&.dealer_code.presence || @seller&.email.presence || "N/A" %>
+Submitted On: <%= format_date(@return_request.created_at) %>
+
+Latest Status:
+<% @changed_fields.each do |change| %>
+- <%= change[:label] %>: <%= [change[:before].present? ? "Previous #{change[:before]}" : nil, "Current #{change[:after]}"].compact.join(" | ") %>
+<% end %>
+
+Reason: <%= @return_request.reason.presence || "N/A" %>
+Details: <%= @return_request.details.presence || "N/A" %>
+Resolution Notes: <%= @return_request.resolution_notes.presence || "N/A" %>
+
+This is an automated update from SalesPoints.

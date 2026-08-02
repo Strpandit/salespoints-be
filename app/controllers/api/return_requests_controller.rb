@@ -80,6 +80,8 @@ module Api
         requestable.update!(status: :replacement_requested)
       end
 
+      ReplacementRequestNotificationService.request_created!(request, actor: current_user)
+
       render json: {
         data: ReturnRequestSerializer.render(request),
         message: "Replacement request created successfully"
@@ -118,6 +120,8 @@ module Api
         actor: current_user,
         resolution_notes: params[:resolution_notes]
       ).transition!(next_status: params[:status])
+
+      ReplacementRequestNotificationService.request_updated!(updated_request, actor: current_user)
 
       render json: {
         data: ReturnRequestSerializer.render(updated_request),

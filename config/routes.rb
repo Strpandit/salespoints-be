@@ -63,7 +63,11 @@ Rails.application.routes.draw do
       end
     end
     resources :dealer_ledger_entries, only: [:index]
-    resources :dealer_payouts, only: [:index, :create, :update]
+    resources :dealer_payouts, only: [:index, :create, :update] do
+      collection do
+        get :eligible_orders
+      end
+    end
     get "payments/cashfree/verify", to: "payments#verify_cashfree"
     post "payments/cashfree/cancel", to: "payments#cancel_cashfree"
     post "payments/cashfree/webhook", to: "payments#cashfree_webhook"

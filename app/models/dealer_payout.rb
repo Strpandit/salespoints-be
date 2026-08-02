@@ -2,8 +2,10 @@ class DealerPayout < ApplicationRecord
   STATUSES = %w[pending approved processing paid rejected failed cancelled].freeze
 
   belongs_to :dealer
+  belongs_to :requestable, polymorphic: true, optional: true
   belongs_to :approved_by_admin, class_name: "AdminUser", optional: true
   belongs_to :processed_by_admin, class_name: "AdminUser", optional: true
+  has_one_attached :gst_invoice
 
   validates :request_number, presence: true, uniqueness: true
   validates :status, inclusion: { in: STATUSES }
@@ -27,6 +29,18 @@ class DealerPayout < ApplicationRecord
 
   def paid?
     status == "paid"
+  end
+
+  def order_reference
+    requestable.try(:order_number).presence || requestable.try(:reference_number).presence
+  end
+
+  def request_flow
+    return "b2c" if requestable.is_a?(Order)
+    return "wholesale" if requestable.is_a?(B2bOrder) && requestable.source_type == "WholesalerPost"
+    return "b2b" if requestable.is_a?(B2bOrder)
+
+    "dealer_balance"
   end
 
   private

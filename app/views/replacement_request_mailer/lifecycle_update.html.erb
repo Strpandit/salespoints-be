@@ -1,0 +1,104 @@
+<%
+  accent =
+    case @return_request.status.to_s
+    when "approved", "completed"
+      "#157347"
+    when "rejected", "cancelled"
+      "#b42318"
+    else
+      "#1d4ed8"
+    end
+
+  intro_text =
+    case @recipient_role
+    when "seller"
+      "A buyer has submitted a replacement request for one of your orders. Please review the request details below."
+    when "super_admin"
+      @event_name == "created" ? "A new replacement request has been created on SalesPoints." : "A replacement request has been updated on SalesPoints."
+    else
+      @event_name == "created" ? "We have successfully logged your replacement request." : "There is a fresh update on your replacement request."
+    end
+%>
+
+<div style="margin:0;padding:32px 0;background:#f4f7fb;font-family:Arial,sans-serif;color:#0f172a;">
+  <div style="max-width:760px;margin:0 auto;background:#ffffff;border:1px solid #dbe4f0;border-radius:20px;overflow:hidden;box-shadow:0 18px 50px rgba(15,23,42,0.08);">
+    <div style="padding:28px 32px;background:linear-gradient(135deg,<%= accent %>,#0f172a);color:#ffffff;">
+      <div style="font-size:12px;letter-spacing:1.6px;text-transform:uppercase;opacity:0.9;">SalesPoints Replacement Desk</div>
+      <h1 style="margin:14px 0 8px;font-size:28px;line-height:1.3;font-weight:700;">
+        Replacement Request <%= @status_label %>
+      </h1>
+      <p style="margin:0;font-size:15px;line-height:1.7;max-width:560px;opacity:0.95;"><%= intro_text %></p>
+    </div>
+
+    <div style="padding:32px;">
+      <div style="display:block;margin-bottom:24px;padding:20px;border-radius:16px;background:#f8fafc;border:1px solid #e2e8f0;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+          <tr>
+            <td style="padding:0 0 10px;font-size:13px;color:#475569;">Order Number</td>
+            <td style="padding:0 0 10px;font-size:13px;color:#0f172a;text-align:right;font-weight:700;"><%= @order_reference %></td>
+          </tr>
+          <tr>
+            <td style="padding:0 0 10px;font-size:13px;color:#475569;">Request Type</td>
+            <td style="padding:0 0 10px;font-size:13px;color:#0f172a;text-align:right;font-weight:700;"><%= @return_request.request_type.to_s.humanize %></td>
+          </tr>
+          <tr>
+            <td style="padding:0 0 10px;font-size:13px;color:#475569;">Current Status</td>
+            <td style="padding:0 0 10px;font-size:13px;color:<%= accent %>;text-align:right;font-weight:700;"><%= @status_label %></td>
+          </tr>
+          <tr>
+            <td style="padding:0 0 10px;font-size:13px;color:#475569;">Seller</td>
+            <td style="padding:0 0 10px;font-size:13px;color:#0f172a;text-align:right;font-weight:700;"><%= @seller&.dealer_code.presence || @seller&.email.presence || "N/A" %></td>
+          </tr>
+          <tr>
+            <td style="padding:0;font-size:13px;color:#475569;">Submitted On</td>
+            <td style="padding:0;font-size:13px;color:#0f172a;text-align:right;font-weight:700;"><%= format_date(@return_request.created_at) %></td>
+          </tr>
+        </table>
+      </div>
+
+      <div style="margin-bottom:24px;">
+        <h2 style="margin:0 0 14px;font-size:18px;line-height:1.4;color:#0f172a;">What Changed</h2>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;border-spacing:0 10px;">
+          <% @changed_fields.each do |change| %>
+            <tr>
+              <td style="width:34%;padding:14px 16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px 0 0 12px;font-size:13px;font-weight:700;color:#0f172a;">
+                <%= change[:label] %>
+              </td>
+              <td style="width:66%;padding:14px 16px;background:#ffffff;border:1px solid #e2e8f0;border-left:0;border-radius:0 12px 12px 0;font-size:13px;color:#334155;">
+                <% if change[:before].present? %>
+                  <div style="margin-bottom:6px;"><span style="font-weight:700;color:#64748b;">Previous:</span> <%= change[:before] %></div>
+                <% end %>
+                <div><span style="font-weight:700;color:#0f172a;">Current:</span> <%= change[:after] %></div>
+              </td>
+            </tr>
+          <% end %>
+        </table>
+      </div>
+
+      <div style="margin-bottom:24px;padding:20px;border-radius:16px;background:#fffdf7;border:1px solid #fde68a;">
+        <h2 style="margin:0 0 12px;font-size:18px;line-height:1.4;color:#0f172a;">Request Details</h2>
+        <p style="margin:0 0 12px;font-size:14px;line-height:1.8;color:#334155;">
+          <strong>Reason:</strong>
+          <%= @return_request.reason.presence || "N/A" %>
+        </p>
+        <p style="margin:0;font-size:14px;line-height:1.8;color:#334155;">
+          <strong>Details:</strong>
+          <%= @return_request.details.presence || "N/A" %>
+        </p>
+      </div>
+
+      <% if @return_request.resolution_notes.present? %>
+        <div style="margin-bottom:24px;padding:20px;border-radius:16px;background:#f8fafc;border:1px solid #cbd5e1;">
+          <h2 style="margin:0 0 12px;font-size:18px;line-height:1.4;color:#0f172a;">Resolution Notes</h2>
+          <p style="margin:0;font-size:14px;line-height:1.8;color:#334155;"><%= @return_request.resolution_notes %></p>
+        </div>
+      <% end %>
+
+      <div style="padding:18px 20px;border-radius:16px;background:#eff6ff;border:1px solid #bfdbfe;">
+        <p style="margin:0;font-size:13px;line-height:1.8;color:#1e3a8a;">
+          This is an automated update from SalesPoints. Please use the order management panel to review the latest request state and take any required next action.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
