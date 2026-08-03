@@ -1,7 +1,7 @@
 class ProductVariantSerializer < ApplicationSerializer
   include MediaPayloadBuilder
   attributes :product_id, :variant_sku, :price, :selling_price, :dealer_price, :dealer_selling_price, :consumer_discount_percentage,
-             :dealer_discount_percentage, :is_active, :formatted_variant_attributes, :deleted_at, :media, :own_media, :tax_rate, :tax_inclusive, :hsn_code, :color
+             :dealer_discount_percentage, :is_active, :formatted_variant_attributes, :deleted_at, :media, :own_media, :tax_rate, :tax_inclusive, :hsn_code, :color, :colors
 
   def media
     build_media_payloads(object.display_media_attachments, primary_blob_id: object.display_primary_blob_id)
@@ -44,7 +44,17 @@ class ProductVariantSerializer < ApplicationSerializer
   end
 
   def color
-    formatted_variant_attributes.find { |item| item[:key].to_s.strip.casecmp("color").zero? || item[:key].to_s.strip.casecmp("colour").zero? }&.dig(:value)
+    colors = formatted_variant_attributes
+      .select { |item| item[:key].to_s.strip.casecmp("color").zero? || item[:key].to_s.strip.casecmp("colour").zero? }
+      .map { |item| item[:value] }
+    
+    colors.presence || nil
+  end
+
+  def colors
+    formatted_variant_attributes
+      .select { |item| item[:key].to_s.strip.casecmp("color").zero? || item[:key].to_s.strip.casecmp("colour").zero? }
+      .map { |item| item[:value] }
   end
 
   def formatted_variant_attributes
