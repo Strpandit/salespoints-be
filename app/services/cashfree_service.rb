@@ -245,24 +245,33 @@ class CashfreeService
   end
 
   def verify_bank_account(account_holder_name:, phone:, bank_account:, ifsc_code:, reference_id:)
-    raise StandardError, "Cashfree payout is not configured" unless payout_configured?
+    raise StandardError, "Cashfree is not configured" unless configured?
     raise StandardError, "Bank account is required" if bank_account.blank?
     raise StandardError, "IFSC code is required" if ifsc_code.blank?
 
+    body = {
+      verification_id: reference_id,
+      bank_account: bank_account,
+      ifsc: ifsc_code,
+      name: account_holder_name
+    }
+
+    body[:phone] = format_phone(phone) if phone.present?
+
+
     response = self.class.post(
-      "#{@payout_base_url}/bank-account/sync",
+      "#{verification_base_url}/bank-account/sync",
       headers: verification_headers,
-      body: {
-        verification_id: reference_id,
-        bank_account: bank_account,
-        ifsc: ifsc_code,
-        name: account_holder_name,
-        phone: format_phone(phone)
-      }.to_json,
+      body: body.to_json,
       timeout: REQUEST_TIMEOUT
     )
 
     parsed = parse_response(response)
+    if response.code == 422
+      raise StandardError,
+            "#{parsed['code']}: #{parsed['message']} (Ref: #{parsed.dig('error', 'reference_id')})"
+    end
+
     raise StandardError, parsed["message"].presence || "Unable to verify bank account" unless response.success?
 
     parsed
@@ -370,7 +379,7 @@ class CashfreeService
 
   def parse_response(response)
     if response.respond_to?(:parsed_response)
-      response.parsed_response.is_a?(Hash) ? response.parsed_response : {}
+      response.parsed_response || {}
     elsif response.is_a?(Hash)
       response
     else
