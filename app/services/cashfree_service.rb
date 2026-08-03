@@ -11,7 +11,7 @@ class CashfreeService
     @client_secret = ENV["CASHFREE_CLIENT_SECRET"].to_s
     @webhook_secret = ENV["CASHFREE_WEBHOOK_SECRET"].presence || @client_secret
     @pg_base_url = ENV["CASHFREE_BASE_URL"].presence || "https://sandbox.cashfree.com/pg"
-    @payout_base_url = ENV["CASHFREE_PAYOUT_BASE_URL"].presence || "https://payout-sandbox.cashfree.com/payout"
+    @payout_base_url = ENV["CASHFREE_PAYOUT_BASE_URL"].presence || "https://sandbox.cashfree.com/payout"
     @backend_url = ENV["BACKEND_BASE_URL"].presence || "http://localhost:3000"
     @frontend_url = ENV["FRONTEND_URL"].presence || "http://localhost:5173"
   end
@@ -249,22 +249,15 @@ class CashfreeService
     raise StandardError, "Bank account is required" if bank_account.blank?
     raise StandardError, "IFSC code is required" if ifsc_code.blank?
 
-    token = payout_authorization_token!
-    verification_id = "BANK_VER_#{Time.now.to_i}_#{SecureRandom.hex(4)}"
-
     response = self.class.post(
-      "#{@payout_base_url}/v1/validation/bankDetails",
-      headers: {
-        "Content-Type" => "application/json",
-        "Authorization" => "Bearer #{token}"
-      },
+      "#{@payout_base_url}/bank-account/sync",
+      headers: verification_headers,
       body: {
-        name: account_holder_name.to_s,
-        phone: format_phone(phone),
-        bankAccount: bank_account.to_s,
-        ifsc: ifsc_code.to_s.strip.upcase,
-        refId: reference_id.to_s,
-        verification_id: verification_id
+        verification_id: reference_id,
+        bank_account: bank_account,
+        ifsc: ifsc_code,
+        name: account_holder_name,
+        phone: format_phone(phone)
       }.to_json,
       timeout: REQUEST_TIMEOUT
     )
@@ -333,24 +326,6 @@ class CashfreeService
 
   def verification_base_url
     ENV["CASHFREE_VERIFICATION_BASE_URL"].presence || "https://sandbox.cashfree.com/verification"
-  end
-
-  def payout_authorization_token!
-    response = self.class.post(
-      "#{@payout_base_url}/v1/authorize",
-      headers: payout_headers,
-      timeout: REQUEST_TIMEOUT
-    )
-
-    parsed = parse_response(response)
-    token = parsed["data"]&.[]("token").presence ||
-            parsed["token"].presence ||
-            parsed["data"]&.[]("access_token").presence ||
-            parsed["access_token"].presence
-
-    raise StandardError, parsed["message"].presence || "Unable to authorize payout verification request" if token.blank?
-
-    token
   end
 
   def beneficiary_id_for(dealer)

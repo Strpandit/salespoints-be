@@ -1,5 +1,8 @@
 class ProductVariant < ApplicationRecord
   belongs_to :product
+
+  attribute :variant_attributes, :json, default: []
+  
   include AttachableMediaValidations
   include PrimaryMediaAttachable
 
