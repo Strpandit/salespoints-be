@@ -82,6 +82,11 @@ class CashfreeWebhookProcessingService
   end
 
   def process_payload!(payload)
+    if payout_event?(payload)
+      process_payout!(payload)
+      return
+    end
+
     order_ref = payload.dig("data", "order", "order_id") || payload["order_id"]
     payment_status = payload.dig("data", "payment", "payment_status").to_s.upcase
 
@@ -131,6 +136,47 @@ class CashfreeWebhookProcessingService
     end
   end
 
+  def process_payout!(payload)
+    transfer_id = payload.dig("data", "transfer_id") || payload["transfer_id"] || payload["transferId"]
+    raise StandardError, "Cashfree payout transfer reference missing in webhook" if transfer_id.blank?
+
+    payout = DealerPayout.find_by(payment_reference: transfer_id)
+    return @event.update!(status: "ignored", processed_at: Time.current, response_code: 200) if payout.blank?
+
+    transfer_status = payload.dig("data", "transfer_status").to_s.upcase
+
+    case transfer_status
+    when "SUCCESS"
+      return if payout.paid?
+
+      DealerPayoutService.new(dealer: payout.dealer).mark_paid!(
+        payout: payout,
+        admin: payout.processed_by_admin || payout.approved_by_admin || AdminUser.active.first,
+        payment_reference: payout.payment_reference,
+        payment_mode: payout.payment_mode.presence || "NEFT",
+        note: payload.dig("data", "utr").presence || "Cashfree transfer settled successfully"
+      )
+      payout.reload.update!(
+        metadata: payout.metadata.merge(
+          webhook_response: payload,
+          webhook_settled_at: Time.current.iso8601
+        )
+      )
+    when "FAILED", "REVERSED", "REJECTED"
+      DealerPayoutService.new(dealer: payout.dealer).mark_failed!(
+        payout: payout,
+        admin: payout.processed_by_admin || payout.approved_by_admin || AdminUser.active.first,
+        note: payload.dig("data", "reason").presence || payload.dig("data", "failure_reason").presence || "Cashfree transfer failed"
+      )
+      payout.reload.update!(
+        metadata: payout.metadata.merge(
+          webhook_response: payload,
+          webhook_failed_at: Time.current.iso8601
+        )
+      )
+    end
+  end
+
   def normalize_headers(raw_headers)
     raw_headers.to_h.each_with_object({}) do |(key, value), memo|
       original = key.to_s
@@ -159,6 +205,15 @@ class CashfreeWebhookProcessingService
 
   def event_type_for(payload)
     payload["type"] || payload.dig("data", "payment", "payment_status") || payload.dig("data", "refund", "refund_status") || "cashfree_event"
+  end
+
+  def payout_event?(payload)
+    event_type = payload["type"].to_s.downcase
+    event_type.include?("payout") ||
+      event_type.include?("transfer") ||
+      payload.dig("data", "transfer_status").present? ||
+      payload["transfer_id"].present? ||
+      payload["transferId"].present?
   end
 
   def failure_status_for(error)

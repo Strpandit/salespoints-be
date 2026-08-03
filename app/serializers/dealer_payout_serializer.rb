@@ -3,7 +3,8 @@ class DealerPayoutSerializer < ApplicationSerializer
              :account_holder_name, :payment_reference, :payment_mode, :admin_note,
              :approved_at, :processing_at, :paid_at, :rejected_at, :cancelled_at,
              :created_at, :updated_at, :dealer_name, :dealer_code, :order_reference,
-             :request_flow, :invoice_number, :gst_invoice, :requestable_type, :requestable_id
+             :request_flow, :invoice_number, :gst_invoice, :requestable_type, :requestable_id,
+             :bank_verification_status, :bank_verified, :settlement_ready_for_processing
 
   def amount
     object.amount.to_f
@@ -35,5 +36,21 @@ class DealerPayoutSerializer < ApplicationSerializer
       filename: object.gst_invoice.filename.to_s,
       content_type: object.gst_invoice.content_type.to_s
     }
+  end
+
+  def bank_verification_status
+    object.dealer&.dealer_profile&.bank_verification_status
+  end
+
+  def bank_verified
+    object.dealer&.dealer_profile&.bank_verified? || false
+  end
+
+  def settlement_ready_for_processing
+    profile = object.dealer&.dealer_profile
+    bank_ready = profile&.bank_verified?
+    status_ready = object.status.to_s == "approved"
+
+    bank_ready && status_ready
   end
 end

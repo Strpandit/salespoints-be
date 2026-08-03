@@ -1,6 +1,8 @@
 class DealerProfile < ApplicationRecord
   include AttachableMediaValidations
 
+  BANK_VERIFICATION_STATUSES = %w[unverified verified failed].freeze
+
   belongs_to :dealer
   has_many_attached :store_image
   has_many_attached :aadhar_card
@@ -9,7 +11,21 @@ class DealerProfile < ApplicationRecord
   has_one_attached :cancel_cheque
 
   validates :business_name, :aadhar_number, presence: true
+  validates :bank_verification_status, inclusion: { in: BANK_VERIFICATION_STATUSES }
   validate :attachments_validity
+
+  def bank_verified?
+    bank_verification_status == "verified" &&
+      bank_verified_at.present? &&
+      bank_account_number.present? &&
+      ifsc_code.present?
+  end
+
+  def masked_bank_account_number
+    return nil if bank_account_number.blank?
+
+    "XXXXXX#{bank_account_number.to_s.last(4)}"
+  end
 
   private
 

@@ -11,7 +11,7 @@ class DealerPayoutService
       .includes(:buyer, :seller_dealer, :return_requests)
       .where(seller_dealer_id: @dealer.id)
       .where(status: PAYOUT_READY_ORDER_STATUSES)
-      .where(payment_status: %w[paid partially_refunded refunded])
+      .where(payment_status: "paid")
       .order(delivered_at: :desc)
 
     b2b_orders = B2bOrder
@@ -30,6 +30,7 @@ class DealerPayoutService
   def request!(amount:, note: nil, order_id: nil, order_type: nil, invoice_number: nil, gst_invoice: nil)
     profile = @dealer.dealer_profile
     raise StandardError, "Dealer bank details are incomplete" if profile.blank? || profile.bank_name.blank? || profile.bank_account_number.blank? || profile.ifsc_code.blank?
+    raise StandardError, "Please verify your bank account before requesting payout" unless profile.bank_verified?
 
     requestable = find_requestable(order_id: order_id, order_type: order_type)
 
@@ -53,7 +54,7 @@ class DealerPayoutService
       bank_name: profile.bank_name,
       bank_account_number: profile.bank_account_number,
       ifsc_code: profile.ifsc_code,
-      account_holder_name: @dealer.full_name.presence || profile.business_name,
+      account_holder_name: profile.account_holder_name.presence || @dealer.full_name.presence || profile.business_name,
       invoice_number: invoice_number.presence,
       admin_note: note,
       metadata: payout_metadata(profile, requestable, invoice_number, note)
@@ -202,6 +203,7 @@ class DealerPayoutService
       amount: payout_amount_for(requestable).to_f,
       status: requestable.status,
       payment_status: requestable.payment_status,
+      settlement_hold_until: settlement_hold_until_for(requestable)&.iso8601,
       delivered_at: requestable.delivered_at&.iso8601,
       replacement_request_open: false
     }
@@ -214,6 +216,8 @@ class DealerPayoutService
       gst_number: profile.gst_number,
       note: note,
       invoice_number: invoice_number,
+      bank_verified_at: profile.bank_verified_at&.iso8601,
+      bank_verification_status: profile.bank_verification_status,
       requestable_type: requestable&.class&.name,
       requestable_id: requestable&.id,
       request_flow: requestable.present? ? requestable_flow(requestable) : "dealer_balance",
@@ -244,6 +248,7 @@ class DealerPayoutService
     return { eligible: false, reason: "Unauthorized seller" } unless requestable.try(:seller_dealer_id) == @dealer.id
     return { eligible: false, reason: "Order must be delivered or replacement delivered before payout request" } unless requestable.status.to_s.in?(PAYOUT_READY_ORDER_STATUSES)
     return { eligible: false, reason: "Order payment must be completed before payout request" } unless payment_completed_for_payout?(requestable)
+    return { eligible: false, reason: "Order is still in the 48-hour settlement hold window" } if settlement_hold_active?(requestable)
     return { eligible: false, reason: "Replacement request is still open for this order" } if replacement_request_open?(requestable)
     return { eligible: false, reason: "A payout request already exists for this order" } if active_payout_exists_for?(requestable)
     return { eligible: false, reason: "No payout amount available for this order" } unless payout_amount_for(requestable).positive?
@@ -295,6 +300,19 @@ class DealerPayoutService
       scope.where(order_id: requestable.id).exists?
     else
       scope.where("metadata ->> 'requestable_type' = ? AND metadata ->> 'requestable_id' = ?", requestable.class.name, requestable.id.to_s).exists?
+    end
+  end
+
+  def settlement_hold_active?(requestable)
+    hold_until = settlement_hold_until_for(requestable)
+    hold_until.present? && hold_until > Time.current
+  end
+
+  def settlement_hold_until_for(requestable)
+    if requestable.respond_to?(:settlement_due_at) && requestable.try(:settlement_due_at).present?
+      requestable.settlement_due_at
+    elsif requestable.delivered_at.present?
+      requestable.delivered_at + 48.hours
     end
   end
 

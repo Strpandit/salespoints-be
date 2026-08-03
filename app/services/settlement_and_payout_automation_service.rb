@@ -134,8 +134,10 @@ class SettlementAndPayoutAutomationService
     Dealer.transaction do
       payout = DealerPayout.lock.includes(:dealer).find(payout.id)
       dealer = payout.dealer
+      profile = dealer.dealer_profile
       
       raise StandardError, "Payout is not in approved status" unless payout.approved?
+      raise StandardError, "Dealer bank account is not verified" unless profile&.bank_verified?
 
       DealerPayoutService.new(dealer: dealer).ensure_requestable_settlement_balance!(payout: payout, dealer: dealer)
       raise StandardError, "Dealer settlement balance is insufficient" if payout.amount.to_d > dealer.reload.settlement_balance.to_d

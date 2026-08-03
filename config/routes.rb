@@ -139,6 +139,7 @@ Rails.application.routes.draw do
       get :active_dealers, on: :collection
       get :nearby, on: :collection
       get :admin_overview, on: :member
+      post :verify_bank_account, on: :member
       patch :block, on: :member
       patch :unblock, on: :member
       patch :approve, on: :member

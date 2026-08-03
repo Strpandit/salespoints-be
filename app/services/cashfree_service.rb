@@ -223,6 +223,56 @@ class CashfreeService
     raise StandardError, "Cashfree Transfer Status Error: #{e.message}"
   end
 
+  def verify_ifsc(ifsc_code:)
+    raise StandardError, "Cashfree is not configured" unless configured?
+    raise StandardError, "IFSC code is required" if ifsc_code.blank?
+
+    response = self.class.post(
+      "#{verification_base_url}/ifsc",
+      headers: verification_headers,
+      body: { ifsc: ifsc_code.to_s.strip.upcase }.to_json,
+      timeout: REQUEST_TIMEOUT
+    )
+
+    parsed = parse_response(response)
+    raise StandardError, parsed["message"].presence || "Unable to verify IFSC code" unless response.success?
+
+    parsed
+  rescue => e
+    raise StandardError, "Cashfree IFSC Verification Error: #{e.message}"
+  end
+
+  def verify_bank_account(account_holder_name:, phone:, bank_account:, ifsc_code:, reference_id:)
+    raise StandardError, "Cashfree payout is not configured" unless payout_configured?
+    raise StandardError, "Bank account is required" if bank_account.blank?
+    raise StandardError, "IFSC code is required" if ifsc_code.blank?
+
+    token = payout_authorization_token!
+
+    response = self.class.post(
+      "#{@payout_base_url}/v1/validation/bankDetails",
+      headers: {
+        "Content-Type" => "application/json",
+        "Authorization" => "Bearer #{token}"
+      },
+      body: {
+        name: account_holder_name.to_s,
+        phone: format_phone(phone),
+        bankAccount: bank_account.to_s,
+        ifsc: ifsc_code.to_s.strip.upcase,
+        refId: reference_id.to_s
+      }.to_json,
+      timeout: REQUEST_TIMEOUT
+    )
+
+    parsed = parse_response(response)
+    raise StandardError, parsed["message"].presence || "Unable to verify bank account" unless response.success?
+
+    parsed
+  rescue => e
+    raise StandardError, "Cashfree Bank Verification Error: #{e.message}"
+  end
+
   def verify_webhook_signature!(raw_body:, signature:, timestamp:)
     raise StandardError, "Cashfree webhook secret is not configured" if @webhook_secret.blank?
     raise StandardError, "Missing webhook signature header" if signature.blank?
@@ -268,6 +318,37 @@ class CashfreeService
     }
   end
 
+  def verification_headers
+    {
+      "Content-Type" => "application/json",
+      "x-api-version" => ENV["CASHFREE_VERIFICATION_API_VERSION"].presence || DEFAULT_API_VERSION,
+      "x-client-id" => ENV["CASHFREE_VERIFICATION_CLIENT_ID"].presence || @client_id,
+      "x-client-secret" => ENV["CASHFREE_VERIFICATION_CLIENT_SECRET"].presence || @client_secret
+    }
+  end
+
+  def verification_base_url
+    ENV["CASHFREE_VERIFICATION_BASE_URL"].presence || "https://sandbox.cashfree.com/verification"
+  end
+
+  def payout_authorization_token!
+    response = self.class.post(
+      "#{@payout_base_url}/v1/authorize",
+      headers: payout_headers,
+      timeout: REQUEST_TIMEOUT
+    )
+
+    parsed = parse_response(response)
+    token = parsed["data"]&.[]("token").presence ||
+            parsed["token"].presence ||
+            parsed["data"]&.[]("access_token").presence ||
+            parsed["access_token"].presence
+
+    raise StandardError, parsed["message"].presence || "Unable to authorize payout verification request" if token.blank?
+
+    token
+  end
+
   def beneficiary_id_for(dealer)
     code = dealer.respond_to?(:dealer_code) ? dealer.dealer_code.to_s.presence : nil
     "DEAL-#{dealer.id}-#{code || 'SELLER'}"
@@ -282,9 +363,11 @@ class CashfreeService
     dealer.present? &&
     dealer.email.present? &&
     dealer.phone.present? &&
+    profile&.account_holder_name.present? &&
     profile&.bank_account_number.present? &&
     profile&.ifsc_code.present? &&
-    profile&.bank_name.present?
+    profile&.bank_name.present? &&
+    profile&.bank_verified?
   end
 
   def customer_details_for(customer)

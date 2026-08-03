@@ -4,8 +4,8 @@ module Api
     # before_action :authenticate_request!, except: [:verify_otp]
     before_action :require_admin, only: [:create, :index, :active_dealers, :block, :unblock, :destroy, :approve, :reject, :admin_overview]
     before_action :require_admin_approver!, only: [:approve, :reject]
-    before_action :set_dealer, only: [:show, :update, :destroy, :block, :unblock, :approve, :reject, :verify_otp, :admin_overview]
-    before_action :authorize_dealer_update, only: [:update, :show]
+    before_action :set_dealer, only: [:show, :update, :destroy, :block, :unblock, :approve, :reject, :verify_otp, :admin_overview, :verify_bank_account]
+    before_action :authorize_dealer_update, only: [:update, :show, :verify_bank_account]
 
     def index
       dealers = Dealer.includes(:dealer_profile, :dealer_location)
@@ -184,6 +184,8 @@ module Api
     end
 
     def update
+      normalize_verified_bank_payload!
+
       if @dealer.update(dealer_params)
         notify_admins_entity_updated(@dealer)
         render json: serialize_resource(@dealer, DealerSerializer, base_url: request.base_url).merge(message: "Dealer updated successfully"), status: :ok
@@ -192,6 +194,30 @@ module Api
           error: @dealer.errors.full_messages
         }, status: :unprocessable_entity
       end
+    end
+
+    def verify_bank_account
+      service = DealerBankVerificationService.new(dealer: @dealer)
+      result = service.verify!(
+        account_number: params[:bank_account_number],
+        confirm_account_number: params[:confirm_bank_account_number],
+        account_holder_name: params[:account_holder_name],
+        ifsc_code: params[:ifsc_code]
+      )
+
+      render json: {
+        data: {
+          verification_reference: result.verification_reference,
+          bank_name: result.bank_name,
+          name_at_bank: result.name_at_bank,
+          account_holder_name: result.account_holder_name,
+          ifsc_code: result.ifsc_code,
+          masked_account_number: "XXXXXX#{result.account_number.to_s.last(4)}"
+        },
+        message: "Bank account verified successfully"
+      }, status: :ok
+    rescue StandardError => e
+      render json: { error: e.message }, status: :unprocessable_entity
     end
 
     def block
@@ -321,11 +347,51 @@ module Api
         :first_name, :last_name, :email, :phone, :gender, :country_code, :status, :pincode, :password, :password_confirmation,
         dealer_profile_attributes: [
           :id, :business_name, :business_type, :gst_number, :pan_number, :aadhar_number,
-          :bank_name, :bank_account_number, :ifsc_code, :business_address,
+          :bank_name, :bank_account_number, :ifsc_code, :account_holder_name, :business_address,
           :business_contact_number, :business_email, :work_category, :associated_brands,
-          :is_verified, :pan_card, :gst_certificate, :cancel_cheque, { store_image: [], aadhar_card: [] }
+          :is_verified, :bank_verification_reference, :pan_card, :gst_certificate, :cancel_cheque, { store_image: [], aadhar_card: [] }
         ],
         dealer_location_attributes: [:id, :latitude, :longitude, :service_radius_km, :is_active]
+      )
+    end
+
+    def normalize_verified_bank_payload!
+      attrs = params.dig(:dealer, :dealer_profile_attributes)
+      return if attrs.blank?
+      return unless current_user_type == "Dealer"
+
+      profile = @dealer.dealer_profile
+      incoming_account = attrs[:bank_account_number].to_s.gsub(/\s+/, "")
+      incoming_ifsc = attrs[:ifsc_code].to_s.strip.upcase
+      incoming_holder = attrs[:account_holder_name].to_s.squish
+
+      bank_fields_present = incoming_account.present? || incoming_ifsc.present? || incoming_holder.present? || attrs[:bank_name].present?
+      return unless bank_fields_present
+
+      existing_matches =
+        profile.present? &&
+        profile.bank_account_number.to_s == incoming_account &&
+        profile.ifsc_code.to_s.upcase == incoming_ifsc &&
+        profile.account_holder_name.to_s.casecmp?(incoming_holder)
+
+      return if existing_matches && profile.bank_verified?
+
+      verification_reference = attrs[:bank_verification_reference].presence
+      raise StandardError, "Please verify bank account before saving these details" if verification_reference.blank?
+
+      verification_payload = DealerBankVerificationService.new(dealer: @dealer).consume_verified_payload!(
+        verification_reference: verification_reference,
+        account_number: incoming_account,
+        ifsc_code: incoming_ifsc,
+        account_holder_name: incoming_holder
+      )
+
+      attrs[:bank_name] = verification_payload[:bank_name]
+      attrs[:account_holder_name] = verification_payload[:account_holder_name]
+      target_profile = profile || @dealer.build_dealer_profile
+      DealerBankVerificationService.new(dealer: @dealer).persist_verified_profile!(
+        profile: target_profile,
+        verification_payload: verification_payload
       )
     end
 
