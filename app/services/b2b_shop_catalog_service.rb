@@ -221,7 +221,7 @@ class B2bShopCatalogService
     posts = WholesalerPost.visible_to_marketplace
                           .includes(:dealer_product)
                           .where.not(dealer_id: @buyer_dealer.id)
-                          .where("title ILIKE :q OR description ILIKE :q", q: "%#{query}%")
+                          .where("title ILIKE :q OR body ILIKE :q", q: "%#{query}%")
 
     posts = posts.by_pincode(pincode.to_s) if pincode.present?
 

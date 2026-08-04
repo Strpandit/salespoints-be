@@ -7,14 +7,17 @@ class SupportTicket < ApplicationRecord
   has_many :messages, class_name: 'TicketMessage', dependent: :destroy
   has_many :notifications, as: :notifiable, dependent: :destroy
 
+  # Callbacks
+  before_validation :generate_ticket_number, on: :create
+
   # Validations
   validates :ticket_number, presence: true, uniqueness: true
   validates :subject, presence: true
   validates :description, presence: true
-  validates :category, presence: true, inclusion: { in: %w(order_issue payment product account general other) }
-  validates :priority, inclusion: { in: %w(low medium high urgent) }
-  validates :status, inclusion: { in: %w(open in_progress waiting_customer resolved closed) }
-  validates :user_type, inclusion: { in: %w(customer dealer admin) }
+  validates :category, presence: true
+  validates :priority, inclusion: { in: %w(low medium high urgent) }, allow_blank: true
+  validates :status, inclusion: { in: %w(open in_progress waiting_customer resolved closed) }, allow_blank: true
+  validates :user_type, inclusion: { in: %w(customer account dealer admin) }, allow_blank: true
 
   # Scopes
   scope :open, -> { where(status: %w(open in_progress waiting_customer)) }
@@ -29,11 +32,9 @@ class SupportTicket < ApplicationRecord
   scope :for_dealer, ->(dealer_id) { where(dealer_id: dealer_id, user_type: 'dealer') }
   scope :for_admin, ->(admin_id) { where(admin_user_id: admin_id, user_type: 'admin') }
 
-  # Callbacks
-  before_create :generate_ticket_number
-
   # Methods
   def generate_ticket_number
+    return if ticket_number.present?
     timestamp = Time.current.strftime('%y%m%d')
     random_suffix = SecureRandom.hex(3).upcase
     self.ticket_number = "TKT-#{timestamp}-#{random_suffix}"
@@ -100,14 +101,14 @@ class SupportTicket < ApplicationRecord
 
   def category_display
     {
-      'order_issue' => 'Order Issue',
-      'payment' => 'Payment Problem',
-      'product' => 'Product Inquiry',
+      'orders' => 'Order & Shipping',
+      'payments' => 'Payments & Refunds',
+      'product_warranty' => 'Product & Warranty',
       'account' => 'Account Help',
-      'general' => 'General Question',
+      'general' => 'General Query',
       'other' => 'Other'
     }[category] || category
-  end
+  end 
 
   def priority_color
     {
