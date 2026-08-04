@@ -1,8 +1,5 @@
 class ProductVariant < ApplicationRecord
   belongs_to :product
-
-  attribute :variant_attributes, :json, default: []
-  
   include AttachableMediaValidations
   include PrimaryMediaAttachable
 
@@ -15,6 +12,8 @@ class ProductVariant < ApplicationRecord
   validates :variant_sku, presence: true, uniqueness: true
   validates :selling_price, :dealer_selling_price, presence: true, numericality: true
   validate :media_files_valid
+
+  before_save :normalize_colors
 
   scope :active, -> { where(is_active: true, deleted_at: nil) }
 
@@ -74,5 +73,9 @@ class ProductVariant < ApplicationRecord
 
   def media_files_valid
     validate_attachment_set(:media)
+  end
+
+  def normalize_colors
+    self.colors = colors&.reject(&:blank?)&.uniq
   end
 end

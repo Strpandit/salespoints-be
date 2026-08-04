@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_07_30_013332) do
+ActiveRecord::Schema[8.0].define(version: 2026_08_03_132827) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -432,10 +432,14 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_30_013332) do
     t.jsonb "metadata", default: {}, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "requestable_type"
+    t.bigint "requestable_id"
+    t.string "invoice_number"
     t.index ["approved_by_admin_id"], name: "index_dealer_payouts_on_approved_by_admin_id"
     t.index ["dealer_id"], name: "index_dealer_payouts_on_dealer_id"
     t.index ["processed_by_admin_id"], name: "index_dealer_payouts_on_processed_by_admin_id"
     t.index ["request_number"], name: "index_dealer_payouts_on_request_number", unique: true
+    t.index ["requestable_type", "requestable_id"], name: "index_dealer_payouts_on_requestable"
     t.index ["status"], name: "index_dealer_payouts_on_status"
   end
 
@@ -474,6 +478,16 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_30_013332) do
     t.datetime "updated_at", null: false
     t.string "work_category"
     t.string "associated_brands"
+    t.string "account_holder_name"
+    t.string "bank_verification_status", default: "unverified", null: false
+    t.string "bank_verification_reference"
+    t.datetime "bank_verified_at"
+    t.string "verified_bank_name"
+    t.string "verified_name_at_bank"
+    t.text "last_bank_verification_error"
+    t.jsonb "bank_verification_payload", default: {}, null: false
+    t.index ["bank_verification_reference"], name: "index_dealer_profiles_on_bank_verification_reference"
+    t.index ["bank_verification_status"], name: "index_dealer_profiles_on_bank_verification_status"
     t.index ["dealer_id"], name: "index_dealer_profiles_on_dealer_id"
   end
 
@@ -769,6 +783,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_30_013332) do
     t.datetime "updated_at", null: false
     t.bigint "primary_media_blob_id"
     t.string "hsn_code"
+    t.string "colors", array: true
     t.index ["primary_media_blob_id"], name: "index_product_variants_on_primary_media_blob_id"
     t.index ["product_id"], name: "index_product_variants_on_product_id"
     t.index ["variant_sku"], name: "index_product_variants_on_variant_sku", unique: true, where: "(deleted_at IS NULL)"

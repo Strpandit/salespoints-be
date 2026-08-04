@@ -270,6 +270,6 @@ class DeliveryConfirmationService
     return nil if phone.blank?
 
     cc = record.try(:country_code).presence || @deliverable.shipping_address&.dig("country_code").presence || "+91"
-    "#{cc}#{record.phone}".gsub(/\s+/, "")
+    "#{cc}#{phone}".gsub(/\s+/, "")
   end
 end

@@ -130,7 +130,7 @@ module Api
           :dealer_selling_price, :discount_percentage, :is_active, :_destroy,
           :primary_media_blob_id, :primary_new_media_index,
           :purge_media_blob_ids, { purge_media_blob_ids: [] },
-          { media: [] }, { variant_attributes: [:key, :value] }
+          { media: [], colors: [], variant_attributes: [:key, :value] }
         ]
       )
     end
@@ -138,17 +138,7 @@ module Api
     def normalized_product_params
       attrs = product_params.to_h.deep_dup
       variant_attrs = attrs["product_variants_attributes"]
-      
-      if variant_attrs.present?
-        variant_attrs.each do |index, variant|
-          if variant["variant_attributes"].is_a?(Hash)
-            variant["variant_attributes"] = variant["variant_attributes"].values
-          end
-        end
-        attrs["product_variants_attributes"] = variant_attrs
-        return attrs
-      end
-      
+      return attrs if variant_attrs.present?
       return attrs if @product&.product_variants&.exists?
 
       fallback_variant = build_fallback_variant_attributes(attrs)

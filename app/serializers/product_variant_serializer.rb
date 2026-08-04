@@ -1,7 +1,7 @@
 class ProductVariantSerializer < ApplicationSerializer
   include MediaPayloadBuilder
   attributes :product_id, :variant_sku, :price, :selling_price, :dealer_price, :dealer_selling_price, :consumer_discount_percentage,
-             :dealer_discount_percentage, :is_active, :formatted_variant_attributes, :deleted_at, :media, :own_media, :tax_rate, :tax_inclusive, :hsn_code, :color, :colors
+             :dealer_discount_percentage, :is_active, :formatted_variant_attributes, :deleted_at, :media, :own_media, :tax_rate, :tax_inclusive, :hsn_code, :colors
 
   def media
     build_media_payloads(object.display_media_attachments, primary_blob_id: object.display_primary_blob_id)
@@ -43,18 +43,8 @@ class ProductVariantSerializer < ApplicationSerializer
     true
   end
 
-  def color
-    colors = formatted_variant_attributes
-      .select { |item| item[:key].to_s.strip.casecmp("color").zero? || item[:key].to_s.strip.casecmp("colour").zero? }
-      .map { |item| item[:value] }
-    
-    colors.presence || nil
-  end
-
   def colors
-    formatted_variant_attributes
-      .select { |item| item[:key].to_s.strip.casecmp("color").zero? || item[:key].to_s.strip.casecmp("colour").zero? }
-      .map { |item| item[:value] }
+    object.colors || []
   end
 
   def formatted_variant_attributes
