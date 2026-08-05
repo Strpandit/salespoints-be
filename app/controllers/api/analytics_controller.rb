@@ -368,38 +368,79 @@ module Api
 
     # ─── TOP PRODUCTS ──────────────────────────────────────────────────────────
     def top_products_combined(date_range)
-      items = OrderItem.joins(:order)
-                       .where(orders: { created_at: date_range })
-                       .group(:product_name)
-                       .select("product_name, SUM(quantity) as units_total, SUM(total_price) as revenue_total")
-                       .order("revenue_total DESC")
-                       .limit(5)
-
-      if items.empty?
+      # B2C Products
+      b2c_items = OrderItem.joins(order: { product_variant: :product })
+                          .where(orders: { created_at: date_range })
+                          .group("products.name")
+                          .select("products.name as product_name, SUM(order_items.quantity) as units_total, SUM(order_items.total_price) as revenue_total")
+      
+      # B2B Products (via dealer_product -> product)
+      b2b_items = B2bOrderItem.joins(b2b_order: { dealer_product: :product })
+                              .where(b2b_orders: { created_at: date_range })
+                              .group("products.name")
+                              .select("products.name as product_name, SUM(b2b_order_items.quantity) as units_total, SUM(b2b_order_items.total_price) as revenue_total")
+      
+      combined = {}
+      
+      b2c_items.each do |item|
+        combined[item.product_name] ||= { revenue: 0, units: 0 }
+        combined[item.product_name][:revenue] += item.revenue_total.to_f
+        combined[item.product_name][:units] += item.units_total.to_i
+      end
+      
+      b2b_items.each do |item|
+        combined[item.product_name] ||= { revenue: 0, units: 0 }
+        combined[item.product_name][:revenue] += item.revenue_total.to_f
+        combined[item.product_name][:units] += item.units_total.to_i
+      end
+      
+      sorted = combined.sort_by { |_, v| -v[:revenue] }.first(5)
+      
+      if sorted.empty?
         Product.limit(5).map { |p| { name: p.name, revenue: 0.0, units: 0 } }
       else
-        items.map do |item|
+        sorted.map do |name, data|
           {
-            name:    item.product_name || "Product",
-            revenue: item.revenue_total.to_f,
-            units:   item.units_total.to_i
+            name:    name || "Product",
+            revenue: data[:revenue].round(2),
+            units:   data[:units]
           }
         end
       end
     end
 
     def dealer_top_products(dealer_id, date_range)
-      items = OrderItem.joins(:order)
-                       .where(orders: { created_at: date_range, seller_dealer_id: dealer_id })
-                       .group(:product_name)
-                       .select("product_name, SUM(quantity) as units_total, SUM(total_price) as revenue_total")
-                       .order("revenue_total DESC")
-                       .limit(5)
-      items.map do |item|
+      b2c_items = OrderItem.joins(order: { product_variant: :product })
+                          .where(orders: { created_at: date_range, seller_dealer_id: dealer_id })
+                          .group("products.name")
+                          .select("products.name as product_name, SUM(order_items.quantity) as units_total, SUM(order_items.total_price) as revenue_total")
+      
+      b2b_items = B2bOrderItem.joins(b2b_order: { dealer_product: :product })
+                              .where(b2b_orders: { created_at: date_range, seller_dealer_id: dealer_id })
+                              .group("products.name")
+                              .select("products.name as product_name, SUM(b2b_order_items.quantity) as units_total, SUM(b2b_order_items.total_price) as revenue_total")
+      
+      combined = {}
+      
+      b2c_items.each do |item|
+        combined[item.product_name] ||= { revenue: 0, units: 0 }
+        combined[item.product_name][:revenue] += item.revenue_total.to_f
+        combined[item.product_name][:units] += item.units_total.to_i
+      end
+      
+      b2b_items.each do |item|
+        combined[item.product_name] ||= { revenue: 0, units: 0 }
+        combined[item.product_name][:revenue] += item.revenue_total.to_f
+        combined[item.product_name][:units] += item.units_total.to_i
+      end
+      
+      sorted = combined.sort_by { |_, v| -v[:revenue] }.first(5)
+      
+      sorted.map do |name, data|
         {
-          name:    item.product_name || "Product",
-          revenue: item.revenue_total.to_f,
-          units:   item.units_total.to_i
+          name:    name || "Product",
+          revenue: data[:revenue].round(2),
+          units:   data[:units]
         }
       end
     end
