@@ -368,13 +368,11 @@ module Api
 
     # ─── TOP PRODUCTS ──────────────────────────────────────────────────────────
     def top_products_combined(date_range)
-      # B2C Products
-      b2c_items = OrderItem.joins(order: { product_variant: :product })
+      b2c_items = OrderItem.joins(:order, product_variant: :product)
                           .where(orders: { created_at: date_range })
                           .group("products.name")
                           .select("products.name as product_name, SUM(order_items.quantity) as units_total, SUM(order_items.total_price) as revenue_total")
       
-      # B2B Products (via dealer_product -> product)
       b2b_items = B2bOrderItem.joins(b2b_order: { dealer_product: :product })
                               .where(b2b_orders: { created_at: date_range })
                               .group("products.name")
@@ -410,7 +408,7 @@ module Api
     end
 
     def dealer_top_products(dealer_id, date_range)
-      b2c_items = OrderItem.joins(order: { product_variant: :product })
+      b2c_items = OrderItem.joins(:order, product_variant: :product)
                           .where(orders: { created_at: date_range, seller_dealer_id: dealer_id })
                           .group("products.name")
                           .select("products.name as product_name, SUM(order_items.quantity) as units_total, SUM(order_items.total_price) as revenue_total")
