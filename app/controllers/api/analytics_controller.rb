@@ -377,6 +377,7 @@ module Api
                               .joins("INNER JOIN dealer_products ON dealer_products.id = b2b_order_items.dealer_product_id")
                               .joins("INNER JOIN products ON products.id = dealer_products.product_id")
                               .where(b2b_orders: { created_at: date_range })
+                              .where.not(b2b_order_items: { dealer_product_id: nil })
                               .group("products.name")
                               .select("products.name as product_name, SUM(b2b_order_items.quantity) as units_total, SUM(b2b_order_items.total_price) as revenue_total")
       
@@ -419,6 +420,7 @@ module Api
                               .joins("INNER JOIN dealer_products ON dealer_products.id = b2b_order_items.dealer_product_id")
                               .joins("INNER JOIN products ON products.id = dealer_products.product_id")
                               .where(b2b_orders: { created_at: date_range, seller_dealer_id: dealer_id })
+                              .where.not(b2b_order_items: { dealer_product_id: nil })
                               .group("products.name")
                               .select("products.name as product_name, SUM(b2b_order_items.quantity) as units_total, SUM(b2b_order_items.total_price) as revenue_total")
       
