@@ -217,7 +217,7 @@ module Api
       if current_user_type == "AdminUser"
         b2b_scope = B2bOrder.where(created_at: date_range)
         b2b_scope.order(created_at: :desc).each do |o|
-          buyer = o.buyer_dealer&.business_name || o.buyer_dealer&.full_name || "Dealer"
+          buyer = o.buyer_dealer&.dealer_profile&.business_name || o.buyer_dealer&.full_name || "Dealer"
           data << [o.reference_number, buyer, o.total_amount.to_f.round(2), o.payment_status, o.status, o.created_at.strftime("%d %b %Y")]
         end
       end
@@ -259,7 +259,7 @@ module Api
         orders  = Order.where(seller_dealer_id: d.id, created_at: date_range).count
         revenue = Order.where(seller_dealer_id: d.id, created_at: date_range).sum(:total_amount).to_f
         [[d.first_name, d.last_name].compact.join(" ")]
-        [d.dealer_code, [d.first_name, d.last_name].compact.join(" "), d.business_name, d.email, orders, revenue.round(2), d.created_at.strftime("%d %b %Y")]
+        [d.dealer_code, [d.first_name, d.last_name].compact.join(" "), d.dealer_profile&.business_name, d.email, orders, revenue.round(2), d.created_at.strftime("%d %b %Y")]
       end
       { headers: headers, data: data }
     end
@@ -277,7 +277,7 @@ module Api
 
       data = scope.order(created_at: :desc).map do |p|
         if current_user_type == "AdminUser"
-          [p.id, p.dealer&.business_name || p.dealer&.full_name, p.amount.to_f.round(2), p.status, p.created_at.strftime("%d %b %Y")]
+          [p.id, p.dealer&.dealer_profile&.business_name || p.dealer&.full_name, p.amount.to_f.round(2), p.status, p.created_at.strftime("%d %b %Y")]
         else
           [p.id, p.amount.to_f.round(2), p.status, p.created_at.strftime("%d %b %Y")]
         end
