@@ -1,11 +1,28 @@
 module Api
   class DealersController < ApplicationController
-    skip_before_action :authenticate_request!, only: [:verify_otp, :resend_signup_otp]
+    skip_before_action :authenticate_request!, only: [:verify_otp, :resend_signup_otp, :check_signup_token]
     # before_action :authenticate_request!, except: [:verify_otp]
     before_action :require_admin, only: [:create, :index, :active_dealers, :block, :unblock, :destroy, :approve, :reject, :admin_overview]
     before_action :require_admin_approver!, only: [:approve, :reject]
-    before_action :set_dealer, only: [:show, :update, :destroy, :block, :unblock, :approve, :reject, :verify_otp, :admin_overview, :verify_bank_account]
+    before_action :set_dealer, only: [:show, :update, :destroy, :block, :unblock, :approve, :reject, :admin_overview, :verify_bank_account]
     before_action :authorize_dealer_update, only: [:update, :show, :verify_bank_account]
+
+    def check_signup_token
+      dealer = find_signup_dealer
+      unless dealer
+        return render json: { valid: false, error: "Verification link or token is invalid.", verified_or_expired: true }, status: :unprocessable_entity
+      end
+
+      if dealer.signup_token.blank? || dealer.otp_pin.blank?
+        return render json: { valid: false, error: "This signup verification link has already been used or verified. Please log in.", verified_or_expired: true }, status: :unprocessable_entity
+      end
+
+      unless dealer.token_valid?(params[:token] || dealer.signup_token)
+        return render json: { valid: false, error: "Verification link has expired (10 min limit). Please request a new OTP.", verified_or_expired: true }, status: :unprocessable_entity
+      end
+
+      render json: { valid: true, email: dealer.email, id: dealer.id }
+    end
 
     def index
       dealers = Dealer.includes(:dealer_profile, :dealer_location)
@@ -80,21 +97,21 @@ module Api
 
       dealer = Dealer.new(dealer_params.except(:status))
       dealer.status = "pending"
-      dealer.otp_pin = rand(1000..9999)
-      dealer.otp_sent_at = Time.current
 
       unless dealer.email.present?
         return render json: { error: "Dealer email is required for OTP verification" }, status: :unprocessable_entity
       end
 
       if dealer.save
+        token = dealer.generate_signup_token!
         DealerAuthMailer.signup_otp(dealer).deliver_later if dealer.email.present?
         notify_admins_about_dealer_creation(dealer)
 
-        verify_url = "#{ENV['FRONTEND_URL'] || request.base_url}/dealer/signup-verify-otp?id=#{dealer.id}&email=#{CGI.escape(dealer.email)}"
+        verify_url = "#{ENV['FRONTEND_URL'] || request.base_url}/dealer/signup-verify-otp?token=#{token}"
         render json: serialize_resource(dealer, DealerSerializer, base_url: request.base_url).merge(
-          message: "Dealer created successfully. OTP sent to dealer email.",
-          verify_url: verify_url
+          message: "Dealer created successfully. 6-digit OTP sent to dealer email.",
+          verify_url: verify_url,
+          token: token
         ), status: :created
       else
         render json: { error: dealer.errors.full_messages }, status: :unprocessable_entity
@@ -102,22 +119,19 @@ module Api
     end
 
     def resend_signup_otp
-      dealer = Dealer.find(params[:id])
+      dealer = find_signup_dealer || Dealer.find_by(id: params[:id])
+      unless dealer
+        return render json: { error: "Dealer not found" }, status: :not_found
+      end
 
-      return render json: {
-        error: "Dealer already verified"
-      }, status: :unprocessable_entity if dealer.otp_pin.blank?
+      if dealer.signup_token.blank? && dealer.otp_pin.blank?
+        return render json: { error: "Dealer already verified. Please log in.", verified_or_expired: true }, status: :unprocessable_entity
+      end
 
-      dealer.update!(
-        otp_pin: rand(1000..9999),
-        otp_sent_at: Time.current
-      )
-
+      new_token = dealer.generate_signup_token!
       DealerAuthMailer.signup_otp(dealer).deliver_later
 
-      render json: {
-        message: "Signup OTP sent successfully"
-      }
+      render json: { message: "Signup OTP & Agreement sent successfully", token: new_token }
     end
 
     def show
@@ -282,14 +296,25 @@ module Api
     end
 
     def verify_otp
-      unless @dealer.otp_valid?(params[:otp].to_s)
-        return render json: { error: "Invalid or expired OTP" }, status: :unauthorized
+      dealer = find_signup_dealer || @dealer
+      unless dealer
+        return render json: { error: "Dealer record not found." }, status: :not_found
+      end
+
+      if dealer.signup_token.blank? || dealer.otp_pin.blank?
+        return render json: { error: "This verification link has already been used or verified. Please log in.", verified_or_expired: true }, status: :unprocessable_entity
+      end
+
+      unless dealer.otp_valid?(params[:otp].to_s)
+        return render json: { error: "Invalid or expired 6-digit OTP (10 min limit)." }, status: :unauthorized
       end
 
       temp_password = SecureRandom.hex(6)
-      @dealer.update!(password: temp_password, password_confirmation: temp_password, otp_pin: nil, otp_sent_at: nil)
-      DealerMailer.welcome_email(@dealer, temp_password).deliver_later if @dealer.email.present?
-      notify_admins_about_dealer_approval(@dealer)
+      dealer.update!(password: temp_password, password_confirmation: temp_password)
+      dealer.clear_otp!
+
+      DealerMailer.welcome_email(dealer, temp_password).deliver_later if dealer.email.present?
+      notify_admins_about_dealer_approval(dealer)
 
       render json: { message: "Dealer OTP verified successfully. Credentials have been emailed." }, status: :ok
     end
@@ -393,6 +418,13 @@ module Api
         profile: target_profile,
         verification_payload: verification_payload
       )
+    end
+
+    def find_signup_dealer
+      token_or_id = params[:token].presence || params[:id].presence
+      dealer = Dealer.find_by(signup_token: token_or_id) if token_or_id.present?
+      dealer ||= Dealer.find_by(id: token_or_id) if token_or_id.present?
+      dealer
     end
 
     def set_dealer

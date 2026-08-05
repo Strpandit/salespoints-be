@@ -1,10 +1,27 @@
 module Api
   class AdminUsersController < ApplicationController
-    skip_before_action :authenticate_request!, only: [:login, :login_otp, :forgot_password, :otp_confirmation, :reset_user_password, :verify_otp, :resend_signup_otp]
-    before_action :require_admin, except: [:login, :login_otp, :forgot_password, :otp_confirmation, :reset_user_password, :verify_otp, :resend_signup_otp]
+    skip_before_action :authenticate_request!, only: [:login, :login_otp, :forgot_password, :otp_confirmation, :reset_user_password, :verify_otp, :resend_signup_otp, :check_signup_token]
+    before_action :require_admin, except: [:login, :login_otp, :forgot_password, :otp_confirmation, :reset_user_password, :verify_otp, :resend_signup_otp, :check_signup_token]
     before_action :require_super_admin, only: [:create, :destroy, :deactivate, :reactivate]
-    before_action :find_admin_user, only: [:show, :update, :destroy, :deactivate, :reactivate, :approve, :verify_otp, :login_otp]
+    before_action :find_admin_user, only: [:show, :update, :destroy, :deactivate, :reactivate, :approve, :login_otp]
     before_action :require_admin_approver!, only: [:approve]
+
+    def check_signup_token
+      admin = find_signup_admin
+      unless admin
+        return render json: { valid: false, error: "Verification link or token is invalid.", verified_or_expired: true }, status: :unprocessable_entity
+      end
+
+      if admin.signup_token.blank? || admin.otp_pin.blank?
+        return render json: { valid: false, error: "This signup verification link has already been used or verified. Please log in.", verified_or_expired: true }, status: :unprocessable_entity
+      end
+
+      unless admin.token_valid?(params[:token] || admin.signup_token)
+        return render json: { valid: false, error: "Verification link has expired (10 min limit). Please request a new OTP.", verified_or_expired: true }, status: :unprocessable_entity
+      end
+
+      render json: { valid: true, email: admin.email, id: admin.id }
+    end
 
     def login
       admin = AdminUser.find_by(email: params[:email]&.downcase, status: 'active')
@@ -97,35 +114,34 @@ module Api
         end
       end
 
+      token = admin.generate_signup_token!
       AdminAuthMailer.signup_otp(admin).deliver_later if admin.email.present?
       notify_admin_approvers(admin)
 
-      verify_url = "#{ENV['FRONTEND_URL'] || request.base_url}/admin/signup-verify-otp?id=#{admin.id}&email=#{CGI.escape(admin.email)}"
+      verify_url = "#{ENV['FRONTEND_URL'] || request.base_url}/admin/signup-verify-otp?token=#{token}"
       render json: serialize_resource(admin.reload, AdminUserSerializer, serializer_options).merge(
-        message: "Admin user created successfully. OTP sent to admin email.",
-        verify_url: verify_url
+        message: "Admin user created successfully. 6-digit OTP sent to admin email.",
+        verify_url: verify_url,
+        token: token
       ), status: :created
     rescue ActiveRecord::RecordInvalid => e
       render json: { error: e.record.errors.full_messages }, status: :unprocessable_entity
     end
 
     def resend_signup_otp
-      admin = AdminUser.find(params[:id])
+      admin = find_signup_admin || AdminUser.find_by(id: params[:id])
+      unless admin
+        return render json: { error: "Admin not found" }, status: :not_found
+      end
 
-      return render json: {
-        error: "Admin already verified"
-      }, status: :unprocessable_entity if admin.otp_pin.blank?
+      if admin.signup_token.blank? && admin.otp_pin.blank?
+        return render json: { error: "Admin already verified. Please log in.", verified_or_expired: true }, status: :unprocessable_entity
+      end
 
-      admin.update!(
-        otp_pin: rand(1000..9999),
-        otp_sent_at: Time.current
-      )
-
+      new_token = admin.generate_signup_token!
       AdminAuthMailer.signup_otp(admin).deliver_later
 
-      render json: {
-        message: "Signup OTP sent successfully"
-      }
+      render json: { message: "Signup OTP sent successfully", token: new_token }
     end
 
     def show
@@ -314,11 +330,24 @@ module Api
     end
 
     def verify_otp
-      return unauthorized("Invalid OTP") unless @admin_user.otp_valid?(params[:otp].to_s)
+      admin = find_signup_admin || @admin_user
+      unless admin
+        return render json: { error: "Admin record not found." }, status: :not_found
+      end
+
+      if admin.signup_token.blank? || admin.otp_pin.blank?
+        return render json: { error: "This verification link has already been used or verified. Please log in.", verified_or_expired: true }, status: :unprocessable_entity
+      end
+
+      unless admin.otp_valid?(params[:otp].to_s)
+        return render json: { error: "Invalid or expired 6-digit OTP (10 min limit)." }, status: :unauthorized
+      end
 
       temp_password = SecureRandom.hex(6)
-      @admin_user.update!(password: temp_password, password_confirmation: temp_password, otp_pin: nil, otp_sent_at: nil)
-      AdminAuthMailer.admin_created(@admin_user, temp_password).deliver_later if @admin_user.email.present?
+      admin.update!(password: temp_password, password_confirmation: temp_password)
+      admin.clear_otp!
+
+      AdminAuthMailer.admin_created(admin, temp_password).deliver_later if admin.email.present?
 
       render json: { message: "Admin OTP verified successfully. Credentials have been emailed." }, status: :ok
     end
@@ -438,6 +467,13 @@ module Api
     #   end
     # rescue StandardError
     # end
+
+    def find_signup_admin
+      token_or_id = params[:token].presence || params[:id].presence
+      admin = AdminUser.find_by(signup_token: token_or_id) if token_or_id.present?
+      admin ||= AdminUser.find_by(id: token_or_id) if token_or_id.present?
+      admin
+    end
 
     def current_admin
       current_user

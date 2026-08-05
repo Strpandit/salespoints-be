@@ -82,6 +82,7 @@ Rails.application.routes.draw do
       get :admin_pincodes, on: :member
       delete :remove_pincode, on: :member
     end
+    get "admin/check_signup_token", to: "admin_users#check_signup_token"
     post "admin/login", to: "admin_users#login"
     post "admin/login_otp", to: "admin_users#login_otp"
     post "admin/forgot_password", to: "admin_users#forgot_password"
@@ -145,6 +146,7 @@ Rails.application.routes.draw do
       patch :approve, on: :member
       patch :reject, on: :member
     end
+    get "dealer/check_signup_token", to: "dealers#check_signup_token"
     post "dealer/verify_otp", to: "dealers#verify_otp"
     post "dealer/resend_signup_otp", to: "dealers#resend_signup_otp"
     # Dealer and dealer products

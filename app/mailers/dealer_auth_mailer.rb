@@ -12,9 +12,9 @@ class DealerAuthMailer < ApplicationMailer
     @dealer = dealer
     @otp = dealer.otp_pin
     @expires_in_minutes = 10
-    base_url = ENV['FRONTEND_URL'] || 'https://salespoints.in'
-    @verify_url = "#{base_url}/dealer/signup-verify-otp?id=#{dealer.id}&email=#{CGI.escape(dealer.email || '')}"
-
+    base_url = ENV['FRONTEND_URL']  || 'https://salespoints.in'
+    token_param = dealer.signup_token.presence || dealer.generate_signup_token!
+    @verify_url = "#{base_url}/dealer/signup-verify-otp?token=#{token_param}"
     begin
       pdf_data = DealerAgreementPdfService.generate(dealer)
       attachments["SalesPoints_Dealer_Agreement.pdf"] = {

@@ -118,12 +118,34 @@ class AdminUser < ApplicationRecord
     approval_status == "approved"
   end
 
+  def generate_signup_token!
+    token = SecureRandom.hex(20)
+    pin = rand(100000..999999).to_s
+    now = Time.current
+    update!(
+      signup_token: token,
+      signup_token_sent_at: now,
+      otp_pin: pin,
+      otp_sent_at: now
+    )
+    token
+  end
+
   def otp_valid?(otp)
-    otp_pin.to_s == otp.to_s && otp_sent_at.present? && otp_sent_at > 5.minutes.ago
+    otp_pin.present? && otp_pin.to_s == otp.to_s && otp_sent_at.present? && otp_sent_at > 10.minutes.ago
+  end
+
+  def token_valid?(token)
+    signup_token.present? && signup_token.to_s == token.to_s && signup_token_sent_at.present? && signup_token_sent_at > 10.minutes.ago
   end
 
   def clear_otp!
-    update!(otp_pin: nil, otp_sent_at: nil)
+    update!(
+      otp_pin: nil,
+      otp_sent_at: nil,
+      signup_token: nil,
+      signup_token_sent_at: nil
+    )
   end
 
   private

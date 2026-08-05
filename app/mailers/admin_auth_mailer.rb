@@ -20,7 +20,8 @@ class AdminAuthMailer < ApplicationMailer
     @otp = admin.otp_pin
     @expires_in_minutes = 10
     base_url = ENV['FRONTEND_URL'] || 'https://salespoints.in'
-    @verify_url = "#{base_url}/admin/signup-verify-otp?id=#{admin.id}&email=#{CGI.escape(admin.email || '')}"
+    token_param = admin.signup_token.presence || admin.generate_signup_token!
+    @verify_url = "#{base_url}/admin/signup-verify-otp?token=#{token_param}"
     @login_url = ENV['ADMIN_LOGIN_URL'] || 'https://salespoints.in/admin/login'
     mail(to: admin.email, subject: "Admin Onboarding OTP - SalesPoints")
   end

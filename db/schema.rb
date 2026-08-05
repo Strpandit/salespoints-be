@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_08_03_132827) do
+ActiveRecord::Schema[8.0].define(version: 2026_08_06_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -137,6 +137,8 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_03_132827) do
     t.bigint "deleted_by_id"
     t.date "joining_date"
     t.string "pincodes", default: [], array: true
+    t.string "signup_token"
+    t.datetime "signup_token_sent_at"
     t.index ["approval_status"], name: "index_admin_users_on_approval_status"
     t.index ["approved_by_id"], name: "index_admin_users_on_approved_by_id"
     t.index ["deleted_by_id"], name: "index_admin_users_on_deleted_by_id"
@@ -144,6 +146,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_03_132827) do
     t.index ["is_super_admin"], name: "index_admin_users_on_is_super_admin"
     t.index ["phone"], name: "index_admin_users_on_phone", unique: true, where: "(deleted_at IS NULL)"
     t.index ["pincodes"], name: "index_admin_users_on_pincodes", using: :gin
+    t.index ["signup_token"], name: "index_admin_users_on_signup_token", unique: true
   end
 
   create_table "b2b_order_items", force: :cascade do |t|
@@ -511,11 +514,14 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_03_132827) do
     t.decimal "settlement_balance", precision: 14, scale: 2, default: "0.0", null: false
     t.bigint "deleted_by_id"
     t.string "pincode"
+    t.string "signup_token"
+    t.datetime "signup_token_sent_at"
     t.index ["dealer_code"], name: "index_dealers_on_dealer_code", unique: true, where: "(deleted_at IS NULL)"
     t.index ["deleted_by_id"], name: "index_dealers_on_deleted_by_id"
     t.index ["email"], name: "index_dealers_on_email", unique: true, where: "(deleted_at IS NULL)"
     t.index ["phone"], name: "index_dealers_on_phone", unique: true, where: "(deleted_at IS NULL)"
     t.index ["pincode"], name: "index_dealers_on_pincode"
+    t.index ["signup_token"], name: "index_dealers_on_signup_token", unique: true
   end
 
   create_table "deletion_requests", force: :cascade do |t|
