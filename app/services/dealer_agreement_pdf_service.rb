@@ -7,6 +7,17 @@ class DealerAgreementPdfService
       margin: [36, 36, 45, 36]
     )
 
+    pdf.font_families.update(
+      "DejaVu" => {
+        normal: Rails.root.join("app/assets/fonts/DejaVuSans.ttf"),
+        bold: Rails.root.join("app/assets/fonts/DejaVuSans-Bold.ttf"),
+        italic: Rails.root.join("app/assets/fonts/DejaVuSans-Oblique.ttf"),
+        bold_italic: Rails.root.join("app/assets/fonts/DejaVuSans-BoldOblique.ttf")
+      }
+    )
+
+    pdf.font "DejaVu"
+
     # Primary colors
     navy_blue = "0F172A"
     brand_blue = "1D4ED8"
