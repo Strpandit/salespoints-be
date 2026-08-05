@@ -217,19 +217,21 @@ Rails.application.routes.draw do
     resources :coupons
 
     # Analytics and Reports
-    get 'analytics/dashboard', to: 'analytics#dashboard'
-    get 'analytics/revenue', to: 'analytics#revenue'
-    get 'analytics/orders', to: 'analytics#orders'
-    get 'analytics/payments', to: 'analytics#payments'
-    get 'analytics/sellers', to: 'analytics#sellers'
-    get 'analytics/products', to: 'analytics#products'
-    get 'analytics/customers', to: 'analytics#customers'
-    get 'analytics/real_time', to: 'analytics#real_time'
+    get 'analytics/dashboard',        to: 'analytics#dashboard'
+    get 'analytics/dealer_dashboard', to: 'analytics#dealer_dashboard'
+    get 'analytics/revenue',          to: 'analytics#revenue'
+    get 'analytics/orders',           to: 'analytics#orders'
+    get 'analytics/payments',         to: 'analytics#payments'
+    get 'analytics/sellers',          to: 'analytics#sellers'
+    get 'analytics/products',         to: 'analytics#products'
+    get 'analytics/customers',        to: 'analytics#customers'
+    get 'analytics/real_time',        to: 'analytics#real_time'
 
-    get 'reports/list', to: 'reports#list'
-    post 'reports/generate', to: 'reports#generate'
-    get 'reports/download/:filename', to: 'reports#download'
-    post 'reports/schedule', to: 'reports#schedule'
+    get  'reports/list',                    to: 'reports#list'
+    get  'reports/summary',                 to: 'reports#summary'
+    post 'reports/generate',               to: 'reports#generate'
+    get  'reports/download/:filename',     to: 'reports#download'
+    post 'reports/schedule',               to: 'reports#schedule'
 
     # Support Tickets
     post 'support_tickets', to: 'support_tickets#create'
