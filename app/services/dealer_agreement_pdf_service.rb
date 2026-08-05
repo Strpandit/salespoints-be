@@ -46,7 +46,7 @@ class DealerAgreementPdfService
       pdf.fill_color navy_blue
       pdf.move_down 6
       pdf.indent(8) do
-        pdf.text "Issued To: #{dealer_name.presence || 'Dealer'} (#{dealer.email})  |  Generated: #{Time.current.strftime('%d %b %Y, %I:%M %p')}", size: 8.5, style: :bold
+        pdf.text "Issued To: #{dealer_name.presence || 'Dealer'} (#{dealer.email})", size: 8.5, style: :bold
       end
       pdf.move_down 12
     end
@@ -315,7 +315,7 @@ class DealerAgreementPdfService
               "SalesPoints India Pvt. Ltd. reserves the right to remove, restrict, or disable any disputed, unauthorized, risky, or policy-violating product listing and may also take appropriate action against the Dealer’s account if necessary."
       },
       {
-        title: "26. Billing, Invoicing & Payment Processing Consent",
+        title: "27. Billing, Invoicing & Payment Processing Consent",
         body: "The Dealer acknowledges and agrees that, in order to manage the business operations of the SalesPoints Marketplace in a smooth, secure, and professional manner, the billing and payment processing shall be carried out through SalesPoints India Pvt. Ltd.\n\n" \
               "The Dealer agrees that, in certain transactions, the Dealer may generate invoices for its products in the name of SalesPoints India Pvt. Ltd., after which SalesPoints India Pvt. Ltd. shall issue the invoice to the end customer/buyer in accordance with the applicable process.\n\n" \
               "The Dealer understands and accepts that the purpose of this process is to ensure marketplace operations, customer experience, dealer privacy and security, transaction management, and business confidentiality.\n\n" \
@@ -328,7 +328,7 @@ class DealerAgreementPdfService
               "SalesPoints India Pvt. Ltd. shall have the right to update, modify, or change the billing, invoicing, and settlement process as per marketplace requirements, legal compliance, and operational convenience."
       },
       {
-        title: "26. Acceptance",
+        title: "28. Acceptance",
         body: "By registering, accessing, or using the SalesPoints Marketplace, the Dealer acknowledges, represents, and agrees that:\n" \
               "1. All information, documents, and details provided to SalesPoints India Pvt. Ltd. are true, accurate, complete, and up to date.\n" \
               "2. The Dealer has read, understood, and agrees to comply with these Terms & Conditions, the Seller Policy, Privacy Policy, and all other applicable marketplace policies.\n" \
