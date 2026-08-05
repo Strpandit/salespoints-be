@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background: #f0f4f8;
+        padding: 24px 16px;
+        color: #1a202c;
+      }
+      .wrapper { max-width: 640px; margin: 0 auto; }
+
+      /* ── Header ── */
+      .header {
+        background: linear-gradient(135deg, #1a56db 0%, #1e40af 100%);
+        border-radius: 12px 12px 0 0;
+        padding: 28px 32px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+      }
+      .header-icon {
+        font-size: 36px;
+        line-height: 1;
+        flex-shrink: 0;
+      }
+      .header-text h1 {
+        color: #fff;
+        font-size: 20px;
+        font-weight: 700;
+        letter-spacing: -0.3px;
+      }
+      .header-text p {
+        color: #bfdbfe;
+        font-size: 13px;
+        margin-top: 4px;
+      }
+
+      /* ── Body card ── */
+      .card {
+        background: #fff;
+        padding: 32px;
+        border-radius: 0 0 12px 12px;
+        box-shadow: 0 4px 20px rgba(0,0,0,.08);
+      }
+
+      /* ── Intro sentence ── */
+      .intro {
+        font-size: 15px;
+        color: #374151;
+        line-height: 1.6;
+        margin-bottom: 24px;
+      }
+      .intro strong { color: #1a202c; }
+
+      /* ── Actor block ── */
+      .actor-block {
+        background: #f0f9ff;
+        border: 1px solid #bae6fd;
+        border-radius: 8px;
+        padding: 14px 18px;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .actor-avatar {
+        width: 38px; height: 38px;
+        background: #1a56db;
+        border-radius: 50%;
+        color: #fff;
+        font-weight: 700;
+        font-size: 15px;
+        display: flex; align-items: center; justify-content: center;
+        flex-shrink: 0;
+        text-transform: uppercase;
+      }
+      .actor-info .actor-name {
+        font-weight: 600;
+        font-size: 14px;
+        color: #1e3a8a;
+      }
+      .actor-info .actor-email {
+        font-size: 12px;
+        color: #6b7280;
+        margin-top: 2px;
+      }
+      .actor-label {
+        font-size: 11px;
+        color: #6b7280;
+        text-transform: uppercase;
+        letter-spacing: .8px;
+        margin-bottom: 6px;
+        font-weight: 600;
+      }
+
+      /* ── Changes table (before → after) ── */
+      .changes-section { margin-bottom: 20px; }
+      .section-title {
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: #6b7280;
+        margin-bottom: 10px;
+        padding-bottom: 6px;
+        border-bottom: 1px solid #e5e7eb;
+      }
+      .changes-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      .changes-table thead th {
+        background: #f9fafb;
+        padding: 9px 14px;
+        text-align: left;
+        color: #6b7280;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: .8px;
+        border-bottom: 1px solid #e5e7eb;
+        font-weight: 600;
+      }
+      .changes-table tbody tr:nth-child(even) { background: #f9fafb; }
+      .changes-table tbody td {
+        padding: 10px 14px;
+        vertical-align: top;
+        border-bottom: 1px solid #f3f4f6;
+        color: #374151;
+      }
+      .changes-table tbody td:first-child {
+        font-weight: 600;
+        color: #1a202c;
+        white-space: nowrap;
+        width: 28%;
+      }
+      .val-old {
+        color: #dc2626;
+        text-decoration: line-through;
+        font-size: 12.5px;
+      }
+      .val-new {
+        color: #16a34a;
+        font-weight: 600;
+        font-size: 13px;
+      }
+      .arrow { color: #9ca3af; font-size: 11px; margin: 2px 0; }
+
+      /* ── Details / flat key-value ── */
+      .details-grid {
+        display: table;
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      .detail-row { display: table-row; }
+      .detail-row:nth-child(even) .detail-key,
+      .detail-row:nth-child(even) .detail-val { background: #f9fafb; }
+      .detail-key {
+        display: table-cell;
+        padding: 9px 14px 9px 0;
+        color: #6b7280;
+        font-size: 11.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: .6px;
+        white-space: nowrap;
+        width: 36%;
+        vertical-align: top;
+        border-bottom: 1px solid #f3f4f6;
+      }
+      .detail-val {
+        display: table-cell;
+        padding: 9px 0 9px 14px;
+        color: #1a202c;
+        font-weight: 500;
+        border-bottom: 1px solid #f3f4f6;
+        vertical-align: top;
+      }
+
+      /* ── Entity badge ── */
+      .entity-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .6px;
+        margin-bottom: 20px;
+      }
+
+      /* ── Action badge ── */
+      .action-badge {
+        display: inline-block;
+        padding: 5px 14px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .6px;
+      }
+
+      /* ── Warning / note boxes ── */
+      .warning-box {
+        background: #fffbeb;
+        border: 1px solid #fcd34d;
+        border-left: 4px solid #f59e0b;
+        border-radius: 6px;
+        padding: 12px 16px;
+        font-size: 13px;
+        color: #92400e;
+        margin-top: 20px;
+      }
+      .note-box {
+        background: #f0fdf4;
+        border: 1px solid #bbf7d0;
+        border-left: 4px solid #16a34a;
+        border-radius: 6px;
+        padding: 12px 16px;
+        font-size: 13px;
+        color: #14532d;
+        margin-top: 20px;
+      }
+
+      /* ── Timestamp strip ── */
+      .timestamp-strip {
+        background: #f9fafb;
+        border-radius: 6px;
+        padding: 10px 16px;
+        font-size: 12px;
+        color: #9ca3af;
+        margin-top: 20px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .timestamp-strip span { color: #6b7280; font-weight: 600; }
+
+      /* ── Footer ── */
+      .footer {
+        text-align: center;
+        padding: 20px 0 0;
+        font-size: 12px;
+        color: #9ca3af;
+        margin-top: 24px;
+        border-top: 1px solid #e5e7eb;
+      }
+      .footer a { color: #1a56db; text-decoration: none; }
+    </style>
+  </head>
+  <body>
+    <div class="wrapper">

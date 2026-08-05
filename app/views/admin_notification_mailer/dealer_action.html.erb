@@ -1,113 +1,106 @@
-<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="UTF-8">
-    <style>
-      body {
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        margin: 0;
-        padding: 20px;
-        background: #f5f5f5;
-      }
-      .container {
-        max-width: 700px;
-        margin: 0 auto;
-        background: white;
-        border-radius: 8px;
-        overflow: hidden;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-      }
-      .header {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        padding: 20px;
-      }
-      .header h2 {
-        margin: 0;
-        font-size: 20px;
-      }
-      .content {
-        padding: 30px;
-      }
-      .info-block {
-        background: #f0f0f0;
-        padding: 15px;
-        border-radius: 5px;
-        margin: 20px 0;
-        border-left: 4px solid #667eea;
-      }
-      .label {
-        color: #7f8c8d;
-        font-size: 12px;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-      }
-      .value {
-        color: #2c3e50;
-        font-size: 16px;
-        font-weight: bold;
-        margin: 5px 0 0 0;
-      }
-      .action-badge {
-        display: inline-block;
-        background: #667eea;
-        color: white;
-        padding: 5px 12px;
-        border-radius: 20px;
-        font-size: 12px;
-        font-weight: bold;
-      }
-      .timestamp {
-        color: #95a5a6;
-        font-size: 12px;
-        margin-top: 5px;
-      }
-      .footer {
-        background: #ecf0f1;
-        padding: 20px;
-        text-align: center;
-        font-size: 12px;
-        color: #7f8c8d;
-        border-top: 1px solid #bdc3c7;
-      }
-    </style>
-  </head>
-  <body>
-    <div class="container">
-      <div class="header">
-        <h2>📋 Dealer Action Report</h2>
-      </div>
+<%
+  # Colour palette per action type
+  ACTION_COLORS = {
+    "approved"   => { bg: "#f0fdf4", border: "#bbf7d0", badge_bg: "#16a34a", text: "#14532d" },
+    "rejected"   => { bg: "#fef2f2", border: "#fecaca", badge_bg: "#dc2626", text: "#991b1b" },
+    "suspended"  => { bg: "#fef3c7", border: "#fde68a", badge_bg: "#d97706", text: "#92400e" },
+    "activated"  => { bg: "#f0fdf4", border: "#bbf7d0", badge_bg: "#16a34a", text: "#14532d" },
+    "deactivated"=> { bg: "#fef2f2", border: "#fecaca", badge_bg: "#dc2626", text: "#991b1b" },
+    "updated"    => { bg: "#fffbeb", border: "#fde68a", badge_bg: "#d97706", text: "#92400e" },
+  }.freeze
+  palette = ACTION_COLORS[@action.to_s.downcase] ||
+            { bg: "#f0f4ff", border: "#c7d2fe", badge_bg: "#4f46e5", text: "#312e81" }
+%>
+<%= render 'admin_notification_mailer/email_header' %>
 
-      <div class="content">
-        <p>A dealer account action has been performed:</p>
+      <!-- Card -->
+      <div class="card" style="padding:0; overflow:hidden;">
 
-        <div class="info-block">
-          <div class="label">Dealer Name</div>
-          <div class="value"><%= @dealer_name %></div>
-
-          <div class="label" style="margin-top: 15px;">Action</div>
-          <div style="margin-top: 5px;">
-            <span class="action-badge"><%= @action.upcase %></span>
-          </div>
-
-          <% if @details.present? %>
-            <div class="label" style="margin-top: 15px;">Details</div>
-            <div class="value"><%= @details %></div>
-          <% end %>
-
-          <div class="timestamp" style="margin-top: 15px;">
-            <strong>Time:</strong> <%= Time.now.strftime("%Y-%m-%d %H:%M:%S") %>
+        <!-- Header banner -->
+        <div class="header" style="background: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%);">
+          <div class="header-icon">📋</div>
+          <div class="header-text">
+            <h1>Dealer Action: <%= @action.to_s.titleize %></h1>
+            <p>SalesPoints Admin Notification</p>
           </div>
         </div>
 
-        <p>
-          Log in to your admin dashboard to view full details and manage dealers.
-        </p>
-      </div>
+        <div style="padding:28px 32px;">
 
-      <div class="footer">
-        <p>This is an automated notification email.</p>
-        <p>© 2026 SalesPoints. All rights reserved.</p>
+          <!-- Badge row -->
+          <div style="margin-bottom:20px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+            <span class="entity-badge" style="background:#f0f4ff; color:#3730a3;">
+              📋 Dealer Account
+            </span>
+            <span class="action-badge" style="background:<%= palette[:badge_bg] %>; color:#fff;">
+              <%= @action.to_s.upcase %>
+            </span>
+          </div>
+
+          <!-- Intro -->
+          <p class="intro">
+            The dealer account <strong>&ldquo;<%= @dealer_name %>&rdquo;</strong>
+            has had the action <strong><%= @action.to_s.titleize %></strong> performed on it.
+          </p>
+
+          <!-- Who did it -->
+          <div class="actor-label">Action Performed By</div>
+          <div class="actor-block" style="background:<%= palette[:bg] %>; border-color:<%= palette[:border] %>;">
+            <div class="actor-avatar" style="background:<%= palette[:badge_bg] %>;">
+              <%= (@actor[:name].presence || @actor[:email] || "?")[0] %>
+            </div>
+            <div class="actor-info">
+              <div class="actor-name" style="color:<%= palette[:text] %>;"><%= @actor[:name].presence || "Unknown" %></div>
+              <div class="actor-email"><%= @actor[:email].presence || "—" %></div>
+            </div>
+          </div>
+
+          <!-- Before → After changes (for updates) -->
+          <% if @changes.present? %>
+            <div class="changes-section">
+              <div class="section-title">🔄 What Changed</div>
+              <table class="changes-table">
+                <thead>
+                  <tr>
+                    <th>Field</th>
+                    <th>Before</th>
+                    <th>After</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% @changes.each do |field, diff| %>
+                    <tr>
+                      <td><%= field.to_s.humanize %></td>
+                      <td><span class="val-old"><%= diff[:from] || diff["from"] || "—" %></span></td>
+                      <td><span class="val-new"><%= diff[:to]   || diff["to"]   || "—" %></span></td>
+                    </tr>
+                  <% end %>
+                </tbody>
+              </table>
+            </div>
+          <% end %>
+
+          <!-- Free-text details -->
+          <% if @details.present? %>
+            <div class="changes-section">
+              <div class="section-title">📝 Additional Notes</div>
+              <p style="font-size:14px; color:#374151; line-height:1.6;"><%= @details %></p>
+            </div>
+          <% end %>
+
+          <!-- Timestamp -->
+          <div class="timestamp-strip">
+            🕐 <span>Action performed at:</span>
+            <%= Time.current.strftime("%d %b %Y, %I:%M %p %Z") %>
+          </div>
+
+          <!-- Footer -->
+          <div class="footer">
+            <p>This is an automated notification from <strong>SalesPoints</strong>.</p>
+            <p style="margin-top:6px;">© 2026 SalesPoints. All rights reserved.</p>
+          </div>
+
+        </div>
       </div>
     </div>
   </body>

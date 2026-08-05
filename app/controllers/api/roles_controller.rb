@@ -151,20 +151,23 @@ module Api
     end
 
     def notify_admins_entity_created(role)
+      details = role.attributes.except("id", "created_at", "updated_at")
       get_admin_emails.each do |email|
-        AdminNotificationMailer.entity_created(email, "Role", role.name, current_admin&.email).deliver_later
+        AdminNotificationMailer.entity_created(email, "Role", role.name, current_admin, details).deliver_later
       end
     end
 
     def notify_admins_entity_updated(role)
+      changes = role.saved_changes.except("updated_at", "created_at").transform_values { |v| { from: v[0], to: v[1] } }
       get_admin_emails.each do |email|
-        AdminNotificationMailer.entity_updated(email, "Role", role.name, current_admin&.email).deliver_later
+        AdminNotificationMailer.entity_updated(email, "Role", role.name, current_admin, changes).deliver_later
       end
     end
 
     def notify_admins_entity_deleted(role)
+      details = role.attributes.except("id", "created_at", "updated_at")
       get_admin_emails.each do |email|
-        AdminNotificationMailer.entity_deleted(email, "Role", role.name, current_admin&.email).deliver_later
+        AdminNotificationMailer.entity_deleted(email, "Role", role.name, current_admin, details).deliver_later
       end
     end
   end

@@ -419,8 +419,9 @@ module Api
 
     def notify_admins_about_dealer_creation(dealer)
       admin_emails = get_admin_emails
+      details = dealer.attributes.except("id", "created_at", "updated_at", "password_digest")
       admin_emails.each do |email|
-        AdminNotificationMailer.dealer_action(email, dealer.full_name, "created", "New dealer registered").deliver_later
+        AdminNotificationMailer.dealer_action(email, dealer.full_name, "registered", dealer, details, "New dealer registered").deliver_later
       end
     end
 
@@ -434,16 +435,17 @@ module Api
       end
     end
 
-    def notify_admins_about_dealer_action(dealer, action, details = nil)
+    def notify_admins_about_dealer_action(dealer, action, details = nil, changes = {})
       admin_emails = get_admin_emails
       admin_emails.each do |email|
-        AdminNotificationMailer.dealer_action(email, dealer.full_name, action, details).deliver_later
+        AdminNotificationMailer.dealer_action(email, dealer.full_name, action, current_admin || dealer, changes, details).deliver_later
       end
     end
 
     def notify_admins_entity_updated(dealer)
+      changes = dealer.saved_changes.except("updated_at", "created_at", "password_digest").transform_values { |v| { from: v[0], to: v[1] } }
       get_admin_emails.each do |email|
-        AdminNotificationMailer.entity_updated(email, "Dealer", dealer.full_name, current_admin&.email).deliver_later
+        AdminNotificationMailer.entity_updated(email, "Dealer", dealer.full_name, current_admin, changes).deliver_later
       end
     end
 

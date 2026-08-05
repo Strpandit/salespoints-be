@@ -628,10 +628,11 @@ module Api
       AdminUser.where(is_super_admin: true).pluck(:email)
     end
 
-    def notify_admins_about_product_action(product_name, dealer_name, action, details = nil)
+    def notify_admins_about_product_action(product_name, dealer_name, action, details = nil, changes = {})
+      actor = respond_to?(:current_admin) && current_admin ? current_admin : current_user
       admin_emails = get_admin_emails
       admin_emails.each do |email|
-        AdminNotificationMailer.product_action(email, product_name, action, dealer_name, details).deliver_later
+        AdminNotificationMailer.product_action(email, product_name, action, dealer_name, actor, changes, details).deliver_later
       end
     end
   end
