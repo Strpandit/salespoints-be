@@ -54,45 +54,27 @@ module Api
       end
 
       period     = params[:period].presence || "monthly"
-      fmt        = params[:format].presence || "csv"
       date_range = date_range_for(period)
-
-      filename  = "#{report_type}_#{Time.current.strftime('%Y%m%d_%H%M%S')}.#{fmt}"
-      file_path = Rails.root.join("tmp", filename)
 
       rows = build_report_rows(report_type, date_range)
 
-      CSV.open(file_path, "w") do |csv|
+      csv_data = CSV.generate do |csv|
         csv << ["Report",    REPORT_TYPES[report_type]]
         csv << ["Period",    period.capitalize]
         csv << ["Generated", Time.current.strftime("%d %b %Y %H:%M")]
         csv << []
         csv << rows[:headers]
-        rows[:data].each { |row| csv << row }
+        rows[:data].each do |row|
+          csv << row
+        end
       end
 
-      render json: {
-        success: true,
-        data: {
-          filename:     filename,
-          download_url: "/api/reports/download/#{filename}",
-          rows:         rows[:data].size
-        },
-        message: "Report generated successfully"
-      }
-    rescue => e
-      Rails.logger.error "Report generation error: #{e.message}"
-      render json: { success: false, error: "Failed to generate report" }, status: :unprocessable_entity
-    end
-
-    # GET /reports/download/:filename
-    def download
-      filename  = params[:filename].gsub(/[^a-zA-Z0-9_\-.]/, "")
-      file_path = Rails.root.join("tmp", filename)
-      unless File.exist?(file_path)
-        return render json: { success: false, error: "Report file not found" }, status: :not_found
-      end
-      send_file file_path, filename: filename, type: "text/csv", disposition: "attachment"
+      send_data(
+        csv_data,
+        filename: "#{report_type}_#{Time.current.strftime('%Y%m%d_%H%M%S')}.csv",
+        type: "text/csv; charset=utf-8",
+        disposition: "attachment"
+      )
     end
 
     # POST /reports/schedule

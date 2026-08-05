@@ -194,6 +194,7 @@ module Api
           
           # Timestamps
           placed_at: order.placed_at&.iso8601,
+          processing_at: order.processing_at&.iso8601,
           shipped_at: order.shipped_at&.iso8601,
           delivered_at: order.delivered_at&.iso8601,
           cancelled_at: order.cancelled_at&.iso8601,

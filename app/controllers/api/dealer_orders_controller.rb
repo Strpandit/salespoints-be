@@ -10,7 +10,13 @@ module Api
       orders = apply_time_filter(orders, time_filter)
       
       if params[:status].present? && params[:status] != "all"
-        orders = orders.select { |o| o[:status] == params[:status] }
+        # pending_request / rejected_request are request_status values, not status
+        b2b_request_statuses = %w[pending_request rejected_request]
+        if b2b_request_statuses.include?(params[:status])
+          orders = orders.select { |o| o[:request_status] == params[:status] }
+        else
+          orders = orders.select { |o| o[:status] == params[:status] }
+        end
       end
       
       if params[:source_type].present? && params[:source_type] != "all"
@@ -274,8 +280,10 @@ module Api
         seller_id: order.seller_dealer_id,
         created_at: order.created_at.iso8601,
         placed_at: order.placed_at&.iso8601,
+        processing_at: order.processing_at&.iso8601,
         shipped_at: order.shipped_at&.iso8601,
         delivered_at: order.delivered_at&.iso8601,
+        cancelled_at: order.cancelled_at&.iso8601,
         settlement_status: order.settlement_status || "on_hold",
         seller_settlement_amount: order.seller_settlement_amount.to_f,
         refund_amount: order.refund_amount.to_f,

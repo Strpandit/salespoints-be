@@ -230,7 +230,6 @@ Rails.application.routes.draw do
     get  'reports/list',                    to: 'reports#list'
     get  'reports/summary',                 to: 'reports#summary'
     post 'reports/generate',               to: 'reports#generate'
-    get  'reports/download/:filename',     to: 'reports#download'
     post 'reports/schedule',               to: 'reports#schedule'
 
     # Support Tickets
