@@ -172,7 +172,7 @@ module Api
         {
           id: o.reference_number,
           order_number: o.reference_number,
-          customer: o.buyer_dealer&.business_name || o.buyer_dealer&.full_name || "Dealer",
+          customer: o.buyer_dealer&.dealer_profile&.business_name || o.buyer_dealer&.full_name || "Dealer",
           amount: o.total_amount.to_f,
           status: o.status,
           date: o.created_at,
@@ -338,7 +338,7 @@ module Api
         next unless d
         {
           id:          d.id,
-          name:        d.business_name.presence || [d.first_name, d.last_name].compact.join(" ").presence || d.dealer_code,
+          name:        d.dealer_profile&.business_name.presence || [d.first_name, d.last_name].compact.join(" ").presence || d.dealer_code,
           dealer_code: d.dealer_code,
           orders:      stats[:orders],
           revenue:     stats[:revenue].round(2)
@@ -468,7 +468,7 @@ module Api
       end
 
       b2b = B2bOrder.order(created_at: :desc).limit(5).map do |o|
-        buyer_name = o.buyer_dealer&.business_name || o.buyer_dealer&.full_name || "Dealer"
+        buyer_name = o.buyer_dealer&.dealer_profile&.business_name || o.buyer_dealer&.full_name || "Dealer"
         {
           id:           o.reference_number,
           order_number: o.reference_number,
