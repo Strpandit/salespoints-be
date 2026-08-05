@@ -371,28 +371,27 @@ module Api
       b2c_items = OrderItem.joins(:order, product_variant: :product)
                           .where(orders: { created_at: date_range })
                           .group("products.name")
-                          .select("products.name as product_name, SUM(order_items.quantity) as units_total, SUM(order_items.total_price) as revenue_total")
+                          .select("products.name as product_title, SUM(order_items.quantity) as units_total, SUM(order_items.total_price) as revenue_total")
       
       b2b_items = B2bOrderItem.joins(:b2b_order)
                               .joins("INNER JOIN dealer_products ON dealer_products.id = b2b_order_items.dealer_product_id")
                               .joins("INNER JOIN products ON products.id = dealer_products.product_id")
                               .where(b2b_orders: { created_at: date_range })
-                              .where.not(b2b_order_items: { dealer_product_id: nil })
                               .group("products.name")
-                              .select("products.name as product_name, SUM(b2b_order_items.quantity) as units_total, SUM(b2b_order_items.total_price) as revenue_total")
+                              .select("products.name as product_title, SUM(b2b_order_items.quantity) as units_total, SUM(b2b_order_items.total_price) as revenue_total")
       
       combined = {}
       
       b2c_items.each do |item|
-        combined[item.product_name] ||= { revenue: 0, units: 0 }
-        combined[item.product_name][:revenue] += item.revenue_total.to_f
-        combined[item.product_name][:units] += item.units_total.to_i
+        combined[item.product_title] ||= { revenue: 0, units: 0 }
+        combined[item.product_title][:revenue] += item.revenue_total.to_f
+        combined[item.product_title][:units] += item.units_total.to_i
       end
       
       b2b_items.each do |item|
-        combined[item.product_name] ||= { revenue: 0, units: 0 }
-        combined[item.product_name][:revenue] += item.revenue_total.to_f
-        combined[item.product_name][:units] += item.units_total.to_i
+        combined[item.product_title] ||= { revenue: 0, units: 0 }
+        combined[item.product_title][:revenue] += item.revenue_total.to_f
+        combined[item.product_title][:units] += item.units_total.to_i
       end
       
       sorted = combined.sort_by { |_, v| -v[:revenue] }.first(5)
@@ -414,28 +413,27 @@ module Api
       b2c_items = OrderItem.joins(:order, product_variant: :product)
                           .where(orders: { created_at: date_range, seller_dealer_id: dealer_id })
                           .group("products.name")
-                          .select("products.name as product_name, SUM(order_items.quantity) as units_total, SUM(order_items.total_price) as revenue_total")
+                          .select("products.name as product_title, SUM(order_items.quantity) as units_total, SUM(order_items.total_price) as revenue_total")
       
       b2b_items = B2bOrderItem.joins(:b2b_order)
                               .joins("INNER JOIN dealer_products ON dealer_products.id = b2b_order_items.dealer_product_id")
                               .joins("INNER JOIN products ON products.id = dealer_products.product_id")
                               .where(b2b_orders: { created_at: date_range, seller_dealer_id: dealer_id })
-                              .where.not(b2b_order_items: { dealer_product_id: nil })
                               .group("products.name")
-                              .select("products.name as product_name, SUM(b2b_order_items.quantity) as units_total, SUM(b2b_order_items.total_price) as revenue_total")
+                              .select("products.name as product_title, SUM(b2b_order_items.quantity) as units_total, SUM(b2b_order_items.total_price) as revenue_total")
       
       combined = {}
       
       b2c_items.each do |item|
-        combined[item.product_name] ||= { revenue: 0, units: 0 }
-        combined[item.product_name][:revenue] += item.revenue_total.to_f
-        combined[item.product_name][:units] += item.units_total.to_i
+        combined[item.product_title] ||= { revenue: 0, units: 0 }
+        combined[item.product_title][:revenue] += item.revenue_total.to_f
+        combined[item.product_title][:units] += item.units_total.to_i
       end
       
       b2b_items.each do |item|
-        combined[item.product_name] ||= { revenue: 0, units: 0 }
-        combined[item.product_name][:revenue] += item.revenue_total.to_f
-        combined[item.product_name][:units] += item.units_total.to_i
+        combined[item.product_title] ||= { revenue: 0, units: 0 }
+        combined[item.product_title][:revenue] += item.revenue_total.to_f
+        combined[item.product_title][:units] += item.units_total.to_i
       end
       
       sorted = combined.sort_by { |_, v| -v[:revenue] }.first(5)
