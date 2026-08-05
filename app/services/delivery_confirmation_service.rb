@@ -62,7 +62,6 @@ class DeliveryConfirmationService
         completed_at: confirmation.completed_at || Time.current
       )
 
-      InvoicePdf.new(@deliverable).generate
       mark_delivered!
       mark_payment_paid_if_required!
       create_completed_notifications(confirmation)

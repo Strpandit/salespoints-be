@@ -14,7 +14,18 @@ class DealerAuthMailer < ApplicationMailer
     @expires_in_minutes = 10
     base_url = ENV['FRONTEND_URL'] || 'https://salespoints.in'
     @verify_url = "#{base_url}/dealer/signup-verify-otp?id=#{dealer.id}&email=#{CGI.escape(dealer.email || '')}"
-    mail(to: dealer.email, subject: "Dealer Onboarding OTP - SalesPoints")
+
+    begin
+      pdf_data = DealerAgreementPdfService.generate(dealer)
+      attachments["SalesPoints_Dealer_Agreement.pdf"] = {
+        mime_type: "application/pdf",
+        content: pdf_data
+      }
+    rescue StandardError => e
+      Rails.logger.error("Failed to attach Dealer Agreement PDF: #{e.message}")
+    end
+
+    mail(to: dealer.email, subject: "Dealer Onboarding OTP & Agreement - SalesPoints")
   end
 
   def dealer_login_notification(dealer)
