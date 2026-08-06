@@ -130,7 +130,11 @@ class CashfreeWebhookProcessingService
         reference: payload.dig("data", "payment", "cf_payment_id"),
         gateway_payload: payload
       )
-      EmailDispatcherService.retail_order_accepted(order) if order.seller_dealer.present?
+      if order.seller_dealer.present?
+        EmailDispatcherService.retail_order_accepted(order)
+      else
+        B2cOrderBroadcastService.new(order: order, actor: order.buyer).broadcast!
+      end
     elsif payment_status.present?
       order.mark_payment_failed!(gateway_payload: payload)
     end

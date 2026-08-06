@@ -40,40 +40,20 @@ class PaymentAttemptFinalizationService
   end
 
   def finalize_b2b_order!(attempt)
-    Rails.logger.info "🔄 finalize_b2b_order! STARTED"
-    Rails.logger.info "   Attempt ID: #{attempt.id}"
-    Rails.logger.info "   Attempt Status: #{attempt.status}"
-    Rails.logger.info "   Order ID: #{attempt.result_payload['request_metadata']['request_order_id']}"
     ActiveRecord::Base.transaction do
       attempt = PaymentAttempt.lock.find(@payment_attempt.id)
-      Rails.logger.info "✅ Attempt locked: #{attempt.id}"
 
       if attempt.processed?
-        Rails.logger.info "⚠️ Attempt already processed, checking for existing order..."
-        existing_order = B2bOrder.find_by(id: metadata["request_order_id"], buyer_payment_attempt_id: attempt.id)
+        existing_order = find_existing_b2b_order(attempt)
         return Result.new(orders: [], b2b_order: existing_order) if existing_order.present?
         return Result.new(orders: [], b2b_order: nil)
       end
 
-      existing_order = find_existing_b2b_order(attempt)
-      if existing_order.present?
-        Rails.logger.info "✅ Existing order found: #{existing_order.id}"
-        mark_attempt_processed!(attempt, b2b_order: existing_order)
-        return Result.new(orders: [], b2b_order: existing_order)
-      end
-
-      Rails.logger.info "📦 Processing new B2B order..."
       order = process_b2b_order!(attempt)
-      Rails.logger.info "✅ Order processed: #{order.id}, Status: #{order.status}"
       mark_attempt_processed!(attempt, b2b_order: order)
-      Rails.logger.info "✅ Attempt marked as processed"
 
       Result.new(orders: [], b2b_order: order)
     end
-  rescue StandardError => e
-    Rails.logger.error "❌ finalize_b2b_order! FAILED: #{e.message}"
-    Rails.logger.error "   Backtrace: #{e.backtrace.join("\n   ")}"
-    raise e
   end
 
   def finalize_retail_orders!(attempt)

@@ -219,7 +219,7 @@ class DeliveryConfirmationService
   def send_delivery_emails
     case @deliverable
     when Order
-      EmailDispatcherService.retail_order_delivered(@deliverable)
+      # Email already sent by OrderLifecycleService during mark_delivered!
     when B2bOrder
       EmailDispatcherService.b2b_order_delivered(@deliverable)
     end

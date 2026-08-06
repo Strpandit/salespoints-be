@@ -166,6 +166,11 @@ class DirectBuyNowService
       payment_gateway_payload: payload
     )
 
+    order.update!(
+      gateway_order_reference: attempt.gateway_order_reference,
+      payment_gateway_payload: payload
+    )
+
     {
       payment_session_id: attempt.payment_session_id,
       gateway_order_reference: attempt.gateway_order_reference,

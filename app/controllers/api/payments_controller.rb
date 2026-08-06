@@ -7,8 +7,20 @@ module Api
         return verify_payment_attempt!
       end
 
-      order = scoped_orders.find_by(id: params[:order_id])
+      order = scoped_orders.find_by(id: params[:order_id]) || Order.find_by(id: params[:order_id])
       return render json: { error: "Order not found" }, status: :not_found unless order
+
+      if order.gateway_order_reference.blank?
+        attempt = PaymentAttempt.where(buyer: order.buyer, status: "pending")
+                                .where("result_payload -> 'order_ids' @> ?", [order.id].to_json)
+                                .last
+        attempt ||= PaymentAttempt.where(buyer: order.buyer).where("result_payload -> 'order_ids' @> ?", [order.id].to_json).last
+
+        if attempt&.gateway_order_reference.present?
+          order.update!(gateway_order_reference: attempt.gateway_order_reference)
+        end
+      end
+
       return render json: { error: "Cashfree reference missing" }, status: :unprocessable_entity if order.gateway_order_reference.blank?
 
       payload = CashfreeService.new.fetch_order(order.gateway_order_reference)
@@ -18,12 +30,16 @@ module Api
       when "PAID"
         order.mark_payment_paid!(reference: payload["cf_payment_id"] || payload["payment_id"], gateway_payload: payload)
         if order.status == "pending"
-          OrderLifecycleService.new(
-            order: order,
-            actor: current_user,
-            status_note: "Online payment confirmed successfully."
-          ).transition!(next_status: "processing")
-          EmailDispatcherService.retail_order_accepted(order) if order.seller_dealer.present?
+          if order.seller_dealer.present?
+            OrderLifecycleService.new(
+              order: order,
+              actor: current_user,
+              status_note: "Online payment confirmed successfully."
+            ).transition!(next_status: "processing")
+            EmailDispatcherService.retail_order_accepted(order)
+          else
+            B2cOrderBroadcastService.new(order: order, actor: order.buyer).broadcast!
+          end
         end
       when "ACTIVE"
         order.update!(payment_gateway_payload: order.payment_gateway_payload.merge(payload))
