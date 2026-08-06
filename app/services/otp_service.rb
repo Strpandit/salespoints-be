@@ -30,15 +30,7 @@ class OtpService
   def self.send_via_channel(account, otp)
     if account.phone.present?
       destination = formatted_phone(account.phone, account.country_code)
-
-      begin
-        MetaWhatsappCloudService.new.send_login_otp(to: destination, otp: otp)
-      rescue StandardError => e
-        MetaWhatsappCloudService.new.send_text_message(
-          to: destination,
-          body: "🔐 Your SalesPoints OTP code is #{otp}. It is valid for 5 minutes. Do not share this code with anyone."
-        )
-      end
+      MetaWhatsappCloudService.new.send_login_otp(to: destination, otp: otp)
     elsif account.email.present?
       AccountMailer.send_otp(account, otp).deliver_now
     else
