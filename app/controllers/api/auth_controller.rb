@@ -1,13 +1,21 @@
 module Api
   class AuthController < ApplicationController
     skip_before_action :authenticate_request!
-    # Login via email/phone + otp
+    # Login/Signup via email or phone + 6-digit WhatsApp OTP (Account only)
     def send_otp
       identifier = params[:identifier].to_s.strip
       signup = ActiveModel::Type::Boolean.new.cast(params[:signup])
 
+      if identifier.blank?
+        return render json: { error: "Email or Phone number is required" }, status: :unprocessable_entity
+      end
+
       is_email = identifier.include?('@')
-      normalized_phone = identifier.gsub(/\D/, '')
+      normalized_phone = is_email ? nil : identifier.gsub(/\D/, '').last(10)
+
+      if !is_email && (normalized_phone.blank? || normalized_phone.length < 10)
+        return render json: { error: "Please enter a valid 10-digit mobile number" }, status: :unprocessable_entity
+      end
 
       account = is_email ?
               Account.find_by(email: identifier.downcase) :
@@ -31,23 +39,39 @@ module Api
         account = Account.create!(
           email: is_email ? identifier.downcase : nil,
           phone: is_email ? nil : normalized_phone,
-          country_code: ENV.fetch('DEFAULT_COUNTRY_CODE', '+91'),
+          country_code: params[:country_code].presence || ENV.fetch('DEFAULT_COUNTRY_CODE', '+91'),
           status: 'pending'
         )
-
       end
+
       OtpService.send_otp(account)
-      render json: { message: "OTP sent successfully", flow: signup ? 'signup' : 'login' }
+
+      channel_name = account.phone.present? ? "WhatsApp" : "Email"
+      render json: {
+        message: "6-digit OTP sent successfully via #{channel_name}",
+        flow: signup ? 'signup' : 'login',
+        channel: channel_name.downcase
+      }, status: :ok
+    rescue StandardError => e
+      render json: { error: e.message }, status: :unprocessable_entity
     end
 
     def verify_otp
       identifier = params[:identifier].to_s.strip
-      otp = params[:otp].to_s
-      account = identifier.include?('@') ?
-                  Account.find_by(email: identifier.downcase) :
-                  Account.find_by(phone: identifier.gsub(/\D/, ''))
+      otp = params[:otp].to_s.strip
 
-      return render json: { error: 'Invalid OTP' }, status: :unauthorized unless account&.otp_valid?(otp)
+      if identifier.blank? || otp.blank?
+        return render json: { error: "Identifier and OTP are required" }, status: :unprocessable_entity
+      end
+
+      is_email = identifier.include?('@')
+      normalized_phone = is_email ? nil : identifier.gsub(/\D/, '').last(10)
+
+      account = is_email ?
+                  Account.find_by(email: identifier.downcase) :
+                  Account.find_by(phone: normalized_phone)
+
+      return render json: { error: 'Invalid or expired OTP' }, status: :unauthorized unless account&.otp_valid?(otp)
 
       account.clear_otp!
       
@@ -67,7 +91,9 @@ module Api
         message: is_signup ? 'Signup successful' : 'Login successful',
         token: token,
         account: serialize_data(account, AccountSerializer)
-      }
+      }, status: :ok
+    rescue StandardError => e
+      render json: { error: e.message }, status: :unprocessable_entity
     end
 
     def google_login

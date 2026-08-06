@@ -127,16 +127,24 @@ module Api
 
       if checkout_context == "b2b_order"
         token = params[:payment_token] || params[:token]
-        order = B2bOrder.find_by(payment_token: token)
+        order = B2bOrder.find_by(payment_token: token) if token.present?
+        order ||= B2bOrder.find_by(buyer_payment_attempt_id: attempt.id)
+        order ||= B2bOrder.find_by(id: attempt.result_payload&.dig("b2b_order_id"))
+        order ||= B2bOrder.find_by(id: attempt.result_payload&.dig("request_metadata", "request_order_id"))
 
-        return render json: { error: "Invalid payment link" }, status: :not_found unless order
-        return render json: { error: "Payment already completed" }, status: :unprocessable_entity if order.payment_status == "paid"
-        return render json: { error: "Payment link expired" }, status: :unprocessable_entity if order.expires_at.present? && order.expires_at <= Time.current
+        return render json: { error: "Invalid payment link or order not found" }, status: :not_found unless order
 
-        unless attempt.result_payload.present? &&
-              attempt.result_payload["b2b_order_id"].to_i == order.id
-          return render json: { error: "Payment attempt does not match this order" }, status: :not_found
+        if order.payment_status == "paid" || order.confirmed?
+          return render json: {
+            data: B2bOrderSerializer.render(order),
+            b2b_order: B2bOrderSerializer.render(order),
+            payment_attempt: serialize_payment_attempt(attempt.reload),
+            payment_gateway_status: "PAID",
+            message: "Payment completed successfully"
+          }, status: :ok
         end
+
+        return render json: { error: "Payment link expired" }, status: :unprocessable_entity if order.expires_at.present? && order.expires_at <= Time.current
       elsif current_admin || current_dealer || current_account
         attempt = scoped_payment_attempts.find_by(id: params[:payment_attempt_id])
 

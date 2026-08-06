@@ -5,13 +5,13 @@ class OtpService
 
   def self.send_otp(account)
     if account.otp_sent_at && account.otp_sent_at > COOLDOWN.ago
-      raise StandardError, "Please wait before requesting another OTP"
+      raise StandardError, "Please wait 30 seconds before requesting another OTP"
     end
 
     attempts = Rails.cache.read(otp_attempt_key(account)) || 0
-    raise StandardError, "Too many OTP requests" if attempts >= MAX_ATTEMPTS
+    raise StandardError, "Too many OTP requests. Please try again in 5 minutes." if attempts >= MAX_ATTEMPTS
 
-    otp = rand.to_s[2..7]
+    otp = rand(100000..999999).to_s
 
     account.update!(
       otp_pin: otp,
@@ -28,15 +28,34 @@ class OtpService
   end
 
   def self.send_via_channel(account, otp)
-    if account.email.present?
+    if account.phone.present?
+      destination = formatted_phone(account.phone, account.country_code)
+
+      begin
+        MetaWhatsappCloudService.new.send_login_otp(to: destination, otp: otp)
+      rescue StandardError => e
+        MetaWhatsappCloudService.new.send_text_message(
+          to: destination,
+          body: "🔐 Your SalesPoints OTP code is #{otp}. It is valid for 5 minutes. Do not share this code with anyone."
+        )
+      end
+    elsif account.email.present?
       AccountMailer.send_otp(account, otp).deliver_now
     else
-      SmsService.send_sms(account.phone, "Your OTP is #{otp}")
+      raise StandardError, "No phone number or email registered for this account"
     end
+  end
+
+  private
+
+  def self.formatted_phone(phone, country_code)
+    cc = country_code.to_s.strip.presence || "+91"
+    cc = "+#{cc.delete_prefix('+')}" unless cc.start_with?("+")
+    raw = phone.to_s.gsub(/\D/, "").last(10)
+    "#{cc}#{raw}".delete_prefix("+")
   end
 
   def self.otp_attempt_key(account)
     "otp_attempts:#{account.id}"
   end
-
 end

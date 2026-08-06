@@ -72,7 +72,6 @@ gem "dotenv-rails", groups: [:development, :test, :production]
 gem 'kaminari'
 gem 'httparty'
 gem 'acts_as_paranoid'
-gem 'plivo'
 gem 'rexml'
 gem 'phonelib'
 gem 'country_select'

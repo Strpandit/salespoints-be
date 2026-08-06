@@ -284,7 +284,7 @@ module Api
     def b2b_similar
       return unauthorized("Dealers only") unless current_dealer
 
-      product = Product.find_by(id: params[:product_id])
+      product = params[:product_id].present? ? Product.find_by(id: params[:product_id]) : Product.find_by(slug: params[:slug])
       return render json: { error: "Product not found" }, status: :not_found unless product
 
       dealer_products = DealerProduct.live

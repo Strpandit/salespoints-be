@@ -252,10 +252,6 @@ GEM
     pg (1.6.3-x64-mingw-ucrt)
     pg (1.6.3-x86_64-linux)
     phonelib (0.10.16)
-    plivo (4.63.1)
-      faraday (~> 2.7)
-      htmlentities
-      jwt
     pp (0.6.3)
       prettyprint
     prawn (2.4.0)
@@ -445,7 +441,6 @@ DEPENDENCIES
   matrix (~> 0.4.3)
   pg
   phonelib
-  plivo
   prawn
   prawn-table
   propshaft
