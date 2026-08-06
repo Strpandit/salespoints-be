@@ -226,8 +226,7 @@ class MetaWhatsappCloudService
     send_template_message(
       to: to,
       template_name: TEMPLATE_ACCOUNT_LOGIN_OTP,
-      components: components,
-      language: "en_US"
+      components: components
     )
   end
 
