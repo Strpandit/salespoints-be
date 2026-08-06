@@ -212,8 +212,17 @@ class MetaWhatsappCloudService
         parameters: [
           { type: "text", text: otp.to_s }
         ]
+      },
+      {
+        type: "button",
+        sub_type: "copy_code",
+        index: 0,
+        parameters: [
+          { type: "text", text: otp.to_s }
+        ]
       }
     ]
+    
     send_template_message(
       to: to,
       template_name: TEMPLATE_ACCOUNT_LOGIN_OTP,
