@@ -192,7 +192,7 @@ module Api
       elsif order.is_direct_buy?
         "direct_buy"
       else
-        "broadcast"
+        "b2b"
       end
       
       {
