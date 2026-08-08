@@ -396,13 +396,17 @@ class InvoicePdf
     order_items.each do |item|
       product = item.product_variant&.product
 
+      serial_text = ""
+      if @order.delivery_confirmation&.serial_numbers.present?
+        serial_text = "Serial No(s):\n" + @order.delivery_confirmation.serial_numbers.join(", ")
+      end
+
       left = <<~TEXT
       <b>#{product&.name || item&.wholesaler_post&.title || 'Product'}</b>
 
       #{item.product_variant&.variant_sku || item&.wholesaler_post&.modal_no || 'Standard'}
 
-      1. [IMEI/Serial No:
-      #{SecureRandom.random_number(999999999999999)}]
+      #{serial_text}
 
       #{tax_label}: #{product&.tax_rate || 18} %
       TEXT

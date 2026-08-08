@@ -100,6 +100,7 @@ module Api
         buyer: current_dealer,
         product_id: params[:product_id],
         product_variant_id: params[:product_variant_id],
+        product_variant_color_id: params[:product_variant_color_id],
         quantity: quantity,
         payment_method: payment_method,
         payment_status: payment_status,

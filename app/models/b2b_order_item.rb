@@ -3,6 +3,7 @@ class B2bOrderItem < ApplicationRecord
   belongs_to :dealer_product, optional: true
   belongs_to :product_variant, optional: true
   belongs_to :wholesaler_post, optional: true
+  belongs_to :product_variant_color, optional: true
 
   STATUSES = %w[open accepted cancelled].freeze
 
@@ -15,5 +16,17 @@ class B2bOrderItem < ApplicationRecord
 
   def accepted?
     status == "accepted"
+  end
+
+  def product_name_with_variant
+    base = product_variant&.product&.name
+    sku = product_variant&.variant_sku
+    color_name = product_variant_color&.color_name || ad_hoc_color
+
+    name_parts = [base]
+    name_parts << "(#{sku})" if sku.present?
+    name_parts << "- #{color_name}" if color_name.present?
+
+    name_parts.compact.join(" ")
   end
 end

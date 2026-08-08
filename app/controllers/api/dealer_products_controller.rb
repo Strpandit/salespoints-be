@@ -412,7 +412,7 @@ module Api
           product_variants_attributes: [
             :id, :variant_sku, :price, :selling_price, :dealer_price, :hsn_code,
             :dealer_selling_price, :discount_percentage, :is_active, :_destroy,
-            { media: [], variant_attributes: [:key, :value] }
+            { media: [], variant_attributes: [:key, :value], product_variant_colors_attributes: [:id, :color_name, :color_hex, :_destroy] }
           ]
         ]
       )

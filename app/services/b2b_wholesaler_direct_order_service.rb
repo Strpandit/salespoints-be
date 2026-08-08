@@ -73,6 +73,7 @@ class B2bWholesalerDirectOrderService
         total_price: subtotal,
         dealer_product_id: @wholesaler_post.dealer_product_id || nil,
         wholesaler_post_id: @wholesaler_post.id,
+        ad_hoc_color: @wholesaler_post.ad_hoc_color,
         status: "open"
       )
 

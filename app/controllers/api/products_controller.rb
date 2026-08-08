@@ -130,7 +130,7 @@ module Api
           :dealer_selling_price, :discount_percentage, :is_active, :_destroy,
           :primary_media_blob_id, :primary_new_media_index,
           :purge_media_blob_ids, { purge_media_blob_ids: [] },
-          { media: [], colors: [], variant_attributes: [:key, :value] }
+          { media: [], variant_attributes: [:key, :value], product_variant_colors_attributes: [:id, :color_name, :color_hex, :_destroy] }
         ]
       )
     end

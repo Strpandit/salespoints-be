@@ -23,12 +23,14 @@ class DeliveryConfirmationService
     confirmation
   end
 
-  def submit_form!(confirmation:, declarations:, notes:, files:)
+  def submit_form!(confirmation:, declarations:, notes:, serial_numbers:, files:)
     ensure_required_declarations!(declarations)
     ensure_required_files!(files)
+    ensure_serial_numbers_match!(serial_numbers)
 
     confirmation.declarations = normalized_declarations(declarations)
     confirmation.notes = notes.to_s.strip.presence
+    confirmation.serial_numbers = Array(serial_numbers).reject(&:blank?)
     attach_files!(confirmation, files)
     confirmation.submitted_at = Time.current
     confirmation.status = "pending_otp"
@@ -100,6 +102,20 @@ class DeliveryConfirmationService
     raise StandardError, "Product with customer image is required" if files[:product_with_customer_image].blank?
     raise StandardError, "Product packaging image is required" if files[:product_packaging_image].blank?
     raise StandardError, "At least one open box product image is required" if Array(files[:product_open_box_images]).reject(&:blank?).blank?
+  end
+
+  def ensure_serial_numbers_match!(serial_numbers)
+    expected_qty = case @deliverable
+                   when Order then @deliverable.order_items.sum(:quantity)
+                   when B2bOrder then @deliverable.b2b_order_items.sum(:quantity)
+                   else 0
+                   end
+    
+    provided_serials = Array(serial_numbers).reject(&:blank?)
+    
+    if provided_serials.length != expected_qty
+      raise StandardError, "Please provide exactly #{expected_qty} serial numbers (you provided #{provided_serials.length})"
+    end
   end
 
   def attach_files!(confirmation, files)

@@ -6,14 +6,14 @@ class ProductVariant < ApplicationRecord
   has_many_attached :media
   has_many :dealer_products
   has_many :order_items
+  has_many :product_variant_colors, dependent: :destroy
+  accepts_nested_attributes_for :product_variant_colors, allow_destroy: true
 
   attr_accessor :purge_media_blob_ids
 
   validates :variant_sku, presence: true, uniqueness: true
   validates :selling_price, :dealer_selling_price, presence: true, numericality: true
   validate :media_files_valid
-
-  before_save :normalize_colors
 
   scope :active, -> { where(is_active: true, deleted_at: nil) }
 
@@ -73,9 +73,5 @@ class ProductVariant < ApplicationRecord
 
   def media_files_valid
     validate_attachment_set(:media)
-  end
-
-  def normalize_colors
-    self.colors = colors&.reject(&:blank?)&.uniq
   end
 end

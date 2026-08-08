@@ -1,7 +1,7 @@
 class B2bOrderSerializer < ApplicationSerializer
   attributes :reference_number, :status, :coupon_code, :requested_radius_km, :accepted_at, :cancelled_at,
              :expires_at, :created_at, :buyer_dealer_id, :seller_dealer_id,
-             :subtotal_amount, :taxable_amount, :tax_amount, :discount_amount, :total_amount,
+             :subtotal_amount, :taxable_amount, :tax_amount, :discount_amount, :total_amount, :total_items,
              :buyer_name, :seller_name, :open_items_count, :accepted_items_count, :latitude, :longitude,
              :payment_method, :payment_status, :request_status, :source_type, :is_direct_buy,
              :payment_link_sent_at, :confirmed_at, :payment_confirmed_at, :shipped_at, :delivered_at,
@@ -28,6 +28,10 @@ class B2bOrderSerializer < ApplicationSerializer
 
   def total_amount
     object.total_amount.to_f
+  end
+
+  def total_items
+    object.b2b_order_items.sum(:quantity)
   end
 
   def buyer_name

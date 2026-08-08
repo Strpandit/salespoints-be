@@ -15,6 +15,7 @@ module Api
         confirmation: @confirmation,
         declarations: params[:declarations] || {},
         notes: params[:notes],
+        serial_numbers: params[:serial_numbers],
         files: {
           product_with_customer_image: params[:product_with_customer_image],
           product_packaging_image: params[:product_packaging_image],

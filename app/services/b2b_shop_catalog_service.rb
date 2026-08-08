@@ -9,6 +9,12 @@ class B2bShopCatalogService
   end
 
   def call
+    if @params[:search].present?
+      query = @params[:search].strip
+      pincode = @params[:pincode].presence || @params[:postal_code].presence
+      @search_mapping = B2bSearchSuggestionService.matching_product_mapping(query: query, buyer_dealer: @buyer_dealer, pincode: pincode)
+    end
+
     coords = resolve_buyer_coordinates
 
     if coords.blank?
@@ -72,17 +78,13 @@ class B2bShopCatalogService
     items = items.where(product_id: @params[:product_id]) if @params[:product_id].present?
     items = items.where(product_variant_id: @params[:product_variant_id]) if @params[:product_variant_id].present?
 
-    if @params[:search].present?
-      query = @params[:search].strip
-      items = items.joins(:product)
-                  .left_outer_joins(product: :brand)
-                  .where(
-                    "products.name ILIKE :q OR 
-                      products.slug ILIKE :q OR 
-                      products.sku ILIKE :q OR 
-                      brands.name ILIKE :q",
-                    q: "%#{query}%"
-                  )
+    if @params[:search].present? && @search_mapping
+      matched_product_ids = (@search_mapping[:b2b_product_ids] + @search_mapping[:wholesaler_post_ids].keys).uniq
+      if matched_product_ids.empty?
+        items = items.none
+      else
+        items = items.where(product_id: matched_product_ids)
+      end
     end
 
     if @params[:brands].present? && @params[:brands].is_a?(Array)
@@ -198,42 +200,28 @@ class B2bShopCatalogService
   end
 
   def prioritize_wholesaler_matches(rows)
-    return rows if @params[:search].blank?
+    return rows if @params[:search].blank? || @search_mapping.nil?
 
-    wholesaler_product_ids = wholesaler_product_ids(@params[:search].strip)
-    return rows if wholesaler_product_ids.empty?
+    wholesaler_mapping = @search_mapping[:wholesaler_post_ids]
+    return rows if wholesaler_mapping.empty?
 
     rows.each do |row|
-      priority = wholesaler_product_ids.include?(row.product_id) ? PRIORITY_WHOLESALER : PRIORITY_B2B
-      row.define_singleton_method(:listing_priority) { priority }
-      row.define_singleton_method(:from_wholesaler) { priority == PRIORITY_WHOLESALER }
+      post_id = wholesaler_mapping[row.product_id]
+      if post_id
+        row.define_singleton_method(:listing_priority) { PRIORITY_WHOLESALER }
+        row.define_singleton_method(:from_wholesaler) { true }
+        row.define_singleton_method(:wholesaler_post_id) { post_id }
+      else
+        row.define_singleton_method(:listing_priority) { PRIORITY_B2B }
+        row.define_singleton_method(:from_wholesaler) { false }
+        row.define_singleton_method(:wholesaler_post_id) { nil }
+      end
     end
 
     rows.sort_by do |row|
       priority = row.respond_to?(:listing_priority) ? row.listing_priority : PRIORITY_B2B
       [priority, row.distance_km]
     end
-  end
-
-  def wholesaler_product_ids(query)
-    pincode = @params[:pincode].presence || @params[:postal_code].presence
-
-    posts = WholesalerPost.visible_to_marketplace
-                          .includes(:dealer_product)
-                          .where.not(dealer_id: @buyer_dealer.id)
-                          .where("title ILIKE :q OR body ILIKE :q", q: "%#{query}%")
-
-    posts = posts.by_pincode(pincode.to_s) if pincode.present?
-
-    posts.filter_map do |post|
-      next if post.dealer_product_id.blank?
-
-      dealer_product = post.dealer_product
-      next unless dealer_product&.sellable_in_b2b?
-      next unless dealer_product.stock_quantity.to_i.positive?
-
-      dealer_product.product_id
-    end.uniq
   end
 
   def paginate(prioritized)

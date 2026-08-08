@@ -1,7 +1,8 @@
 class OrderItemSerializer < ApplicationSerializer
   attributes :quantity, :unit_price, :taxable_amount, :gst_percentage, 
             :gst_amount, :total_price, :product_name, :product_name_with_variant,
-            :variant_sku, :product_id, :variant_id, :product_media, :variant_media
+            :variant_sku, :product_id, :variant_id, :product_media, :variant_media,
+            :color
 
   def pricing
     @pricing ||= Pricing::PriceCalculator.new(
@@ -57,6 +58,16 @@ class OrderItemSerializer < ApplicationSerializer
 
   def variant_media
     object.product_variant.media.map { |file| file_payload(file) }
+  end
+
+  def color
+    if object.product_variant_color.present?
+      object.product_variant_color.color_name
+    elsif object.ad_hoc_color.present?
+      object.ad_hoc_color
+    else
+      "Standard"
+    end
   end
 
   private

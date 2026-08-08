@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_08_06_000000) do
+ActiveRecord::Schema[8.0].define(version: 2026_08_08_122109) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -161,8 +161,11 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_06_000000) do
     t.string "status", default: "open", null: false
     t.datetime "responded_at"
     t.integer "wholesaler_post_id"
+    t.bigint "product_variant_color_id"
+    t.string "ad_hoc_color"
     t.index ["b2b_order_id"], name: "index_b2b_order_items_on_b2b_order_id"
     t.index ["dealer_product_id"], name: "index_b2b_order_items_on_dealer_product_id"
+    t.index ["product_variant_color_id"], name: "index_b2b_order_items_on_product_variant_color_id"
     t.index ["product_variant_id"], name: "index_b2b_order_items_on_product_variant_id"
     t.index ["status"], name: "index_b2b_order_items_on_status"
     t.index ["wholesaler_post_id"], name: "index_b2b_order_items_on_wholesaler_post_id"
@@ -450,13 +453,13 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_06_000000) do
     t.integer "dealer_id", null: false
     t.integer "product_id", null: false
     t.integer "product_variant_id", null: false
-    t.integer "stock_quantity"
     t.boolean "is_active", default: true
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.integer "approve_status", default: 0
     t.boolean "sell_in_b2b", default: true, null: false
     t.boolean "sell_in_b2c", default: true, null: false
+    t.integer "stock_quantity", default: 0
     t.index ["approve_status"], name: "index_dealer_products_on_approve_status"
     t.index ["dealer_id"], name: "index_dealer_products_on_dealer_id"
     t.index ["product_id"], name: "index_dealer_products_on_product_id"
@@ -563,6 +566,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_06_000000) do
     t.datetime "completed_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "serial_numbers", default: [], array: true
     t.index ["buyer_type", "buyer_id"], name: "index_delivery_confirmations_on_buyer_type_and_buyer_id"
     t.index ["deliverable_type", "deliverable_id"], name: "idx_delivery_confirmations_on_deliverable", unique: true
     t.index ["seller_dealer_id"], name: "index_delivery_confirmations_on_seller_dealer_id"
@@ -615,8 +619,11 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_06_000000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.integer "dealer_product_id"
+    t.bigint "product_variant_color_id"
+    t.string "ad_hoc_color"
     t.index ["dealer_product_id"], name: "index_order_items_on_dealer_product_id"
     t.index ["order_id"], name: "index_order_items_on_order_id"
+    t.index ["product_variant_color_id"], name: "index_order_items_on_product_variant_color_id"
     t.index ["product_variant_id"], name: "index_order_items_on_product_variant_id"
   end
 
@@ -774,6 +781,17 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_06_000000) do
     t.index ["product_id"], name: "index_product_specifications_on_product_id"
   end
 
+  create_table "product_variant_colors", force: :cascade do |t|
+    t.bigint "product_variant_id", null: false
+    t.string "color_name"
+    t.string "color_hex"
+    t.string "sku_code"
+    t.bigint "primary_media_blob_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["product_variant_id"], name: "index_product_variant_colors_on_product_variant_id"
+  end
+
   create_table "product_variants", force: :cascade do |t|
     t.integer "product_id", null: false
     t.string "variant_sku"
@@ -789,7 +807,6 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_06_000000) do
     t.datetime "updated_at", null: false
     t.bigint "primary_media_blob_id"
     t.string "hsn_code"
-    t.string "colors", array: true
     t.index ["primary_media_blob_id"], name: "index_product_variants_on_primary_media_blob_id"
     t.index ["product_id"], name: "index_product_variants_on_product_id"
     t.index ["variant_sku"], name: "index_product_variants_on_variant_sku", unique: true, where: "(deleted_at IS NULL)"
@@ -980,7 +997,6 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_06_000000) do
     t.string "title"
     t.text "body"
     t.decimal "price", precision: 12, scale: 2
-    t.integer "stock_quantity", default: 0
     t.string "modal_no"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
@@ -993,6 +1009,8 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_06_000000) do
     t.string "pincodes", default: [], array: true
     t.datetime "reuploaded_at"
     t.string "hsn_code"
+    t.string "ad_hoc_color"
+    t.integer "stock_quantity", default: 0
     t.index ["approve_status"], name: "index_wholesaler_posts_on_approve_status"
     t.index ["dealer_id"], name: "index_wholesaler_posts_on_dealer_id"
     t.index ["dealer_product_id"], name: "index_wholesaler_posts_on_dealer_product_id"
@@ -1010,6 +1028,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_06_000000) do
   add_foreign_key "admin_users", "admin_users", column: "deleted_by_id"
   add_foreign_key "b2b_order_items", "b2b_orders"
   add_foreign_key "b2b_order_items", "dealer_products"
+  add_foreign_key "b2b_order_items", "product_variant_colors"
   add_foreign_key "b2b_order_items", "product_variants"
   add_foreign_key "b2b_order_items", "wholesaler_posts"
   add_foreign_key "b2b_order_offers", "b2b_orders"
@@ -1043,12 +1062,14 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_06_000000) do
   add_foreign_key "order_broadcast_trackers", "orders"
   add_foreign_key "order_items", "dealer_products"
   add_foreign_key "order_items", "orders"
+  add_foreign_key "order_items", "product_variant_colors"
   add_foreign_key "order_items", "product_variants"
   add_foreign_key "order_offers", "dealers"
   add_foreign_key "order_offers", "notifications"
   add_foreign_key "order_offers", "orders"
   add_foreign_key "orders", "dealers", column: "seller_dealer_id"
   add_foreign_key "product_specifications", "products"
+  add_foreign_key "product_variant_colors", "product_variants"
   add_foreign_key "product_variants", "products"
   add_foreign_key "products", "brands"
   add_foreign_key "products", "categories"

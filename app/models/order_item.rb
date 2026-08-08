@@ -2,6 +2,7 @@ class OrderItem < ApplicationRecord
   belongs_to :order
   belongs_to :product_variant
   belongs_to :dealer_product, optional: true 
+  belongs_to :product_variant_color, optional: true
 
   validates :quantity, numericality: { greater_than: 0 }
   validates :unit_price, :total_price, numericality: { greater_than_or_equal_to: 0 }
@@ -17,10 +18,13 @@ class OrderItem < ApplicationRecord
   def product_name_with_variant
     base = product_name
     sku = product_variant&.variant_sku
-    return base if sku.blank?
-    return sku if base.blank?
+    color_name = product_variant_color&.color_name || ad_hoc_color
 
-    "#{base} (#{sku})"
+    name_parts = [base]
+    name_parts << "(#{sku})" if sku.present?
+    name_parts << "- #{color_name}" if color_name.present?
+
+    name_parts.compact.join(" ")
   end
 
   def accepted?

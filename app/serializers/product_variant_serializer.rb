@@ -44,7 +44,13 @@ class ProductVariantSerializer < ApplicationSerializer
   end
 
   def colors
-    object.colors || []
+    object.product_variant_colors.map do |c|
+      {
+        id: c.id,
+        color_name: c.color_name,
+        color_hex: c.color_hex
+      }
+    end
   end
 
   def formatted_variant_attributes

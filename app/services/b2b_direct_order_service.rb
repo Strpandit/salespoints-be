@@ -2,10 +2,11 @@ class B2bDirectOrderService
   COD_LIMIT = 50_000.to_d
   INITIAL_RADIUS = 10
 
-  def initialize(buyer:, product_id:, product_variant_id:, quantity:, payment_method: nil, payment_status: "pending", buyer_payment_attempt: nil, pincode: nil, delivery_address: nil, use_business_address: true)
+  def initialize(buyer:, product_id:, product_variant_id:, product_variant_color_id: nil, quantity:, payment_method: nil, payment_status: "pending", buyer_payment_attempt: nil, pincode: nil, delivery_address: nil, use_business_address: true)
     @buyer = buyer
     @product_id = product_id
     @product_variant_id = product_variant_id
+    @product_variant_color_id = product_variant_color_id
     @quantity = quantity.to_i.positive? ? quantity.to_i : 1
     @payment_method = payment_method
     @payment_status = payment_status.to_s.presence || "pending"
@@ -59,6 +60,7 @@ class B2bDirectOrderService
       item = B2bOrderItem.create!(
         b2b_order: order,
         product_variant_id: variant.id,
+        product_variant_color_id: @product_variant_color_id,
         quantity: @quantity,
         unit_price: pricing[:unit_price],
         total_price: pricing[:subtotal],

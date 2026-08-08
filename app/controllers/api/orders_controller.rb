@@ -15,6 +15,7 @@ module Api
       result = DirectBuyNowService.new(
         buyer: current_buyer,
         product_variant_id: params[:product_variant_id],
+        product_variant_color_id: params[:product_variant_color_id],
         quantity: params[:quantity] || 1,
         payment_method: payment_method,
         billing_address: billing_address,

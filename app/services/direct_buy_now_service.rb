@@ -1,10 +1,11 @@
 class DirectBuyNowService
   Result = Struct.new(:order, :payment_data, keyword_init: true)
 
-  def initialize(buyer:, product_variant_id:, quantity:, payment_method:, 
+  def initialize(buyer:, product_variant_id:, product_variant_color_id: nil, quantity:, payment_method:, 
                  billing_address:, shipping_address:, pincode:)
     @buyer = buyer
     @product_variant_id = product_variant_id
+    @product_variant_color_id = product_variant_color_id
     @quantity = quantity.to_i.positive? ? quantity.to_i : 1
     @payment_method = payment_method.to_s.presence || "cod"
     @billing_address = billing_address || {}
@@ -62,6 +63,7 @@ class DirectBuyNowService
       OrderItem.create!(
         order: order,
         product_variant_id: variant.id,
+        product_variant_color_id: @product_variant_color_id,
         quantity: @quantity,
         unit_price: pricing[:unit_price],
         total_price: pricing[:subtotal]
@@ -193,7 +195,8 @@ class DirectBuyNowService
         order_id: order.order_number,
         status: "pending",
         total_amount: order.total_amount.to_f,
-        expires_at: 4.hours.from_now
+        expires_at: 4.hours.from_now,
+        product_variant_color_id: @product_variant_color_id
       }
     )
   end

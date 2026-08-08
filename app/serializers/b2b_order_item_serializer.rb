@@ -1,7 +1,7 @@
 class B2bOrderItemSerializer < ApplicationSerializer
   attributes :dealer_product_id, :product_variant_id, :quantity, :status, :responded_at,
              :unit_price, :taxable_amount, :gst_percentage, :gst_amount, :total_price, :product_name, :variant_sku, :assigned_dealer_name,
-             :media, :product_media, :variant_media
+             :media, :product_media, :variant_media, :color
 
   def pricing
     if object.product_variant.present?
@@ -88,6 +88,16 @@ class B2bOrderItemSerializer < ApplicationSerializer
     
     return [] unless object.product_variant_id.present?
     object.product_variant&.media&.map { |file| file_payload(file) } || []
+  end
+
+  def color
+    if object.product_variant_color.present?
+      object.product_variant_color.color_name
+    elsif object.ad_hoc_color.present?
+      object.ad_hoc_color
+    else
+      "Standard"
+    end
   end
 
   private
