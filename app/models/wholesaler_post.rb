@@ -20,7 +20,7 @@ class WholesalerPost < ApplicationRecord
 
   scope :visible_to_marketplace, -> {
     where(approve_status: "approved")
-      .where("(reuploaded_at >= ?) OR (reuploaded_at IS NULL AND created_at >= ?)", 7.days.ago, 7.days.ago)
+      .where("(wholesaler_posts.reuploaded_at >= ?) OR (wholesaler_posts.reuploaded_at IS NULL AND wholesaler_posts.created_at >= ?)", 7.days.ago, 7.days.ago)
   }
   scope :by_pincode, ->(pincode) { where("? = ANY(pincodes)", pincode) }
   scope :by_pincodes, ->(pincodes) { where("pincodes && ARRAY[?]::varchar[]", pincodes) }

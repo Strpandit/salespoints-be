@@ -281,26 +281,26 @@ module Api
     end
 
     # Dealer-only similar products for B2B details page, excluding own products.
-    def b2b_similar
+     def b2b_similar
       return unauthorized("Dealers only") unless current_dealer
 
       product = params[:product_id].present? ? Product.find_by(id: params[:product_id]) : Product.find_by(slug: params[:slug])
       return render json: { error: "Product not found" }, status: :not_found unless product
 
-      dealer_products = DealerProduct.live
-                                    .for_b2b
-                                    .includes(:dealer, :product, :product_variant)
-                                    .joins(:product)
-                                    .where(products: { category_id: product.category_id })
-                                    .where.not(product_id: product.id)
-                                    .where.not(dealer_id: current_dealer.id)
-                                    .where("dealer_products.stock_quantity > 0")
-                                    .select(
-                                      "dealer_products.*",
-                                      "SUM(dealer_products.stock_quantity) as total_stock"
-                                    )
-                                    .group("dealer_products.product_id")
-                                    .limit(8)
+      items = DealerProduct.live
+                          .for_b2b
+                          .includes(:dealer, :product, :product_variant)
+                          .joins(:product)
+                          .where(products: { category_id: product.category_id })
+                          .where.not(product_id: product.id)
+                          .where.not(dealer_id: current_dealer.id)
+                          .where("dealer_products.stock_quantity > 0")
+                          .select(
+                            "dealer_products.*",
+                            "SUM(dealer_products.stock_quantity) as total_stock"
+                          )
+                          .group("dealer_products.product_id")
+                          .limit(8)
 
       render json: serialize_resource(
         items,
@@ -310,6 +310,7 @@ module Api
         message: "Similar B2B products fetched successfully"
       ), status: :ok
     end
+
 
     def check_b2b_pincode
       return unauthorized("Dealers only") unless current_dealer
