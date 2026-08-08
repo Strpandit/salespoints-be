@@ -3,9 +3,6 @@ class DealerProfile < ApplicationRecord
 
   BANK_VERIFICATION_STATUSES = %w[unverified verified failed].freeze
 
-  serialize :business_type, JSON
-  serialize :work_category, JSON
-
   belongs_to :dealer
   has_many_attached :store_image
   has_many_attached :aadhar_card

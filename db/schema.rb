@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_08_08_122109) do
+ActiveRecord::Schema[8.0].define(version: 2026_08_08_160828) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -469,7 +469,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_08_122109) do
   create_table "dealer_profiles", force: :cascade do |t|
     t.integer "dealer_id", null: false
     t.string "business_name"
-    t.string "business_type"
+    t.json "business_type"
     t.string "gst_number"
     t.string "pan_number"
     t.string "aadhar_number"
@@ -482,7 +482,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_08_122109) do
     t.boolean "is_verified", default: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.string "work_category"
+    t.json "work_category"
     t.string "associated_brands"
     t.string "account_holder_name"
     t.string "bank_verification_status", default: "unverified", null: false
