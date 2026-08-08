@@ -89,8 +89,7 @@ class B2bSearchSuggestionService
                                       brands.name ILIKE :q OR 
                                       categories.name ILIKE :q OR 
                                       product_variants.variant_sku ILIKE :q OR 
-                                      product_variant_colors.color_name ILIKE :q OR 
-                                      dealer_products.ad_hoc_color ILIKE :q",
+                                      product_variant_colors.color_name ILIKE :q",
                                      q: q
                                    )
 

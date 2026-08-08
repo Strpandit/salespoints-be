@@ -295,18 +295,12 @@ module Api
                                     .where.not(product_id: product.id)
                                     .where.not(dealer_id: current_dealer.id)
                                     .where("dealer_products.stock_quantity > 0")
-
-      grouped = dealer_products.group_by(&:product_id)
-
-      items = grouped.values.first(8).map do |products|
-        representative = products.first
-
-        representative.define_singleton_method(:stock_quantity) do
-          products.sum(&:stock_quantity)
-        end
-
-        representative
-      end
+                                    .select(
+                                      "dealer_products.*",
+                                      "SUM(dealer_products.stock_quantity) as total_stock"
+                                    )
+                                    .group("dealer_products.product_id")
+                                    .limit(8)
 
       render json: serialize_resource(
         items,
@@ -576,7 +570,7 @@ module Api
 
     def build_fallback_variant_attributes(attrs)
       variant_attrs = {}
-      %w[variant_sku price selling_price dealer_price dealer_selling_price discount_percentage].each do |key|
+      %w[variant_sku price selling_price dealer_price dealer_selling_price discount_percentage product_variant_colors_attributes].each do |key|
         value = attrs.delete(key)
         variant_attrs[key] = value if value.present?
       end
