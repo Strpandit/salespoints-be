@@ -296,10 +296,10 @@ module Api
                           .where.not(dealer_id: current_dealer.id)
                           .where("dealer_products.stock_quantity > 0")
                           .select(
-                            "dealer_products.*",
-                            "SUM(dealer_products.stock_quantity) as total_stock"
+                            "DISTINCT ON (dealer_products.product_id) dealer_products.*",
+                            "SUM(dealer_products.stock_quantity) OVER(PARTITION BY dealer_products.product_id) AS stock_quantity"
                           )
-                          .group("dealer_products.product_id")
+                          .order("dealer_products.product_id")
                           .limit(8)
 
       render json: serialize_resource(

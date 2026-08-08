@@ -371,10 +371,11 @@ module Api
       params.require(:dealer).permit(
         :first_name, :last_name, :email, :phone, :gender, :country_code, :status, :pincode, :password, :password_confirmation,
         dealer_profile_attributes: [
-          :id, :business_name, :business_type, :gst_number, :pan_number, :aadhar_number,
+          :id, :business_name, :gst_number, :pan_number, :aadhar_number,
           :bank_name, :bank_account_number, :ifsc_code, :account_holder_name, :business_address,
-          :business_contact_number, :business_email, :work_category, :associated_brands,
-          :is_verified, :bank_verification_reference, :pan_card, :gst_certificate, :cancel_cheque, { store_image: [], aadhar_card: [] }
+          :business_contact_number, :business_email, :associated_brands,
+          :is_verified, :bank_verification_reference, :pan_card, :gst_certificate, :cancel_cheque, 
+          { business_type: [], work_category: [], store_image: [], aadhar_card: [] }
         ],
         dealer_location_attributes: [:id, :latitude, :longitude, :service_radius_km, :is_active]
       )
