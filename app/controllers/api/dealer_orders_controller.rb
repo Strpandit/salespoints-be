@@ -227,7 +227,7 @@ module Api
         accepted_items_count: order.b2b_order_items.accepted_items.count,
         open_items_count: order.b2b_order_items.open_items.count,
         items: order.b2b_order_items.map { |item| transform_b2b_item(item) },
-        delivery_confirmation: is_seller && order.delivery_confirmation ? order.delivery_confirmation.as_json(only: [:token, :status, :submitted_at, :completed_at]) : nil,
+        delivery_confirmation: delivery_confirmation_payload(order.delivery_confirmation),
         can_accept: order.pending_request? && !order.expired? && order.seller_dealer_id == current_dealer.id,
         can_reject: order.pending_request? && !order.expired? && order.seller_dealer_id == current_dealer.id,
         can_update: order.can_transition_to?("shipped") && order.seller_dealer_id == current_dealer.id,
@@ -289,7 +289,7 @@ module Api
         refund_amount: order.refund_amount.to_f,
         refund_status: order.refund_status || "none",
         items: order.order_items.map { |item| transform_retail_item(item) },
-        delivery_confirmation: is_seller && order.delivery_confirmation ? order.delivery_confirmation.as_json(only: [:token, :status, :submitted_at, :completed_at]) : nil,
+        delivery_confirmation: delivery_confirmation_payload(order.delivery_confirmation),
         replacement_request: replacement_request.present? ? ReturnRequestSerializer.new(replacement_request, base_url: request.base_url).serializable_hash : nil,
         can_request_replacement: false,
         can_manage_replacement: is_seller && replacement_request.present? && replacement_request.status == "requested",
@@ -441,6 +441,43 @@ module Api
       else
         orders
       end
+    end
+
+    def delivery_confirmation_payload(dc)
+      return nil unless dc.present?
+
+      {
+        id: dc.id,
+        token: dc.token,
+        status: dc.status,
+        notes: dc.notes,
+        buyer_name: dc.buyer_name,
+        seller_name: dc.seller_name,
+        buyer_phone: dc.buyer_phone,
+        seller_phone: dc.seller_phone,
+        buyer_otp_verified: dc.buyer_verified?,
+        submitted_at: dc.submitted_at&.iso8601,
+        completed_at: dc.completed_at&.iso8601,
+        declarations: dc.declarations,
+        uploads: {
+          product_with_customer_image: attachment_payload(dc.product_with_customer_image),
+          product_packaging_image: attachment_payload(dc.product_packaging_image),
+          product_open_box_images: (dc.product_open_box_images || []).map { |file| attachment_payload(file) }.compact
+        }
+      }
+    end
+
+    def attachment_payload(file)
+      return nil unless file.respond_to?(:attached?) && file.attached?
+
+      {
+        filename: file.filename.to_s,
+        content_type: file.content_type,
+        byte_size: file.byte_size,
+        url: Rails.application.routes.url_helpers.rails_blob_url(file, only_path: false)
+      }
+    rescue StandardError
+      nil
     end
   end
 end

@@ -220,7 +220,10 @@ module Api
               reason: rr.reason,
               resolution_notes: rr.resolution_notes
             }
-          end
+          end,
+
+          # Delivery Confirmation & Proof Images
+          delivery_confirmation: delivery_confirmation_payload(order.delivery_confirmation)
         }
       end
 
@@ -278,8 +281,48 @@ module Api
               total_price: item.total_price.to_f,
               status: item.status
             }
-          end
+          end,
+
+          # Delivery Confirmation & Proof Images
+          delivery_confirmation: delivery_confirmation_payload(order.delivery_confirmation)
         }
+      end
+
+      def delivery_confirmation_payload(dc)
+        return nil unless dc.present?
+
+        {
+          id: dc.id,
+          token: dc.token,
+          status: dc.status,
+          notes: dc.notes,
+          buyer_name: dc.buyer_name,
+          seller_name: dc.seller_name,
+          buyer_phone: dc.buyer_phone,
+          seller_phone: dc.seller_phone,
+          buyer_otp_verified: dc.buyer_verified?,
+          submitted_at: dc.submitted_at&.iso8601,
+          completed_at: dc.completed_at&.iso8601,
+          declarations: dc.declarations,
+          uploads: {
+            product_with_customer_image: attachment_payload(dc.product_with_customer_image),
+            product_packaging_image: attachment_payload(dc.product_packaging_image),
+            product_open_box_images: (dc.product_open_box_images || []).map { |file| attachment_payload(file) }.compact
+          }
+        }
+      end
+
+      def attachment_payload(file)
+        return nil unless file.respond_to?(:attached?) && file.attached?
+
+        {
+          filename: file.filename.to_s,
+          content_type: file.content_type,
+          byte_size: file.byte_size,
+          url: Rails.application.routes.url_helpers.rails_blob_url(file, only_path: false)
+        }
+      rescue StandardError
+        nil
       end
 
       def require_admin!

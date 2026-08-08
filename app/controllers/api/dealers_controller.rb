@@ -390,16 +390,16 @@ module Api
       incoming_ifsc = attrs[:ifsc_code].to_s.strip.upcase
       incoming_holder = attrs[:account_holder_name].to_s.squish
 
-      bank_fields_present = incoming_account.present? || incoming_ifsc.present? || incoming_holder.present? || attrs[:bank_name].present?
-      return unless bank_fields_present
+      # Return early if bank account is not being changed or updated
+      return if incoming_account.blank?
 
       existing_matches =
         profile.present? &&
         profile.bank_account_number.to_s == incoming_account &&
-        profile.ifsc_code.to_s.upcase == incoming_ifsc &&
-        profile.account_holder_name.to_s.casecmp?(incoming_holder)
+        (incoming_ifsc.blank? || profile.ifsc_code.to_s.upcase == incoming_ifsc) &&
+        (incoming_holder.blank? || profile.account_holder_name.to_s.casecmp?(incoming_holder))
 
-      return if existing_matches && profile.bank_verified?
+      return if existing_matches
 
       verification_reference = attrs[:bank_verification_reference].presence
       raise StandardError, "Please verify bank account before saving these details" if verification_reference.blank?
