@@ -52,6 +52,9 @@ module Api
       order = Order.includes(:buyer, :seller_dealer, order_items: { product_variant: :product }).find_by(id: params[:id], buyer: current_buyer)
         
       return render json: { error: "Order not found" }, status: :not_found unless order
+      unless %w[delivered replacement_requested replacement_approved replacement_shipped replacement_delivered].include?(order.status)
+        return render json: { error: "Invoice can only be generated for delivered orders" }, status: :unprocessable_entity
+      end
         
       generator = InvoicePdf.new(order)
       pdf = generator.generate

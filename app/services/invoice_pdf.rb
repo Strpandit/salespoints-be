@@ -15,6 +15,16 @@ class InvoicePdf
     "36" => "Telangana", "37" => "Andhra Pradesh"
   }.freeze
 
+  STATE_ABBREVIATIONS = {
+    "01" => "JK", "02" => "HP", "03" => "PB", "04" => "CH", "05" => "UK",
+    "06" => "HR", "07" => "DL", "08" => "RJ", "09" => "UP", "10" => "BR",
+    "11" => "SK", "18" => "AS", "19" => "WB", "20" => "JH", "21" => "OR",
+    "22" => "CG", "23" => "MP", "24" => "GJ", "27" => "MH", "29" => "KA",
+    "30" => "GA", "32" => "KL", "33" => "TN", "36" => "TS", "37" => "AP"
+  }.freeze
+
+  REVERSE_GST_STATE_CODES = GST_STATE_CODES.invert.transform_keys { |k| k.downcase.gsub(/\s+/, "") }.freeze
+
   DEFAULT_TAX_RATE = 18.0
 
   def initialize(order)
@@ -148,7 +158,7 @@ class InvoicePdf
   end
 
   def seller_state_code
-    "IN-DL"
+    "DL-07"
   end
 
   # ============ BUYER DETAILS ============
@@ -176,19 +186,23 @@ class InvoicePdf
     end
   end
 
-  def buyer_address
-    return "N/A" if buyer.blank?
+  def raw_buyer_address
+    return nil if buyer.blank?
     
     if buyer.respond_to?(:dealer_profile) && buyer.dealer_profile&.business_address.present?
       buyer.dealer_profile.business_address
-    elsif buyer.respond_to?(:addresses)
-      address = buyer.addresses&.first
-      address.present? ? format_address(address) : "N/A"
-    elsif buyer.respond_to?(:shipping_address)
-      format_address(buyer.shipping_address)
+    elsif buyer.respond_to?(:addresses) && buyer.addresses.present?
+      buyer.addresses.first
+    elsif buyer.respond_to?(:shipping_address) && buyer.shipping_address.present?
+      buyer.shipping_address
     else
-      "N/A"
+      nil
     end
+  end
+
+  def buyer_address
+    address = raw_buyer_address
+    address.present? ? format_address(address) : "N/A"
   end
 
   def buyer_phone
@@ -196,11 +210,24 @@ class InvoicePdf
   end
 
   def buyer_state
-    "Delhi"
+    address = raw_buyer_address
+    state_str = nil
+    
+    case address
+    when Hash, ActionController::Parameters
+      state_str = address["state"] || address[:state]
+    else
+      state_str = address.state if address.respond_to?(:state)
+    end
+    
+    state_str.presence || "Delhi"
   end
 
   def buyer_state_code
-    "IN-DL"
+    state = buyer_state.to_s.downcase.gsub(/\s+/, "")
+    code = REVERSE_GST_STATE_CODES[state] || "07"
+    abbr = STATE_ABBREVIATIONS[code] || "DL"
+    "#{abbr}-#{code}"
   end
 
   def format_address(address)
@@ -308,7 +335,7 @@ class InvoicePdf
       # Left Column
       pdf.bounding_box([0, pdf.cursor], width: pdf.bounds.width * 0.65) do
         pdf.text "SALESPOINTS INDIA PRIVATE LIMITED", size: 10, style: :bold
-        pdf.text "GSTIN - 07ACEPO1919N1ZA", size: 8
+        pdf.text "GSTIN - 07ABTCS6593H1ZH", size: 8
         pdf.text "IRN - #{SecureRandom.hex(20)}", size: 8
       end
       
@@ -343,10 +370,8 @@ class InvoicePdf
     #{buyer_address.to_s.gsub(', ', ",\n")}
 
     Phone: #{buyer_phone}
+    State: #{buyer_state_code} #{buyer_state}
     GSTIN: #{buyer_gstin}
-    State: #{buyer_state}
-    State Code: #{buyer_state_code}
-    Place of Supply: #{buyer_state}
     TEXT
 
     ship_to = <<~TEXT
@@ -401,10 +426,14 @@ class InvoicePdf
         serial_text = "Serial No(s):\n" + @order.delivery_confirmation.serial_numbers.join(", ")
       end
 
+      sku = item.product_variant&.variant_sku || item&.wholesaler_post&.modal_no || 'Standard'
+      color = item.respond_to?(:product_variant_color) && item.product_variant_color ? item.product_variant_color.color_name : (item.respond_to?(:ad_hoc_color) ? item.ad_hoc_color : nil)
+      color_text = color.present? ? " - #{color}" : ""
+
       left = <<~TEXT
       <b>#{product&.name || item&.wholesaler_post&.title || 'Product'}</b>
 
-      #{item.product_variant&.variant_sku || item&.wholesaler_post&.modal_no || 'Standard'}
+      #{sku}#{color_text}
 
       #{serial_text}
 

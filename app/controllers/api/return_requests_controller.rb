@@ -121,6 +121,10 @@ module Api
         resolution_notes: params[:resolution_notes]
       ).transition!(next_status: params[:status])
 
+      if params[:status].to_s == "in_transit"
+        DeliveryConfirmationService.new(deliverable: updated_request.requestable, actor: current_user).create_or_refresh!
+      end
+
       ReplacementRequestNotificationService.request_updated!(updated_request, actor: current_user)
 
       render json: {

@@ -135,6 +135,18 @@ class DeliveryConfirmationService
   end
 
   def mark_delivered!
+    if @deliverable.status == "replacement_shipped"
+      request = @deliverable.return_requests.find_by(request_type: "replacement", status: "in_transit")
+      if request
+        ReturnRequestTransitionService.new(
+          return_request: request,
+          actor: @actor,
+          resolution_notes: "Delivery completed after OTP verification."
+        ).transition!(next_status: "completed")
+        return
+      end
+    end
+
     case @deliverable
     when Order
       OrderLifecycleService.new(

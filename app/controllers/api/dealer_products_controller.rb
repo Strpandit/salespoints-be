@@ -1,6 +1,6 @@
 module Api
   class DealerProductsController < ApplicationController
-    skip_before_action :authenticate_request!, only: [:shop_index, :similar]
+    skip_before_action :authenticate_request!, only: [:shop_index, :similar, :check_pincode]
     before_action :set_dealer_product, only: [:show, :update, :update_stock, :approve, :reject, :revert_to_pending, :destroy, :toggle_active]
 
     def index
