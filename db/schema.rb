@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_08_08_160828) do
+ActiveRecord::Schema[8.0].define(version: 2026_08_11_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -460,6 +460,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_08_160828) do
     t.boolean "sell_in_b2b", default: true, null: false
     t.boolean "sell_in_b2c", default: true, null: false
     t.integer "stock_quantity", default: 0
+    t.jsonb "color_stocks", default: {}, null: false
     t.index ["approve_status"], name: "index_dealer_products_on_approve_status"
     t.index ["dealer_id"], name: "index_dealer_products_on_dealer_id"
     t.index ["product_id"], name: "index_dealer_products_on_product_id"

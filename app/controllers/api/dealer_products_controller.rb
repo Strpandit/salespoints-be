@@ -397,6 +397,7 @@ module Api
         :stock_quantity,
         :sell_in_b2b,
         :sell_in_b2c,
+        color_stocks: {},
         product_attributes: [
           :name, :slug, :sku, :desc, :material, :brand_id, :category_id,
           :is_featured, :is_new, :tax_rate, :price, :selling_price, :dealer_price,
@@ -490,6 +491,7 @@ module Api
           product: product,
           product_variant: variant,
           stock_quantity: dealer_product_params[:stock_quantity],
+          color_stocks: dealer_product_params[:color_stocks] || {},
           sell_in_b2b: sales_channel_param(:sell_in_b2b),
           sell_in_b2c: sales_channel_param(:sell_in_b2c),
           approve_status: status[:approve_status],
@@ -591,7 +593,7 @@ module Api
     end
 
     def update_dealer_product_params
-      attrs = dealer_product_params.slice(:stock_quantity, :sell_in_b2b, :sell_in_b2c).to_h
+      attrs = dealer_product_params.slice(:stock_quantity, :color_stocks, :sell_in_b2b, :sell_in_b2c).to_h
       attrs["sell_in_b2b"] = sales_channel_param(:sell_in_b2b) if dealer_product_params.key?(:sell_in_b2b)
       attrs["sell_in_b2c"] = sales_channel_param(:sell_in_b2c) if dealer_product_params.key?(:sell_in_b2c)
       attrs

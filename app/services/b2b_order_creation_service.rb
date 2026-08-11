@@ -61,12 +61,16 @@ class B2bOrderCreationService
     elsif request_item.dealer_product_id.present?
       dealer_product = DealerProduct.lock.find_by(id: request_item.dealer_product_id)
       raise StandardError, "Dealer product not found" unless dealer_product
-      if dealer_product.stock_quantity.to_i < request_item.quantity.to_i
-        raise StandardError, "Insufficient stock for dealer product #{dealer_product.id}"
+      if request_item.product_variant_color_id.present?
+        dealer_product.deduct_color_stock!(request_item.product_variant_color_id, request_item.quantity)
+      else
+        if dealer_product.stock_quantity.to_i < request_item.quantity.to_i
+          raise StandardError, "Insufficient stock for dealer product #{dealer_product.id}"
+        end
+        dealer_product.update!(
+          stock_quantity: dealer_product.stock_quantity.to_i - request_item.quantity.to_i
+        )
       end
-      dealer_product.update!(
-        stock_quantity: dealer_product.stock_quantity.to_i - request_item.quantity.to_i
-      )
     else
       raise StandardError, "Cannot deduct stock: no source found for request item #{request_item.id}"
     end

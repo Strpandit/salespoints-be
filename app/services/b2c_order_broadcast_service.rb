@@ -101,8 +101,9 @@ class B2cOrderBroadcastService
       matched_items = items.select do |item|
         dealer.dealer_products.any? do |dp|
           dp.sell_in_b2c? && 
-          dp.stock_quantity.to_i >= item.quantity.to_i && 
-          dp.product_variant_id == item.product_variant_id
+          dp.product_variant_id == item.product_variant_id &&
+          dp.stock_quantity.to_i >= item.quantity.to_i &&
+          (item.product_variant_color_id.blank? || dp.color_stock_for(item.product_variant_color_id) >= item.quantity.to_i)
         end
       end
 
@@ -271,9 +272,13 @@ class B2cOrderBroadcastService
 
   def serialized_offer_items(items)
     Array(items).map do |item|
+      color = item.respond_to?(:product_variant_color) ? item.product_variant_color : nil
       {
         id: item.id,
         product_variant_id: item.product_variant_id,
+        product_variant_color_id: item.respond_to?(:product_variant_color_id) ? item.product_variant_color_id : nil,
+        color_name: color&.color_name || (item.respond_to?(:ad_hoc_color) ? item.ad_hoc_color : nil),
+        color_hex: color&.color_hex,
         product_name: item.product_variant&.product&.name,
         variant_sku: item.product_variant&.variant_sku,
         quantity: item.quantity,

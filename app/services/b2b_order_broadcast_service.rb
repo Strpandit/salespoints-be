@@ -119,6 +119,10 @@ class B2bOrderBroadcastService
         next unless dealer.status == "active"
         next if dealer.id == @order.buyer_dealer_id
 
+        if item.product_variant_color_id.present?
+          next if dealer_product.color_stock_for(item.product_variant_color_id) < item.quantity.to_i
+        end
+
         location = dealer.dealer_location
         next unless location&.is_active?
         next if location.latitude.blank? || location.longitude.blank?
@@ -356,9 +360,13 @@ class B2bOrderBroadcastService
 
   def serialized_offer_items(items)
     Array(items).map do |item|
+      color = item.respond_to?(:product_variant_color) ? item.product_variant_color : nil
       {
         id: item.id,
         product_variant_id: item.product_variant_id,
+        product_variant_color_id: item.respond_to?(:product_variant_color_id) ? item.product_variant_color_id : nil,
+        color_name: color&.color_name || (item.respond_to?(:ad_hoc_color) ? item.ad_hoc_color : nil),
+        color_hex: color&.color_hex,
         product_name: item.product_variant&.product&.name,
         variant_sku: item.product_variant&.variant_sku,
         quantity: item.quantity,

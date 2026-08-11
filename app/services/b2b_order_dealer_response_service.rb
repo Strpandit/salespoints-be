@@ -690,18 +690,56 @@ class B2bOrderDealerResponseService
       wholesaler_post.update!(
         stock_quantity: wholesaler_post.stock_quantity - item.quantity
       )
+
+      if item.dealer_product_id.present?
+        dealer_product = DealerProduct.lock.find_by(id: item.dealer_product_id)
+        if dealer_product.present?
+          if item.product_variant_color_id.present?
+            dealer_product.deduct_color_stock!(item.product_variant_color_id, item.quantity)
+          elsif dealer_product.stock_quantity.to_i >= item.quantity.to_i
+            dealer_product.update!(stock_quantity: dealer_product.stock_quantity - item.quantity)
+          end
+        end
+      end
     elsif item.dealer_product_id.present?
       dealer_product = DealerProduct.lock.find(item.dealer_product_id)
-      if dealer_product.stock_quantity.to_i < item.quantity.to_i
-        raise StandardError, "Insufficient stock for dealer product #{dealer_product.id}"
+      if item.product_variant_color_id.present?
+        dealer_product.deduct_color_stock!(item.product_variant_color_id, item.quantity)
+      else
+        if dealer_product.stock_quantity.to_i < item.quantity.to_i
+          raise StandardError, "Insufficient stock for dealer product #{dealer_product.id}"
+        end
+        dealer_product.update!(
+          stock_quantity: dealer_product.stock_quantity - item.quantity
+        )
       end
-      dealer_product.update!(
-        stock_quantity: dealer_product.stock_quantity - item.quantity
-      )
     else
       raise StandardError, "Cannot deduct stock: no source found for item #{item.id}"
     end
     
+    item
+  end
+
+  def deduct_b2c_stock!(item)
+    dealer_product = nil
+    if item.dealer_product_id.present?
+      dealer_product = DealerProduct.lock.find_by(id: item.dealer_product_id)
+    end
+    dealer_product ||= DealerProduct.lock.find_by(dealer_id: @dealer.id, product_variant_id: item.product_variant_id)
+
+    if dealer_product.present?
+      if item.product_variant_color_id.present?
+        dealer_product.deduct_color_stock!(item.product_variant_color_id, item.quantity)
+      else
+        if dealer_product.stock_quantity.to_i < item.quantity.to_i
+          raise StandardError, "Insufficient stock for dealer product #{dealer_product.id}"
+        end
+        dealer_product.update!(stock_quantity: dealer_product.stock_quantity - item.quantity)
+      end
+    else
+      raise StandardError, "Cannot deduct B2C stock: dealer product not found for item #{item.id}"
+    end
+
     item
   end
 

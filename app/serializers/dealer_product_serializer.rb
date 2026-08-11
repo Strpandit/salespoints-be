@@ -1,5 +1,5 @@
 class DealerProductSerializer < ApplicationSerializer
-  attributes :stock_quantity, :is_active, :approve_status, :sell_in_b2b, :sell_in_b2c, :created_at, :updated_at, :distance_km,
+  attributes :stock_quantity, :color_stocks, :is_active, :approve_status, :sell_in_b2b, :sell_in_b2c, :created_at, :updated_at, :distance_km,
              :media, :consumer_discount_percentage,
              :dealer_discount_percentage, :from_wholesaler, :wholesaler_post_id, :hsn_code
 

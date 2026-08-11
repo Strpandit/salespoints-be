@@ -17,6 +17,44 @@ class DealerProduct < ApplicationRecord
   validates :sell_in_b2c, inclusion: { in: [true, false] }
   validate :at_least_one_sales_channel_enabled
 
+  before_save :sync_total_stock_from_colors
+
+  def color_stock_for(color_id)
+    return stock_quantity if color_stocks.blank?
+    key = color_id.to_s
+    return 0 unless color_stocks.key?(key)
+    
+    val = color_stocks[key]
+    val.is_a?(Hash) ? val["stock"].to_i : val.to_i
+  end
+
+  def deduct_color_stock!(color_id, quantity)
+    qty = quantity.to_i
+    key = color_id.to_s
+    
+    if color_stocks.present? && color_stocks.is_a?(Hash) && color_stocks.any?
+      if color_stocks.key?(key)
+        val = color_stocks[key]
+        current = val.is_a?(Hash) ? val["stock"].to_i : val.to_i
+        raise StandardError, "Insufficient stock for selected color" if current < qty
+        
+        if val.is_a?(Hash)
+          color_stocks[key]["stock"] = current - qty
+        else
+          color_stocks[key] = current - qty
+        end
+        
+        sync_total_stock_from_colors
+        save!
+      else
+        raise StandardError, "Selected color is not in stock for this seller"
+      end
+    else
+      raise StandardError, "Insufficient total stock" if stock_quantity.to_i < qty
+      update!(stock_quantity: stock_quantity.to_i - qty)
+    end
+  end
+
   scope :with_active_dealer, -> { 
     joins(:dealer).where(dealers: { deleted_at: nil, status: 'active' })
   }
@@ -76,6 +114,15 @@ class DealerProduct < ApplicationRecord
   end
 
   private
+
+  def sync_total_stock_from_colors
+    if color_stocks.present? && color_stocks.is_a?(Hash) && color_stocks.any?
+      total = color_stocks.values.sum do |val|
+        val.is_a?(Hash) ? val["stock"].to_i : val.to_i
+      end
+      self.stock_quantity = total
+    end
+  end
 
   def at_least_one_sales_channel_enabled
     return if sell_in_b2b? || sell_in_b2c?
