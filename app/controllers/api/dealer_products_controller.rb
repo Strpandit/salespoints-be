@@ -593,9 +593,13 @@ module Api
     end
 
     def update_dealer_product_params
-      attrs = dealer_product_params.slice(:stock_quantity, :color_stocks, :sell_in_b2b, :sell_in_b2c).to_h
-      attrs["sell_in_b2b"] = sales_channel_param(:sell_in_b2b) if dealer_product_params.key?(:sell_in_b2b)
-      attrs["sell_in_b2c"] = sales_channel_param(:sell_in_b2c) if dealer_product_params.key?(:sell_in_b2c)
+      dp_params = params[:dealer_product] || params
+      attrs = {}
+      attrs[:product_variant_id] = dp_params[:product_variant_id] if dp_params.key?(:product_variant_id) && dp_params[:product_variant_id].present?
+      attrs[:stock_quantity] = dp_params[:stock_quantity] if dp_params.key?(:stock_quantity) && dp_params[:stock_quantity].present?
+      attrs[:color_stocks] = dp_params[:color_stocks] if dp_params.key?(:color_stocks)
+      attrs[:sell_in_b2b] = ActiveModel::Type::Boolean.new.cast(dp_params[:sell_in_b2b]) if dp_params.key?(:sell_in_b2b)
+      attrs[:sell_in_b2c] = ActiveModel::Type::Boolean.new.cast(dp_params[:sell_in_b2c]) if dp_params.key?(:sell_in_b2c)
       attrs
     end
 
