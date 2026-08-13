@@ -34,7 +34,7 @@ class InvoicePdf
   def generate
     pdf = Prawn::Document.new(
       page_size: "A4",
-      margin: 30,
+      margin: 15,
       info: { Title: "Invoice #{invoice_number}" }
     )
 
@@ -353,16 +353,16 @@ class InvoicePdf
     end
   end
 
-  def tax_amount
-    igst_amount + cgst_amount + sgst_amount
-  end
-
   def total_amount
-    taxable_value + tax_amount
+    taxable_value + igst_amount + cgst_amount + sgst_amount
   end
 
   def tax_label
     tax_type == "IGST" ? "IGST" : "CGST/SGST"
+  end
+
+  def tax_amount
+    igst_amount + cgst_amount + sgst_amount
   end
 
   def currency(amount)
@@ -410,7 +410,7 @@ class InvoicePdf
     <b>Bill To</b>
     #{buyer_name}
 
-    #{billing_address_str}
+    #{billing_address_str.to_s}
 
     Phone: #{buyer_phone}
     State: #{buyer_state_code} #{buyer_state}
@@ -421,20 +421,20 @@ class InvoicePdf
     <b>Ship To</b>
     #{buyer_name}
 
-    #{shipping_address_str}
+    #{shipping_address_str.to_s}
 
     Phone: #{buyer_phone}
     TEXT
 
     pdf.table(
       [[order_details, bill_to, ship_to]],
-      column_widths: [160, 185, 185],
+      column_widths: [170, 200, 200],
       cell_style: {
         borders: [:top, :bottom],
         border_width: 0.5,
         border_color: "CCCCCC",
         padding: [6, 8],
-        size: 9,
+        size: 8,
         inline_format: true,
         valign: :top,
         leading: 2
@@ -452,10 +452,10 @@ class InvoicePdf
   def add_items_table(pdf)
     data = [[
       "Product",
-      "HSN/SAC",
+      "HSN",
       "Qty",
-      "Unit Price",
-      "Discount",
+      "Unit\nPrice",
+      "Dis.",
       "Taxable\nValue",
       "CGST",
       "SGST",
@@ -526,14 +526,14 @@ class InvoicePdf
       },
       column_widths: {
         0 => 150,
-        1 => 55,
+        1 => 50,
         2 => 30,
-        3 => 50,
-        4 => 50,
-        5 => 50,
-        6 => 55,
-        7 => 55,
-        8 => 55,
+        3 => 55,
+        4 => 30,
+        5 => 55,
+        6 => 50,
+        7 => 50,
+        8 => 50,
         9 => 55
       }
     ) do
