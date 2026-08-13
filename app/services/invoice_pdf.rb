@@ -521,7 +521,7 @@ class InvoicePdf
       },
       column_widths: {
         0 => 145,
-        1 => 55,
+        1 => 60,
         2 => 30,
         3 => 50,
         4 => 30,
