@@ -476,7 +476,6 @@ class InvoicePdf
 
       #{serial_text}
 
-      #{tax_label}: #{product&.tax_rate || 18} %
       TEXT
       
       data << [
@@ -486,9 +485,9 @@ class InvoicePdf
         format('%.2f', item.unit_price),
         format('%.2f', discount),
         format('%.2f', taxable_value),
-        format('%.2f', cgst_amount),
-        format('%.2f', sgst_amount),
-        format('%.2f', igst_amount),
+        "#{cgst_amount}\n#{cgst_rate}%",
+        "#{sgst_amount}\n#{sgst_rate}%",
+        "#{igst_amount}\n#{igst_rate}%",
         format('%.2f', total_amount)
       ]
     end
@@ -500,9 +499,9 @@ class InvoicePdf
       format('%.2f', subtotal),
       format('%.2f', discount),
       format('%.2f', taxable_value),
-      format('%.2f', cgst_amount),
-      format('%.2f', sgst_amount),
-      format('%.2f', igst_amount),
+      cgst_amount,
+      sgst_amount,
+      igst_amount,
       format('%.2f', total_amount)
     ]
     
