@@ -428,7 +428,7 @@ class InvoicePdf
 
     pdf.table(
       [[order_details, bill_to, ship_to]],
-      column_widths: [170, 200, 200],
+      column_widths: [165, 200, 200],
       cell_style: {
         borders: [:top, :bottom],
         border_width: 0.5,
@@ -525,10 +525,10 @@ class InvoicePdf
         border_color: "999999"
       },
       column_widths: {
-        0 => 150,
+        0 => 145,
         1 => 50,
         2 => 30,
-        3 => 55,
+        3 => 50,
         4 => 30,
         5 => 55,
         6 => 50,
