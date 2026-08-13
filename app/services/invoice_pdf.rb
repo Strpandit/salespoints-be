@@ -520,7 +520,7 @@ class InvoicePdf
         border_color: "999999"
       },
       column_widths: {
-        0 => 145,
+        0 => 140,
         1 => 60,
         2 => 30,
         3 => 50,
