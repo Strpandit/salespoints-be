@@ -321,36 +321,48 @@ class InvoicePdf
     tax_type == "IGST" ? 18.0 : 0.0
   end
 
-  def igst_amount
-    (taxable_value * igst_rate / 100).round(2)
-  end
-
   def cgst_rate
     tax_type == "CGST_SGST" ? 9.0 : 0.0
-  end
-
-  def cgst_amount
-    (taxable_value * cgst_rate / 100).round(2)
   end
 
   def sgst_rate
     tax_type == "CGST_SGST" ? 9.0 : 0.0
   end
 
+  def igst_amount
+    if tax_type == "IGST"
+      (taxable_value * igst_rate / 100).round(2)
+    else
+      0.0
+    end
+  end
+
+  def cgst_amount
+    if tax_type == "CGST_SGST"
+      (taxable_value * cgst_rate / 100).round(2)
+    else
+      0.0
+    end
+  end
+
   def sgst_amount
-    (taxable_value * sgst_rate / 100).round(2)
-  end
-
-  def total_amount
-    taxable_value + igst_amount + cgst_amount + sgst_amount
-  end
-
-  def tax_label
-    tax_type == "IGST" ? "IGST" : "CGST/SGST"
+    if tax_type == "CGST_SGST"
+      (taxable_value * sgst_rate / 100).round(2)
+    else
+      0.0
+    end
   end
 
   def tax_amount
     igst_amount + cgst_amount + sgst_amount
+  end
+
+  def total_amount
+    taxable_value + tax_amount
+  end
+
+  def tax_label
+    tax_type == "IGST" ? "IGST" : "CGST/SGST"
   end
 
   def currency(amount)
@@ -366,11 +378,12 @@ class InvoicePdf
 
   def add_invoice_header(pdf)
     pdf.bounding_box([0, pdf.cursor], width: pdf.bounds.width) do
-      # Left Column
       pdf.bounding_box([0, pdf.cursor], width: pdf.bounds.width * 0.65) do
-        pdf.text "SALESPOINTS INDIA PRIVATE LIMITED", size: 10, style: :bold
-        pdf.text "GSTIN - 07ABTCS6593H1ZH", size: 8
-        pdf.text "IRN - #{SecureRandom.hex(20)}", size: 8
+        pdf.text "SALESPOINTS INDIA PRIVATE LIMITED", size: 10, style: :bold, align: :center
+        pdf.text "Reg. Off: H-105, Street No. 13, Karawal Nagar, Bhajanpura, Delhi - 110055, IN-DL", size: 8, align: :center
+        pdf.text "support@salespoints.in | +91-8368835228 | www.salespoints.in", size: 8, align: :center
+        pdf.text "GSTIN - 07ABTCS6593H1ZH | CIN - U46524DC2026PTC471107", size: 8, align: :center
+        pdf.text "IRN - #{SecureRandom.hex(20)}", size: 8, align: :center
       end
       
     end
@@ -383,22 +396,21 @@ class InvoicePdf
     pdf.move_down 8
 
     order_details = <<~TEXT
-    <b>Invoice No:</b> #{invoice_number}
     <b>Invoice Date:</b> #{invoice_date.strftime('%d-%m-%Y')}
+    <b>Invoice No:</b> #{invoice_number}
 
-    <b>Order ID:</b> #{order_reference}
     <b>Order Date:</b> #{order_date.strftime('%d-%m-%Y')}
+    <b>Order ID:</b> #{order_reference}
 
+    <b>Verified Seller:</b> #{seller_name}
     <b>PAN:</b> ABTCS6593H
-    <b>CIN:</b> U46524DC2026PTC471107
     TEXT
 
     bill_to = <<~TEXT
     <b>Bill To</b>
-
     #{buyer_name}
 
-    #{billing_address_str.to_s.gsub(', ', ",\n")}
+    #{billing_address_str}
 
     Phone: #{buyer_phone}
     State: #{buyer_state_code} #{buyer_state}
@@ -407,17 +419,16 @@ class InvoicePdf
 
     ship_to = <<~TEXT
     <b>Ship To</b>
-
     #{buyer_name}
 
-    #{shipping_address_str.to_s.gsub(', ', ",\n")}
+    #{shipping_address_str}
 
     Phone: #{buyer_phone}
     TEXT
 
     pdf.table(
       [[order_details, bill_to, ship_to]],
-      column_widths: [145, 195, 195],
+      column_widths: [160, 185, 185],
       cell_style: {
         borders: [:top, :bottom],
         border_width: 0.5,
@@ -446,7 +457,9 @@ class InvoicePdf
       "Unit Price",
       "Discount",
       "Taxable\nValue",
-      "#{tax_label}",
+      "CGST",
+      "SGST",
+      "IGST",
       "Total"
     ]]
     order_items.each do |item|
@@ -478,7 +491,9 @@ class InvoicePdf
         format('%.2f', item.unit_price),
         format('%.2f', discount),
         format('%.2f', taxable_value),
-        format('%.2f', tax_amount),
+        format('%.2f', cgst_amount),
+        format('%.2f', sgst_amount),
+        format('%.2f', igst_amount),
         format('%.2f', total_amount)
       ]
     end
@@ -490,7 +505,9 @@ class InvoicePdf
       format('%.2f', subtotal),
       format('%.2f', discount),
       format('%.2f', taxable_value),
-      format('%.2f', tax_amount),
+      format('%.2f', cgst_amount),
+      format('%.2f', sgst_amount),
+      format('%.2f', igst_amount),
       format('%.2f', total_amount)
     ]
     
@@ -508,14 +525,16 @@ class InvoicePdf
         border_color: "999999"
       },
       column_widths: {
-        0 => 155,
-        1 => 60,
+        0 => 150,
+        1 => 55,
         2 => 30,
-        3 => 55,
-        4 => 55,
-        5 => 60,
-        6 => 65,
+        3 => 50,
+        4 => 50,
+        5 => 50,
+        6 => 55,
         7 => 55,
+        8 => 55,
+        9 => 55
       }
     ) do
       row(0).font_style = :bold
@@ -535,9 +554,9 @@ class InvoicePdf
       columns(1).overflow = :shrink_to_fit
       columns(1).min_font_size = 6
 
-      columns(2..7).align = :center
-      columns(2..7).valign = :center
-      columns(2..7).padding = [4, 4]
+      columns(2..9).align = :center
+      columns(2..9).valign = :center
+      columns(2..9).padding = [4, 4]
 
       row(-1).font_style = :bold
       row(-1).background_color = "F8F8F8"
@@ -620,24 +639,8 @@ class InvoicePdf
     pdf.move_down 4
 
     pdf.text(
-      "This product is delivered by our verified seller store seller code - #{seller_name}. " \
+      "This product is delivered by our verified store seller code - #{seller_name}. " \
       "Salespoints India Pvt. Ltd. is the trusted marketplace intermediator.",
-      size: 7,
-      color: "666666"
-    )
-
-    pdf.move_down 5
-
-    pdf.text(
-      "Registered Office: H-105, Street No. 13, Karawal Nagar, Bhajanpura, Delhi - 110055, IN-DL",
-      size: 7,
-      color: "666666"
-    )
-
-    pdf.move_down 4
-
-    pdf.text(
-      "Contact: support@salespoints.in | +91-8368835228 | www.salespoints.in",
       size: 7,
       color: "666666"
     )
