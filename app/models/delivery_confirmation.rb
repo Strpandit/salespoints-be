@@ -2,21 +2,27 @@ class DeliveryConfirmation < ApplicationRecord
   belongs_to :deliverable, polymorphic: true
   belongs_to :seller_dealer, class_name: "Dealer", optional: true
   belongs_to :buyer, polymorphic: true
+  belongs_to :return_request, optional: true
 
   has_one_attached :product_with_customer_image
   has_one_attached :product_packaging_image
   has_many_attached :product_open_box_images
 
   STATUSES = %w[pending_form pending_otp completed expired].freeze
+  CONTEXTS = %w[original replacement].freeze
 
   validates :token, presence: true, uniqueness: true
   validates :status, inclusion: { in: STATUSES }
+  validates :context, inclusion: { in: CONTEXTS }
   validates :deliverable_type, inclusion: { in: %w[Order B2bOrder] }
 
   before_validation :ensure_token, on: :create
+  before_validation :ensure_context, on: :create
   before_validation :sync_participants_from_deliverable, on: :create
 
   scope :recent, -> { order(created_at: :desc) }
+  scope :original_context, -> { where(context: "original") }
+  scope :replacement_context, -> { where(context: "replacement") }
 
   def completed?
     status == "completed"
@@ -56,6 +62,10 @@ class DeliveryConfirmation < ApplicationRecord
 
   def ensure_token
     self.token ||= SecureRandom.hex(24)
+  end
+
+  def ensure_context
+    self.context ||= "original"
   end
 
   def sync_participants_from_deliverable

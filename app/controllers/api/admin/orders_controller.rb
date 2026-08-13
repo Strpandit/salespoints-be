@@ -226,7 +226,8 @@ module Api
           end,
 
           # Delivery Confirmation & Proof Images
-          delivery_confirmation: delivery_confirmation_payload(order.delivery_confirmation)
+          delivery_confirmation: delivery_confirmation_payload(order.delivery_confirmation),
+          replacement_delivery_confirmation: delivery_confirmation_payload(order.replacement_delivery_confirmation)
         }
       end
 
@@ -287,7 +288,8 @@ module Api
           end,
 
           # Delivery Confirmation & Proof Images
-          delivery_confirmation: delivery_confirmation_payload(order.delivery_confirmation)
+          delivery_confirmation: delivery_confirmation_payload(order.delivery_confirmation),
+          replacement_delivery_confirmation: delivery_confirmation_payload(order.replacement_delivery_confirmation)
         }
       end
 
@@ -297,6 +299,7 @@ module Api
         {
           id: dc.id,
           token: dc.token,
+          context: dc.context,
           status: dc.status,
           notes: dc.notes,
           buyer_name: dc.buyer_name,

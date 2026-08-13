@@ -227,7 +227,8 @@ module Api
         accepted_items_count: order.b2b_order_items.accepted_items.count,
         open_items_count: order.b2b_order_items.open_items.count,
         items: order.b2b_order_items.map { |item| transform_b2b_item(item) },
-        delivery_confirmation: is_seller && order.delivery_confirmation ? delivery_confirmation_payload(order.delivery_confirmation) : nil,
+        delivery_confirmation: (is_seller || is_buyer) && order.delivery_confirmation ? delivery_confirmation_payload(order.delivery_confirmation) : nil,
+        replacement_delivery_confirmation: (is_seller || is_buyer) && order.replacement_delivery_confirmation ? delivery_confirmation_payload(order.replacement_delivery_confirmation) : nil,
         can_accept: order.pending_request? && !order.expired? && order.seller_dealer_id == current_dealer.id,
         can_reject: order.pending_request? && !order.expired? && order.seller_dealer_id == current_dealer.id,
         can_update: order.can_transition_to?("shipped") && order.seller_dealer_id == current_dealer.id,
@@ -290,6 +291,7 @@ module Api
         refund_status: order.refund_status || "none",
         items: order.order_items.map { |item| transform_retail_item(item) },
         delivery_confirmation: is_seller && order.delivery_confirmation ? delivery_confirmation_payload(order.delivery_confirmation) : nil,
+        replacement_delivery_confirmation: is_seller && order.replacement_delivery_confirmation ? delivery_confirmation_payload(order.replacement_delivery_confirmation) : nil,
         replacement_request: replacement_request.present? ? ReturnRequestSerializer.new(replacement_request, base_url: request.base_url).serializable_hash : nil,
         can_request_replacement: false,
         can_manage_replacement: is_seller && replacement_request.present? && replacement_request.status == "requested",
@@ -301,11 +303,13 @@ module Api
     def transform_b2b_item(item)
       item_product_name = item.product_variant&.product&.name || item.wholesaler_post&.title || "Product"
       item_variant_sku = item.product_variant&.variant_sku || item.wholesaler_post&.modal_no || "N/A"
+      color = item.try(:ad_hoc_color).presence || item.try(:product_variant_color)&.color_name.presence || "Standard"
 
       {
         id: item.id,
         product_name: item_product_name,
         variant_sku: item_variant_sku,
+        color: color,
         quantity: item.quantity,
         unit_price: item.unit_price.to_f,
         total_price: item.total_price.to_f,
@@ -315,9 +319,13 @@ module Api
     end
 
     def transform_retail_item(item)
+      color = item.try(:ad_hoc_color).presence || item.try(:product_variant_color)&.color_name.presence || "Standard"
+
       {
         id: item.id,
-        product_name: item.product_name_with_variant || "Item",
+        product_name: item.product_name_with_variant || item.product_name || "Item",
+        variant_sku: item.try(:product_variant)&.variant_sku || "N/A",
+        color: color,
         quantity: item.quantity,
         unit_price: item.unit_price.to_f,
         total_price: item.total_price.to_f
@@ -449,6 +457,7 @@ module Api
       {
         id: dc.id,
         token: dc.token,
+        context: dc.context,
         status: dc.status,
         notes: dc.notes,
         buyer_name: dc.buyer_name,

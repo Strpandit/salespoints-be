@@ -5,7 +5,8 @@ class Order < ApplicationRecord
   has_many :notifications, as: :notifiable, dependent: :nullify
   has_many :return_requests, as: :requestable, dependent: :destroy
   has_many :dealer_ledger_entries, dependent: :nullify
-  has_one :delivery_confirmation, as: :deliverable, dependent: :destroy
+  has_one :delivery_confirmation, -> { where(context: "original") }, as: :deliverable, class_name: "DeliveryConfirmation", dependent: :destroy
+  has_one :replacement_delivery_confirmation, -> { where(context: "replacement") }, as: :deliverable, class_name: "DeliveryConfirmation", dependent: :destroy
   has_many :order_offers, dependent: :destroy
   has_many :order_broadcast_trackers, dependent: :destroy
 

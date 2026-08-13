@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_08_11_100000) do
+ActiveRecord::Schema[8.0].define(version: 2026_08_13_063416) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -568,8 +568,12 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_11_100000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.string "serial_numbers", default: [], array: true
+    t.string "context", default: "original", null: false
+    t.bigint "return_request_id"
     t.index ["buyer_type", "buyer_id"], name: "index_delivery_confirmations_on_buyer_type_and_buyer_id"
+    t.index ["context"], name: "index_delivery_confirmations_on_context"
     t.index ["deliverable_type", "deliverable_id"], name: "idx_delivery_confirmations_on_deliverable", unique: true
+    t.index ["return_request_id"], name: "index_delivery_confirmations_on_return_request_id", where: "(return_request_id IS NOT NULL)"
     t.index ["seller_dealer_id"], name: "index_delivery_confirmations_on_seller_dealer_id"
     t.index ["status"], name: "index_delivery_confirmations_on_status"
     t.index ["token"], name: "index_delivery_confirmations_on_token", unique: true

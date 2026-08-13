@@ -12,10 +12,29 @@ class DeliveryConfirmationService
   end
 
   def create_or_refresh!
-    confirmation = @deliverable.delivery_confirmation || build_confirmation
+    confirmation = @deliverable.delivery_confirmation || build_confirmation(context: "original")
     confirmation.status = "pending_form" unless confirmation.completed?
     confirmation.seller_phone ||= phone_for(seller)
     confirmation.buyer_phone ||= phone_for(buyer)
+    confirmation.save!
+
+    send_form_link(confirmation)
+    create_pending_notification(confirmation)
+    confirmation
+  end
+
+  def create_replacement!(return_request:)
+    existing = @deliverable.replacement_delivery_confirmation
+
+    if existing&.completed?
+      send_form_link(existing)
+      return existing
+    end
+
+    existing&.destroy!
+
+    confirmation = build_confirmation(context: "replacement")
+    confirmation.return_request_id = return_request.id
     confirmation.save!
 
     send_form_link(confirmation)
@@ -75,13 +94,14 @@ class DeliveryConfirmationService
 
   private
 
-  def build_confirmation
+  def build_confirmation(context: "original")
     DeliveryConfirmation.new(
       deliverable: @deliverable,
       seller_dealer: seller,
       buyer: buyer,
       seller_phone: phone_for(seller),
-      buyer_phone: phone_for(buyer)
+      buyer_phone: phone_for(buyer),
+      context: context
     )
   end
 

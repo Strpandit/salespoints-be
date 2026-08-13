@@ -122,7 +122,8 @@ module Api
       ).transition!(next_status: params[:status])
 
       if params[:status].to_s == "in_transit"
-        DeliveryConfirmationService.new(deliverable: updated_request.requestable, actor: current_user).create_or_refresh!
+        DeliveryConfirmationService.new(deliverable: updated_request.requestable, actor: current_user)
+          .create_replacement!(return_request: updated_request)
       end
 
       ReplacementRequestNotificationService.request_updated!(updated_request, actor: current_user)

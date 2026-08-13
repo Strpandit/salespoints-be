@@ -186,38 +186,58 @@ class InvoicePdf
     end
   end
 
-  def raw_buyer_address
+  def raw_shipping_address
+    return @order.shipping_address if @order.shipping_address.present?
     return nil if buyer.blank?
     
     if buyer.respond_to?(:dealer_profile) && buyer.dealer_profile&.business_address.present?
       buyer.dealer_profile.business_address
     elsif buyer.respond_to?(:addresses) && buyer.addresses.present?
       buyer.addresses.first
-    elsif buyer.respond_to?(:shipping_address) && buyer.shipping_address.present?
-      buyer.shipping_address
     else
       nil
     end
   end
 
+  def raw_billing_address
+    return @order.billing_address if @order.billing_address.present?
+
+    raw_shipping_address
+  end
+
+  def raw_buyer_address
+    raw_shipping_address
+  end
+
+  def shipping_address_str
+    format_address(raw_shipping_address)
+  end
+
+  def billing_address_str
+    format_address(raw_billing_address)
+  end
+
   def buyer_address
-    address = raw_buyer_address
-    address.present? ? format_address(address) : "N/A"
+    shipping_address_str
   end
 
   def buyer_phone
-    buyer&.phone || "N/A"
+    phone = buyer&.try(:phone)
+    phone ||= @order.shipping_address&.dig("phone") if @order.shipping_address.is_a?(Hash)
+    phone || "N/A"
   end
 
   def buyer_state
-    address = raw_buyer_address
+    address = raw_shipping_address
     state_str = nil
     
     case address
     when Hash, ActionController::Parameters
       state_str = address["state"] || address[:state]
+    when String
+      state_str = nil
     else
-      state_str = address.state if address.respond_to?(:state)
+      state_str = address.try(:state)
     end
     
     state_str.presence || "Delhi"
@@ -236,14 +256,28 @@ class InvoicePdf
     case address
     when Hash, ActionController::Parameters
       [
-        address["address_line1"],
-        address["address_line2"],
-        address["city"],
-        address["state"],
-        address["postal_code"]
+        address["address_line1"] || address[:address_line1],
+        address["address_line2"] || address[:address_line2],
+        address["city"] || address[:city],
+        address["state"] || address[:state],
+        address["postal_code"] || address[:postal_code] || address["pincode"] || address[:pincode]
       ].compact.reject(&:blank?).join(", ")
+    when String
+      address
     else
-      address.to_s
+      if address.respond_to?(:full_address)
+        address.full_address
+      elsif address.respond_to?(:as_order_payload)
+        format_address(address.as_order_payload)
+      else
+        [
+          address.try(:address_line1),
+          address.try(:address_line2),
+          address.try(:city),
+          address.try(:state),
+          address.try(:postal_code)
+        ].compact.reject(&:blank?).join(", ").presence || "N/A"
+      end
     end
   end
 
@@ -348,15 +382,12 @@ class InvoicePdf
     pdf.stroke_horizontal_rule
     pdf.move_down 8
 
-    # Order Details
     order_details = <<~TEXT
-    <b>Invoice No:</b>
-    #{invoice_number}
-
+    <b>Invoice No:</b> #{invoice_number}
     <b>Invoice Date:</b> #{invoice_date.strftime('%d-%m-%Y')}
+
+    <b>Order ID:</b> #{order_reference}
     <b>Order Date:</b> #{order_date.strftime('%d-%m-%Y')}
-    <b>Order ID:</b>
-    #{order_reference}
 
     <b>PAN:</b> ABTCS6593H
     <b>CIN:</b> U46524DC2026PTC471107
@@ -367,7 +398,7 @@ class InvoicePdf
 
     #{buyer_name}
 
-    #{buyer_address.to_s.gsub(', ', ",\n")}
+    #{billing_address_str.to_s.gsub(', ', ",\n")}
 
     Phone: #{buyer_phone}
     State: #{buyer_state_code} #{buyer_state}
@@ -379,7 +410,7 @@ class InvoicePdf
 
     #{buyer_name}
 
-    #{buyer_address.to_s.gsub(', ', ",\n")}
+    #{shipping_address_str.to_s.gsub(', ', ",\n")}
 
     Phone: #{buyer_phone}
     TEXT
