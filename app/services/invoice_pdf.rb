@@ -378,16 +378,11 @@ class InvoicePdf
 
   def add_invoice_header(pdf)
     pdf.bounding_box([0, pdf.cursor], width: pdf.bounds.width) do
-      pdf.bounding_box([0, pdf.cursor], width: pdf.bounds.width * 0.65) do
-        pdf.text "SALESPOINTS INDIA PRIVATE LIMITED", size: 10, style: :bold, align: :center
-        pdf.text "Reg. Off: H-105, Street No. 13, Karawal Nagar, Bhajanpura, Delhi - 110055, IN-DL", size: 8, align: :center
-        pdf.text "support@salespoints.in | +91-8368835228 | www.salespoints.in", size: 8, align: :center
-        pdf.text "GSTIN - 07ABTCS6593H1ZH | CIN - U46524DC2026PTC471107", size: 8, align: :center
-        pdf.text "IRN - #{SecureRandom.hex(20)}", size: 8, align: :center
-      end
-      
+      pdf.text "SALESPOINTS INDIA PRIVATE LIMITED", size: 10, style: :bold, align: :center
+      pdf.text "Reg. Off: H-105, Street No. 13, Karawal Nagar, Bhajanpura, Delhi - 110055, IN-DL", size: 8, align: :center
+      pdf.text "support@salespoints.in | +91-8368835228 | www.salespoints.in", size: 8, align: :center
+      pdf.text "GSTIN - 07ABTCS6593H1ZH | CIN - U46524DC2026PTC471107", size: 8, align: :center
     end
-    
     pdf.move_down 12
   end
 
@@ -526,11 +521,11 @@ class InvoicePdf
       },
       column_widths: {
         0 => 145,
-        1 => 50,
+        1 => 55,
         2 => 30,
         3 => 50,
         4 => 30,
-        5 => 55,
+        5 => 50,
         6 => 50,
         7 => 50,
         8 => 50,
