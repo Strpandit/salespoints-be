@@ -287,11 +287,9 @@ class DeliveryConfirmationService
   def send_delivery_emails
     case @deliverable
     when Order
-      # Regular delivery email handled by OrderLifecycleService; replacement handled by ReplacementRequestNotificationService
+      EmailDispatcherService.retail_order_delivered(@deliverable)
     when B2bOrder
-      unless @deliverable.status.to_s == "replacement_delivered"
-        EmailDispatcherService.b2b_order_delivered(@deliverable)
-      end
+      EmailDispatcherService.b2b_order_delivered(@deliverable)
     end
   end
 

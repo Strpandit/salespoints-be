@@ -42,6 +42,55 @@ class OrderSettlementService
     end
   end
 
+  def self.settle_order!(order, actor: nil)
+    return if order.blank? || order.seller_dealer.blank?
+
+    amount =
+      case order
+      when Order
+        order.seller_settlement_amount.to_d.round(2).positive? ? order.seller_settlement_amount.to_d.round(2) : order.total_amount.to_d.round(2)
+      when B2bOrder
+        order.total_amount.to_d.round(2)
+      else
+        0.to_d
+      end
+
+    return unless amount.positive?
+
+    already_credited = DealerLedgerEntry.where(
+      dealer_id: order.seller_dealer_id,
+      entry_type: "order_settlement",
+      direction: "credit"
+    )
+
+    if order.is_a?(Order)
+      return if already_credited.where(order_id: order.id).exists?
+    else
+      return if already_credited.where("metadata ->> 'requestable_id' = ?", order.id.to_s).exists?
+    end
+
+    DealerLedgerService.credit!(
+      dealer: order.seller_dealer,
+      amount: amount,
+      entry_type: "order_settlement",
+      description: "Settlement credit for order #{order.try(:order_number) || order.try(:reference_number)}",
+      order: order.is_a?(Order) ? order : nil,
+      metadata: {
+        actor_type: actor&.class&.name,
+        actor_id: actor&.id,
+        requestable_type: order.class.name,
+        requestable_id: order.id
+      }.compact
+    )
+
+    if order.respond_to?(:settlement_status)
+      order.update!(
+        settlement_status: "settled",
+        settled_at: Time.current
+      ) rescue nil
+    end
+  end
+
   def self.process_if_due!(order)
     return if order.blank?
 

@@ -3,21 +3,49 @@
     <div style="padding:28px 32px;background:linear-gradient(135deg,#1d4ed8,#0f172a);color:#fff;">
       <div style="font-size:12px;letter-spacing:1.4px;text-transform:uppercase;opacity:0.9;">SalesPoints Admin Finance</div>
       <h1 style="margin:14px 0 8px;font-size:28px;line-height:1.3;">New Payout Request</h1>
-      <p style="margin:0;font-size:15px;line-height:1.7;max-width:560px;opacity:0.95;">A dealer has submitted a payout request. GST invoice is attached for review.</p>
+      <p style="margin:0;font-size:15px;line-height:1.7;max-width:560px;opacity:0.95;">A dealer has submitted a payout request. Full breakdown and GST invoice are attached for review.</p>
     </div>
 
     <div style="padding:32px;">
-      <div style="padding:22px;border-radius:16px;background:#f8fafc;border:1px solid #e2e8f0;">
+      <!-- Summary Box -->
+      <div style="padding:22px;border-radius:16px;background:#f8fafc;border:1px solid #e2e8f0;margin-bottom:24px;">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
-          <tr><td style="padding:0 0 10px;color:#475569;font-size:13px;">Dealer</td><td style="padding:0 0 10px;text-align:right;font-size:13px;font-weight:700;"><%= @payout.dealer.full_name.presence || @payout.dealer.dealer_code %></td></tr>
-          <tr><td style="padding:0 0 10px;color:#475569;font-size:13px;">Request Number</td><td style="padding:0 0 10px;text-align:right;font-size:13px;font-weight:700;"><%= @payout.request_number %></td></tr>
-          <tr><td style="padding:0 0 10px;color:#475569;font-size:13px;">Amount</td><td style="padding:0 0 10px;text-align:right;font-size:13px;font-weight:700;">Rs <%= format_amount(@payout.amount) %></td></tr>
-          <tr><td style="padding:0 0 10px;color:#475569;font-size:13px;">Status</td><td style="padding:0 0 10px;text-align:right;font-size:13px;font-weight:700;color:#1d4ed8;"><%= @payout.status.to_s.humanize %></td></tr>
-          <tr><td style="padding:0 0 10px;color:#475569;font-size:13px;">Flow</td><td style="padding:0 0 10px;text-align:right;font-size:13px;font-weight:700;"><%= @payout.request_flow.to_s.humanize %></td></tr>
-          <tr><td style="padding:0 0 10px;color:#475569;font-size:13px;">Order Reference</td><td style="padding:0 0 10px;text-align:right;font-size:13px;font-weight:700;"><%= @payout.order_reference.presence || "N/A" %></td></tr>
-          <tr><td style="padding:0;color:#475569;font-size:13px;">Invoice Number</td><td style="padding:0;text-align:right;font-size:13px;font-weight:700;"><%= @payout.invoice_number.presence || "N/A" %></td></tr>
+          <tr><td style="padding:0 0 10px;color:#475569;font-size:13px;">Dealer Name</td><td style="padding:0 0 10px;text-align:right;font-size:13px;font-weight:700;"><%= @payout.dealer.full_name.presence || @payout.dealer.dealer_code %> (<%= @payout.dealer.dealer_code %>)</td></tr>
+          <tr><td style="padding:0 0 10px;color:#475569;font-size:13px;">Request Number</td><td style="padding:0 0 10px;text-align:right;font-size:13px;font-weight:700;font-family:monospace;"><%= @payout.request_number %></td></tr>
+          <tr><td style="padding:0 0 10px;color:#475569;font-size:13px;">Total Payout Amount</td><td style="padding:0 0 10px;text-align:right;font-size:16px;font-weight:800;color:#059669;">Rs <%= format_amount(@payout.amount) %></td></tr>
+          <tr><td style="padding:0 0 10px;color:#475569;font-size:13px;">GST Invoice Number</td><td style="padding:0 0 10px;text-align:right;font-size:13px;font-weight:700;"><%= @payout.invoice_number.presence || "N/A" %></td></tr>
+          <tr><td style="padding:0;color:#475569;font-size:13px;">Bank Details</td><td style="padding:0;text-align:right;font-size:13px;font-weight:700;"><%= @payout.bank_name %> | A/C: <%= @payout.bank_account_number %> | IFSC: <%= @payout.ifsc_code %></td></tr>
         </table>
       </div>
+
+      <!-- Selected Orders Breakdown Table -->
+      <% selected_orders = Array(@payout.metadata&.dig("selected_orders")) %>
+      <% if selected_orders.any? %>
+        <h3 style="margin:24px 0 12px;font-size:16px;color:#0f172a;">Requested Orders Breakdown (<%= selected_orders.length %> Orders)</h3>
+        <div style="overflow-x:auto;border:1px solid #e2e8f0;border-radius:12px;margin-bottom:24px;">
+          <table role="presentation" width="100%" cellpadding="8" cellspacing="0" style="border-collapse:collapse;font-size:13px;">
+            <thead>
+              <tr style="background:#f1f5f9;color:#334155;text-align:left;">
+                <th style="padding:10px;border-bottom:1px solid #e2e8f0;">Order Ref</th>
+                <th style="padding:10px;border-bottom:1px solid #e2e8f0;">Type</th>
+                <th style="padding:10px;border-bottom:1px solid #e2e8f0;">Buyer</th>
+                <th style="padding:10px;border-bottom:1px solid #e2e8f0;text-align:right;">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% selected_orders.each do |ord| %>
+                <tr style="border-bottom:1px solid #f1f5f9;">
+                  <td style="padding:10px;font-weight:600;"><%= ord["reference_number"] %></td>
+                  <td style="padding:10px;text-transform:uppercase;"><%= ord["flow_type"] %></td>
+                  <td style="padding:10px;"><%= ord["buyer_name"] %></td>
+                  <td style="padding:10px;text-align:right;font-weight:700;color:#059669;">Rs <%= format_amount(ord["amount"]) %></td>
+                </tr>
+              <% end %>
+            </tbody>
+          </table>
+        </div>
+      <% end %>
+
       <% if @payout.admin_note.present? %>
         <div style="margin-top:18px;padding:18px;border-radius:14px;background:#fffdf7;border:1px solid #fde68a;">
           <strong>Dealer Note:</strong> <%= @payout.admin_note %>

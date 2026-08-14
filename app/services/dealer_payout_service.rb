@@ -7,11 +7,13 @@ class DealerPayoutService
   end
 
   def eligible_orders
+    ensure_settlement_credits!
+
     retail_orders = Order
       .includes(:buyer, :seller_dealer, :return_requests)
       .where(seller_dealer_id: @dealer.id)
       .where(status: PAYOUT_READY_ORDER_STATUSES)
-      .where(payment_status: "paid")
+      .where(payment_status: %w[paid partially_refunded refunded])
       .order(delivered_at: :desc)
 
     b2b_orders = B2bOrder
@@ -27,38 +29,104 @@ class DealerPayoutService
     payload.sort_by { |row| row[:delivered_at].to_s }.reverse
   end
 
-  def request!(amount:, note: nil, order_id: nil, order_type: nil, invoice_number: nil, gst_invoice: nil)
+  def request!(amount: nil, note: nil, order_id: nil, order_type: nil, orders: nil, invoice_number: nil, gst_invoice: nil)
     profile = @dealer.dealer_profile
     raise StandardError, "Dealer bank details are incomplete" if profile.blank? || profile.bank_name.blank? || profile.bank_account_number.blank? || profile.ifsc_code.blank?
     raise StandardError, "Please verify your bank account before requesting payout" unless profile.bank_verified?
 
-    requestable = find_requestable(order_id: order_id, order_type: order_type)
+    target_orders = []
 
-    payout_amount =
-      if requestable.present?
-        raise StandardError, "GST invoice is required" if gst_invoice.blank?
+    if orders.present?
+      parsed = orders.is_a?(String) ? (JSON.parse(orders) rescue []) : Array(orders)
+      parsed.each do |item|
+        item_hash = item.is_a?(Hash) ? item.with_indifferent_access : {}
+        oid = item_hash[:order_id] || item_hash[:id]
+        otype = item_hash[:order_type] || item_hash[:type]
+        ord = find_requestable(order_id: oid, order_type: otype)
+        target_orders << ord if ord.present?
+      end
+    elsif order_id.present?
+      ord = find_requestable(order_id: order_id, order_type: order_type)
+      target_orders << ord if ord.present?
+    end
 
-        validate_requestable_eligibility!(requestable)
-        payout_amount_for(requestable)
-      else
-        value = BigDecimal(amount.to_s).round(2)
-        raise StandardError, "Payout amount must be greater than 0" unless value.positive?
-        raise StandardError, "Insufficient settlement balance" if value > @dealer.settlement_balance.to_d
-        value
+    payout = nil
+
+    if target_orders.any?
+      raise StandardError, "GST invoice is required" if gst_invoice.blank?
+
+      total_payout_amount = 0.to_d
+      order_summaries = []
+
+      target_orders.each do |order|
+        validate_requestable_eligibility!(order)
+        amt = payout_amount_for(order)
+        total_payout_amount += amt
+        order_summaries << {
+          order_id: order.id,
+          order_type: requestable_type_param(order),
+          reference_number: request_reference(order),
+          flow_type: requestable_flow(order),
+          buyer_name: buyer_name_for(order),
+          amount: amt.to_f,
+          delivered_at: order.delivered_at&.iso8601
+        }
       end
 
-    payout = DealerPayout.create!(
-      dealer: @dealer,
-      requestable: requestable,
-      amount: payout_amount,
-      bank_name: profile.bank_name,
-      bank_account_number: profile.bank_account_number,
-      ifsc_code: profile.ifsc_code,
-      account_holder_name: profile.account_holder_name.presence || @dealer.full_name.presence || profile.business_name,
-      invoice_number: invoice_number.presence,
-      admin_note: note,
-      metadata: payout_metadata(profile, requestable, invoice_number, note)
-    )
+      primary_requestable = target_orders.first
+
+      payout = DealerPayout.create!(
+        dealer: @dealer,
+        requestable: primary_requestable,
+        amount: total_payout_amount.round(2),
+        bank_name: profile.bank_name,
+        bank_account_number: profile.bank_account_number,
+        ifsc_code: profile.ifsc_code,
+        account_holder_name: profile.account_holder_name.presence || @dealer.full_name.presence || profile.business_name,
+        invoice_number: invoice_number.presence,
+        admin_note: note,
+        metadata: payout_metadata(profile, primary_requestable, invoice_number, note).merge(
+          "selected_orders" => order_summaries,
+          "order_count" => target_orders.length
+        )
+      )
+
+      target_orders.drop(1).each do |sec_order|
+        DealerPayout.create!(
+          dealer: @dealer,
+          requestable: sec_order,
+          amount: payout_amount_for(sec_order).round(2),
+          bank_name: profile.bank_name,
+          bank_account_number: profile.bank_account_number,
+          ifsc_code: profile.ifsc_code,
+          account_holder_name: profile.account_holder_name.presence || @dealer.full_name.presence || profile.business_name,
+          invoice_number: invoice_number.presence,
+          admin_note: "Batch payout linked to #{payout.request_number}",
+          metadata: payout_metadata(profile, sec_order, invoice_number, note).merge(
+            "parent_payout_id" => payout.id,
+            "parent_payout_number" => payout.request_number
+          )
+        )
+      end
+    else
+      value = BigDecimal(amount.to_s).round(2)
+      raise StandardError, "Payout amount must be greater than 0" unless value.positive?
+      ensure_settlement_credits!
+      raise StandardError, "Insufficient settlement balance" if value > @dealer.reload.settlement_balance.to_d
+
+      payout = DealerPayout.create!(
+        dealer: @dealer,
+        requestable: nil,
+        amount: value,
+        bank_name: profile.bank_name,
+        bank_account_number: profile.bank_account_number,
+        ifsc_code: profile.ifsc_code,
+        account_holder_name: profile.account_holder_name.presence || @dealer.full_name.presence || profile.business_name,
+        invoice_number: invoice_number.presence,
+        admin_note: note,
+        metadata: payout_metadata(profile, nil, invoice_number, note)
+      )
+    end
 
     payout.gst_invoice.attach(gst_invoice) if gst_invoice.present?
     DealerPayoutNotificationService.request_created!(payout.reload)
@@ -102,7 +170,7 @@ class DealerPayoutService
   end
 
   def mark_paid!(payout:, admin:, payment_reference:, payment_mode:, note: nil)
-    raise StandardError, "Only approved or processing payouts can be paid" unless payout.status.in?(%w[approved processing])
+    raise StandardError, "Only pending, approved or processing payouts can be paid" unless payout.status.in?(%w[pending approved processing])
 
     Dealer.transaction do
       locked_payout = DealerPayout.lock.find(payout.id)
@@ -352,6 +420,15 @@ class DealerPayoutService
       buyer.try(:full_name).presence || buyer.try(:dealer_code).presence || "Buyer"
     else
       "Buyer"
+    end
+  end
+
+  def ensure_settlement_credits!
+    orders = Order.where(seller_dealer_id: @dealer.id, status: PAYOUT_READY_ORDER_STATUSES) +
+             B2bOrder.where(seller_dealer_id: @dealer.id, status: PAYOUT_READY_ORDER_STATUSES)
+
+    orders.each do |ord|
+      OrderSettlementService.settle_order!(ord)
     end
   end
 end

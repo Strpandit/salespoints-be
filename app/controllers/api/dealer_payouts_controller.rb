@@ -35,6 +35,7 @@ module Api
         note: params[:note],
         order_id: params[:order_id],
         order_type: params[:order_type],
+        orders: params[:orders],
         invoice_number: params[:invoice_number],
         gst_invoice: params[:gst_invoice]
       )

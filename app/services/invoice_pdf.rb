@@ -461,8 +461,8 @@ class InvoicePdf
       product = item.product_variant&.product
 
       serial_text = ""
-      if @order.delivery_confirmation&.serial_numbers.present?
-        serial_text = "Serial No(s):\n" + @order.delivery_confirmation.serial_numbers.join(", ")
+      if active_delivery_confirmation&.serial_numbers.present?
+        serial_text = "Serial No(s):\n" + active_delivery_confirmation.serial_numbers.join(", ")
       end
 
       sku = item.product_variant&.variant_sku || item&.wholesaler_post&.modal_no || 'Standard'
@@ -639,5 +639,9 @@ class InvoicePdf
       color: "666666"
     )
 
+  end
+
+  def active_delivery_confirmation
+    @active_delivery_confirmation ||= @order.replacement_delivery_confirmation.presence || @order.delivery_confirmation
   end
 end

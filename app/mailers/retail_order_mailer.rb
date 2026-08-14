@@ -46,6 +46,7 @@ class RetailOrderMailer < ApplicationMailer
     @order = load_order(order_id)
     @buyer = @order.buyer
     @seller = @order.seller_dealer
+    prefix = @order.status.to_s == "replacement_delivered" ? "Replacement Delivered" : "Order Delivered"
 
     if recipient_type.to_s == "buyer" || recipient_type.to_s == "admin"
       generator = InvoicePdf.new(@order)
@@ -59,17 +60,17 @@ class RetailOrderMailer < ApplicationMailer
     when "buyer"
       return if @buyer&.email.blank?
 
-      @subject_line = "Order Delivered - #{@order.order_number}"
+      @subject_line = "#{prefix} - #{@order.order_number}"
       @view_type = "buyer"
       mail(to: @buyer.email, subject: @subject_line)
     when "seller"
       return if @seller&.email.blank?
 
-      @subject_line = "Order Delivered - #{@order.order_number}"
+      @subject_line = "#{prefix} - #{@order.order_number}"
       @view_type = "seller"
       mail(to: @seller.email, subject: @subject_line)
     when "admin"
-      @subject_line = "Order Delivered - #{@order.order_number}"
+      @subject_line = "#{prefix} - #{@order.order_number}"
       @view_type = "admin"
       mail_to_admins(subject: @subject_line)
     end
