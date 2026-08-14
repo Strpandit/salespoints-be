@@ -62,13 +62,21 @@ module Api
 
     def show
       order_id = params[:id].to_i
-      
+
       b2b_order = current_dealer.buyer_b2b_orders.find_by(id: order_id) ||
-                  current_dealer.seller_b2b_orders.find_by(id: order_id)
-      
+                  current_dealer.seller_b2b_orders.find_by(id: order_id) ||
+                  B2bOrder.joins(:b2b_order_offers).where(b2b_order_offers: { dealer_id: current_dealer.id }).find_by(id: order_id)
+
       if b2b_order.present?
+        source_tab = if b2b_order.buyer_dealer_id == current_dealer.id
+                       "outgoing"
+                     elsif b2b_order.seller_dealer_id == current_dealer.id
+                       "accepted"
+                     else
+                       "incoming"
+                     end
         return render json: {
-          data: transform_b2b_order_detail(b2b_order),
+          data: transform_b2b_order_detail(b2b_order, source_tab),
           message: "B2B order fetched successfully"
         }, status: :ok
       end
@@ -77,8 +85,9 @@ module Api
                      current_dealer.orders.find_by(id: order_id)
 
       if retail_order.present?
+        source_tab = retail_order.seller_dealer_id == current_dealer.id ? (retail_order.status == "pending" ? "incoming" : "accepted") : "outgoing"
         return render json: {
-          data: transform_retail_order_detail(retail_order),
+          data: transform_retail_order_detail(retail_order, source_tab),
           message: "B2C order fetched successfully"
         }, status: :ok
       end
@@ -227,14 +236,14 @@ module Api
         accepted_items_count: order.b2b_order_items.accepted_items.count,
         open_items_count: order.b2b_order_items.open_items.count,
         items: order.b2b_order_items.map { |item| transform_b2b_item(item) },
-        delivery_confirmation: (is_seller || is_buyer) && order.delivery_confirmation ? delivery_confirmation_payload(order.delivery_confirmation) : nil,
-        replacement_delivery_confirmation: (is_seller || is_buyer) && order.replacement_delivery_confirmation ? delivery_confirmation_payload(order.replacement_delivery_confirmation) : nil,
-        can_accept: order.pending_request? && !order.expired? && order.seller_dealer_id == current_dealer.id,
-        can_reject: order.pending_request? && !order.expired? && order.seller_dealer_id == current_dealer.id,
+        delivery_confirmation: is_seller && order.delivery_confirmation ? delivery_confirmation_payload(order.delivery_confirmation) : nil,
+        replacement_delivery_confirmation: is_seller && order.replacement_delivery_confirmation ? delivery_confirmation_payload(order.replacement_delivery_confirmation) : nil,
+        can_accept: !is_buyer && order.pending_request? && !order.expired? && (order.seller_dealer_id.nil? || order.seller_dealer_id == current_dealer.id || order.b2b_order_offers.where(dealer_id: current_dealer.id).exists?),
+        can_reject: !is_buyer && order.pending_request? && !order.expired? && (order.seller_dealer_id.nil? || order.seller_dealer_id == current_dealer.id || order.b2b_order_offers.where(dealer_id: current_dealer.id).exists?),
         can_update: order.can_transition_to?("shipped") && order.seller_dealer_id == current_dealer.id,
         can_download_invoice: order.buyer_dealer_id == current_dealer.id,
         replacement_request: replacement_request.present? ? ReturnRequestSerializer.new(replacement_request, base_url: request.base_url).serializable_hash : nil,
-        can_request_replacement: is_buyer && order.status == "delivered" && replacement_request.blank?,
+        can_request_replacement: is_buyer && order.replacement_allowed?,
         can_manage_replacement: is_seller && replacement_request.present? && replacement_request&.open?,
         next_status: b2b_next_status(order)
       }
@@ -293,7 +302,9 @@ module Api
         delivery_confirmation: is_seller && order.delivery_confirmation ? delivery_confirmation_payload(order.delivery_confirmation) : nil,
         replacement_delivery_confirmation: is_seller && order.replacement_delivery_confirmation ? delivery_confirmation_payload(order.replacement_delivery_confirmation) : nil,
         replacement_request: replacement_request.present? ? ReturnRequestSerializer.new(replacement_request, base_url: request.base_url).serializable_hash : nil,
-        can_request_replacement: false,
+        can_accept: is_seller && order.status == "pending",
+        can_reject: is_seller && order.status == "pending",
+        can_request_replacement: is_buyer && order.replacement_allowed?,
         can_manage_replacement: is_seller && replacement_request.present? && replacement_request.open?,
         can_update: (order.can_transition_to?("processing") || order.can_transition_to?("shipped")) && order.seller_dealer_id == current_dealer.id,
         next_status: order.status == "pending" ? "processing" : (order.status == "processing" ? "shipped" : nil)
@@ -485,13 +496,21 @@ module Api
     end
 
     def attachment_payload(file)
-      return nil unless file.respond_to?(:attached?) && file.attached?
+      return nil if file.blank?
+
+      if file.respond_to?(:attached?)
+        return nil unless file.attached?
+        file = file.attachment
+      end
+
+      blob = file.respond_to?(:blob) ? file.blob : file
+      return nil if blob.blank? || !blob.respond_to?(:filename)
 
       {
-        filename: file.filename.to_s,
-        content_type: file.content_type,
-        byte_size: file.byte_size,
-        url: Rails.application.routes.url_helpers.rails_blob_url(file, only_path: false)
+        filename: blob.filename.to_s,
+        content_type: blob.content_type,
+        byte_size: blob.byte_size,
+        url: Rails.application.routes.url_helpers.rails_blob_url(blob, only_path: false)
       }
     rescue StandardError
       nil

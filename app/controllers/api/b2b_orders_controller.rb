@@ -341,12 +341,14 @@ module Api
     end
 
     def find_order(id)
-      b2b_order = B2bOrder.joins(:b2b_order_offers)
-                       .where(b2b_order_offers: { dealer_id: current_dealer.id, status: "open" })
-                       .find_by(id: id)
+      b2b_order = current_dealer.seller_b2b_orders.find_by(id: id) ||
+                  B2bOrder.joins(:b2b_order_offers)
+                          .where(b2b_order_offers: { dealer_id: current_dealer.id, status: "open" })
+                          .find_by(id: id)
       return b2b_order if b2b_order.present?
 
-      retail_order = Order.joins(:order_offers)
+      retail_order = current_dealer.sales_orders.find_by(id: id) ||
+                     Order.joins(:order_offers)
                           .where(order_offers: { dealer_id: current_dealer.id, status: "open" })
                           .find_by(id: id)
       return retail_order if retail_order.present?
@@ -365,12 +367,12 @@ module Api
       if order.is_a?(B2bOrder)
         return false unless order.request_status == "pending_request"
         return false unless order.status.in?(%w[pending_request pending_payment])
-        return false if order.seller_dealer_id.present?
+        return false if order.seller_dealer_id.present? && order.seller_dealer_id != current_dealer.id
         return false if order.expires_at.present? && Time.current > order.expires_at
         true
       elsif order.is_a?(Order)
         return false unless order.status == "pending"
-        return false if order.seller_dealer_id.present?
+        return false if order.seller_dealer_id.present? && order.seller_dealer_id != current_dealer.id
         return false if order.expires_at.present? && Time.current > order.expires_at
         true
       else

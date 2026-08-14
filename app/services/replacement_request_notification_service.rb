@@ -20,37 +20,51 @@ class ReplacementRequestNotificationService
     end
 
     def accept_token_for(return_request)
-      verifier.generate(
-        { action: "accept", id: return_request.id },
-        expires_in: TOKEN_EXPIRY,
-        purpose: "replacement_accept"
-      )
+      generate_compact_token("accept", return_request.id)
     end
 
     def reject_token_for(return_request)
-      verifier.generate(
-        { action: "reject", id: return_request.id },
-        expires_in: TOKEN_EXPIRY,
-        purpose: "replacement_reject"
-      )
+      generate_compact_token("reject", return_request.id)
     end
 
     def shipped_token_for(return_request)
-      verifier.generate(
-        { action: "ship", id: return_request.id },
-        expires_in: TOKEN_EXPIRY,
-        purpose: "replacement_ship"
-      )
+      generate_compact_token("ship", return_request.id)
+    end
+
+    def generate_compact_token(action, id)
+      exp = (Time.now + TOKEN_EXPIRY).to_i
+      payload = "#{action}:#{id}:#{exp}"
+      sig = OpenSSL::HMAC.hexdigest("SHA256", Rails.application.secret_key_base, payload)[0..15]
+      "#{payload}:#{sig}"
     end
 
     def decode_token(token)
-      purpose = token_purpose(token)
-      return nil if purpose.nil?
+      return nil if token.blank?
 
-      payload = verifier.verified(token, purpose: purpose)
-      return nil if payload.nil?
+      # Fallback for old MessageVerifier tokens
+      if token.start_with?("ey") || token.include?("--")
+        purpose = token_purpose(token)
+        return nil if purpose.nil?
 
-      { action: payload[:action], id: payload[:id] }
+        payload = verifier.verified(token, purpose: purpose) rescue nil
+        return nil if payload.nil?
+
+        return { action: payload[:action], id: payload[:id] }
+      end
+
+      parts = token.split(":")
+      return nil unless parts.length == 4
+
+      action, id_str, exp_str, sig = parts
+      exp = exp_str.to_i
+      return nil if Time.now.to_i > exp
+
+      payload = "#{action}:#{id_str}:#{exp_str}"
+      expected_sig = OpenSSL::HMAC.hexdigest("SHA256", Rails.application.secret_key_base, payload)[0..15]
+
+      return nil unless ActiveSupport::SecurityUtils.secure_compare(sig, expected_sig)
+
+      { action: action, id: id_str.to_i }
     rescue StandardError
       nil
     end
@@ -224,6 +238,7 @@ class ReplacementRequestNotificationService
     buyer = buyer_recipient
 
     buyer_phone = buyer.try(:phone).presence || requestable.try(:shipping_address)&.dig("phone") || "N/A"
+    latitude, longitude, location_name = get_buyer_location_details
 
     MetaWhatsappCloudService.new.send_order_accept(
       to: to,
@@ -233,10 +248,25 @@ class ReplacementRequestNotificationService
       order_id: request_reference_number,
       payment_mode: requestable.try(:payment_method).to_s.upcase.presence || "COD",
       total_amount: "₹#{requestable.try(:total_amount).to_f.round(2)}",
+      latitude: latitude,
+      longitude: longitude,
+      location_name: location_name,
       shipped_token: shipped_tok
     )
   rescue StandardError => e
     Rails.logger.error("ReplacementRequestNotificationService WhatsApp (approved) failed for #{return_request.id}: #{e.message}")
+  end
+
+  def get_buyer_location_details
+    addr_text = shipping_address_text
+    if addr_text.present? && addr_text != "Address not available"
+      results = Geocoder.search(addr_text) rescue []
+      if results.any? && results.first.latitude.present? && results.first.longitude.present?
+        return [results.first.latitude.to_f, results.first.longitude.to_f, buyer_display_name]
+      end
+    end
+
+    [28.6139, 77.2090, buyer_display_name]
   end
 
   def buyer_recipient
@@ -403,11 +433,11 @@ class ReplacementRequestNotificationService
   def recipient_name(recipient, fallback:)
     return fallback if recipient.blank?
 
+    recipient.try(:dealer_code).presence ||
     recipient.try(:full_name).presence ||
-      recipient.try(:first_name).presence ||
-      recipient.try(:dealer_code).presence ||
-      recipient.try(:email).presence ||
-      fallback
+    recipient.try(:first_name).presence ||
+    recipient.try(:email).presence ||
+    fallback
   end
 
   def created_event?
@@ -437,17 +467,26 @@ class ReplacementRequestNotificationService
 
   def shipping_address_text
     addr = requestable.try(:shipping_address)
-    return "Address not available" if addr.blank?
 
-    parts = [
-      addr["address_line1"],
-      addr["address_line2"],
-      addr["city"],
-      addr["state"],
-      addr["postal_code"]
-    ].compact.reject(&:blank?)
+    if addr.is_a?(Hash) && addr.present?
+      parts = [
+        addr["address_line1"],
+        addr["address_line2"],
+        addr["city"],
+        addr["state"],
+        addr["postal_code"]
+      ].compact.reject(&:blank?)
+      return parts.join(", ") if parts.any?
+    elsif addr.is_a?(String) && addr.present?
+      return addr
+    end
 
-    parts.any? ? parts.join(", ") : "Address not available"
+    buyer = buyer_recipient
+    if buyer.respond_to?(:dealer_profile) && buyer.dealer_profile&.business_address.present?
+      return buyer.dealer_profile.business_address
+    end
+
+    "Address not available"
   end
 
   def normalized_whatsapp_number(recipient)

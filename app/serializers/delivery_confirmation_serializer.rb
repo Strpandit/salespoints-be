@@ -18,19 +18,23 @@ class DeliveryConfirmationSerializer < ApplicationSerializer
   private
 
   def attachment_payload(file)
-    return nil unless file.attached?
+    return nil if file.blank?
+
+    if file.respond_to?(:attached?)
+      return nil unless file.attached?
+      file = file.attachment
+    end
+
+    blob = file.respond_to?(:blob) ? file.blob : file
+    return nil if blob.blank? || !blob.respond_to?(:filename)
 
     {
-      filename: file.filename.to_s,
-      content_type: file.content_type,
-      byte_size: file.byte_size,
-      url: Rails.application.routes.url_helpers.rails_blob_url(file, only_path: false)
+      filename: blob.filename.to_s,
+      content_type: blob.content_type,
+      byte_size: blob.byte_size,
+      url: Rails.application.routes.url_helpers.rails_blob_url(blob, only_path: false)
     }
   rescue StandardError
-    {
-      filename: file.filename.to_s,
-      content_type: file.content_type,
-      byte_size: file.byte_size
-    }
+    nil
   end
 end
