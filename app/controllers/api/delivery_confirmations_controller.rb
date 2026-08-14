@@ -42,9 +42,10 @@ module Api
     end
 
     def verify_otps
+      otp_value = params[:buyer_otp].presence || params.dig(:delivery_confirmation, :buyer_otp)
       confirmation = service.verify_otps!(
         confirmation: @confirmation,
-        buyer_otp: params[:buyer_otp]
+        buyer_otp: otp_value
       )
 
       render json: serialize_resource(confirmation, DeliveryConfirmationSerializer).merge(
