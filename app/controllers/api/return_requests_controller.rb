@@ -123,19 +123,22 @@ module Api
         }, status: :unprocessable_entity
       end
 
-      updated_request = ReturnRequestTransitionService.new(
-        return_request: request,
-        actor: current_user,
-        resolution_notes: params[:resolution_notes]
-      ).transition!(next_status: next_status)
+      updated_request = nil
+      ReturnRequest.transaction do
+        updated_request = ReturnRequestTransitionService.new(
+          return_request: request,
+          actor: current_user,
+          resolution_notes: params[:resolution_notes]
+        ).transition!(next_status: next_status)
 
-      if next_status == "in_transit"
-        DeliveryConfirmationService.new(deliverable: updated_request.requestable, actor: current_user)
-          .create_replacement!(return_request: updated_request)
+        if next_status == "in_transit"
+          DeliveryConfirmationService.new(deliverable: updated_request.requestable, actor: current_user)
+            .create_replacement!(return_request: updated_request)
 
-        ReplacementRequestNotificationService.request_shipped!(updated_request.reload, actor: current_user)
-      else
-        ReplacementRequestNotificationService.request_updated!(updated_request.reload, actor: current_user)
+          ReplacementRequestNotificationService.request_shipped!(updated_request.reload, actor: current_user)
+        else
+          ReplacementRequestNotificationService.request_updated!(updated_request.reload, actor: current_user)
+        end
       end
 
       render json: {
