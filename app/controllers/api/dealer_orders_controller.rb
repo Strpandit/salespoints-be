@@ -390,8 +390,8 @@ module Api
       status_meta[order.status] || { label: order.status || "Pending", color: "#54595E", bg: "#F1F3F4" }
     end
 
-    def transform_b2b_order_detail(order)
-      base = transform_b2b_order(order, "detail")
+    def transform_b2b_order_detail(order, source_tab = "detail")
+      base = transform_b2b_order(order, source_tab)
       
       base.merge({
         billing_address: order.billing_address,
@@ -415,8 +415,8 @@ module Api
       })
     end
 
-    def transform_retail_order_detail(order)
-      base = transform_retail_order(order, "detail")
+    def transform_retail_order_detail(order, source_tab = "detail")
+      base = transform_retail_order(order, source_tab)
       
       base.merge({
         billing_address: order.billing_address,
