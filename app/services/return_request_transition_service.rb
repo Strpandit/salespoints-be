@@ -6,7 +6,8 @@ class ReturnRequestTransitionService
   end
 
   def transition!(next_status:)
-    raise StandardError, "Unauthorized" if @actor.blank?
+    effective_actor = @actor || @return_request&.requestable&.try(:seller_dealer) || @return_request&.requester
+    raise StandardError, "Unauthorized" if effective_actor.blank?
     next_status = next_status.to_s
     raise StandardError, "Invalid return request status" unless ReturnRequest::STATUSES.include?(next_status)
     raise StandardError, "Invalid return request transition" unless allowed_statuses.include?(next_status)

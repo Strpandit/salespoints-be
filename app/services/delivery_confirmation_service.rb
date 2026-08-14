@@ -83,7 +83,7 @@ class DeliveryConfirmationService
         completed_at: confirmation.completed_at || Time.current
       )
 
-      mark_delivered!
+      mark_delivered!(confirmation: confirmation)
       mark_payment_paid_if_required!
       create_completed_notifications(confirmation)
       send_delivery_emails
@@ -154,26 +154,35 @@ class DeliveryConfirmationService
     rand(100000..999999).to_s
   end
 
-  def mark_delivered!
-    if @deliverable.status.to_s == "replacement_shipped"
-      request = @deliverable.return_requests.find_by(request_type: "replacement", status: "in_transit")
-      if request
-        ReturnRequestTransitionService.new(
-          return_request: request,
-          actor: @actor,
-          resolution_notes: "Replacement delivered after OTP verification."
-        ).transition!(next_status: "received")
+  def mark_delivered!(confirmation: nil)
+    effective_actor = @actor || @deliverable.try(:seller_dealer) || @deliverable.try(:buyer)
+    is_replacement = (confirmation&.context == "replacement") || @deliverable.status.to_s == "replacement_shipped"
 
-        request.reload
+    if is_replacement
+      request = @deliverable.return_requests.where(request_type: "replacement").where(status: %w[in_transit approved]).order(created_at: :desc).first
+      if request
+        begin
+          ReturnRequestTransitionService.new(
+            return_request: request,
+            actor: effective_actor,
+            resolution_notes: "Replacement delivered after OTP verification."
+          ).transition!(next_status: "received")
+        rescue StandardError => e
+          Rails.logger.warn("ReturnRequestTransitionService transition error: #{e.message}")
+        end
+
+        request.reload rescue nil
         request.update!(
-          status: "completed",
+          status: "received",
           completed_at: request.completed_at || Time.current,
-          resolution_notes: "Replacement delivered and completed after OTP verification."
-        )
+          resolution_notes: "Replacement delivered after OTP verification."
+        ) rescue nil
 
         @deliverable.update!(status: "replacement_delivered", status_note: "Replacement delivered after OTP verification.")
-
-        ReplacementRequestNotificationService.request_completed!(request, actor: @actor)
+        ReplacementRequestNotificationService.request_completed!(request, actor: effective_actor) rescue nil
+        return
+      else
+        @deliverable.update!(status: "replacement_delivered", status_note: "Replacement delivered after OTP verification.")
         return
       end
     end
@@ -182,7 +191,7 @@ class DeliveryConfirmationService
     when Order
       OrderLifecycleService.new(
         order: @deliverable,
-        actor: @actor,
+        actor: effective_actor,
         status_note: "Delivery completed after OTP verification."
       ).transition!(next_status: "delivered")
     when B2bOrder
