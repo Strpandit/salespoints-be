@@ -12,6 +12,7 @@ class MetaWhatsappCloudService
   TEMPLATE_DELIVERY_FORM_LINK = "delivery_form_link"
   TEMPLATE_DELIVERY_VERIFICATION_OTP = "delivery_code"
   TEMPLATE_ACCOUNT_LOGIN_OTP = "login_code"
+  TEMPLATE_REPLACEMENT_REQUEST = "replacement_request_dealer"
 
   def send_dealer_order_request(to:, product:, variant:, sku:, price:, quantity:, total_amount:, delivery_location:, approx_distance:, accept_token:, reject_token:, image_url: nil)
     components = []
@@ -226,6 +227,44 @@ class MetaWhatsappCloudService
     send_template_message(
       to: to,
       template_name: TEMPLATE_ACCOUNT_LOGIN_OTP,
+      components: components
+    )
+  end
+
+  def send_replacement_request(to:, order_ref:, buyer_name:, items_summary:, total_amount:, address:, reason:, accept_token:, reject_token:)
+    components = [
+      {
+        type: "body",
+        parameters: [
+          { type: "text", text: order_ref.to_s },
+          { type: "text", text: buyer_name.to_s },
+          { type: "text", text: items_summary.to_s },
+          { type: "text", text: total_amount.to_s },
+          { type: "text", text: address.to_s },
+          { type: "text", text: reason.to_s }
+        ]
+      },
+      {
+        type: "button",
+        sub_type: "quick_reply",
+        index: 0,
+        parameters: [
+          { type: "payload", payload: accept_token.to_s }
+        ]
+      },
+      {
+        type: "button",
+        sub_type: "quick_reply",
+        index: 1,
+        parameters: [
+          { type: "payload", payload: reject_token.to_s }
+        ]
+      }
+    ]
+
+    send_template_message(
+      to: to,
+      template_name: TEMPLATE_REPLACEMENT_REQUEST,
       components: components
     )
   end

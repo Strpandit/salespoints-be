@@ -169,7 +169,7 @@ class InvoicePdf
 
   def buyer_name
     if buyer.present?
-      buyer.full_name || buyer.dealer_code || "Customer"
+      buyer.dealer_profile&.business_name || buyer.full_name || buyer.dealer_code || "Customer"
     else
       "Customer"
     end
@@ -379,7 +379,7 @@ class InvoicePdf
   def add_invoice_header(pdf)
     pdf.bounding_box([0, pdf.cursor], width: pdf.bounds.width) do
       pdf.text "SALESPOINTS INDIA PRIVATE LIMITED", size: 10, style: :bold, align: :center
-      pdf.text "Reg. Off: H-105, Street No. 13, Karawal Nagar, Bhajanpura, Delhi - 110055, IN-DL", size: 8, align: :center
+      pdf.text "Reg. Off: Prop No-49, Kh No. 70, Road Sadatpur, Karawal  Nagar, New Delhi - 110094", size: 8, align: :center
       pdf.text "support@salespoints.in | +91-8368835228 | www.salespoints.in", size: 8, align: :center
       pdf.text "GSTIN - 07ABTCS6593H1ZH | CIN - U46524DC2026PTC471107", size: 8, align: :center
     end
@@ -485,9 +485,9 @@ class InvoicePdf
         format('%.2f', item.unit_price),
         format('%.2f', discount),
         format('%.2f', taxable_value),
-        "#{cgst_amount}\n#{cgst_rate}%",
-        "#{sgst_amount}\n#{sgst_rate}%",
-        "#{igst_amount}\n#{igst_rate}%",
+        "#{cgst_amount}\n#{cgst_rate} %",
+        "#{sgst_amount}\n#{sgst_rate} %",
+        "#{igst_amount}\n#{igst_rate} %",
         format('%.2f', total_amount)
       ]
     end

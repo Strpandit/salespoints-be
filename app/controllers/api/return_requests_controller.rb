@@ -115,18 +115,28 @@ module Api
         }, status: :unprocessable_entity
       end
 
+      next_status = params[:status].to_s
+
+      if %w[received completed].include?(next_status)
+        return render json: {
+          error: "This status is set automatically after delivery OTP verification. You cannot set it manually."
+        }, status: :unprocessable_entity
+      end
+
       updated_request = ReturnRequestTransitionService.new(
         return_request: request,
         actor: current_user,
         resolution_notes: params[:resolution_notes]
-      ).transition!(next_status: params[:status])
+      ).transition!(next_status: next_status)
 
-      if params[:status].to_s == "in_transit"
+      if next_status == "in_transit"
         DeliveryConfirmationService.new(deliverable: updated_request.requestable, actor: current_user)
           .create_replacement!(return_request: updated_request)
-      end
 
-      ReplacementRequestNotificationService.request_updated!(updated_request, actor: current_user)
+        ReplacementRequestNotificationService.request_shipped!(updated_request.reload, actor: current_user)
+      else
+        ReplacementRequestNotificationService.request_updated!(updated_request.reload, actor: current_user)
+      end
 
       render json: {
         data: ReturnRequestSerializer.render(updated_request),

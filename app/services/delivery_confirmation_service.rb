@@ -155,14 +155,25 @@ class DeliveryConfirmationService
   end
 
   def mark_delivered!
-    if @deliverable.status == "replacement_shipped"
+    if @deliverable.status.to_s == "replacement_shipped"
       request = @deliverable.return_requests.find_by(request_type: "replacement", status: "in_transit")
       if request
         ReturnRequestTransitionService.new(
           return_request: request,
           actor: @actor,
-          resolution_notes: "Delivery completed after OTP verification."
-        ).transition!(next_status: "completed")
+          resolution_notes: "Replacement delivered after OTP verification."
+        ).transition!(next_status: "received")
+
+        request.reload
+        request.update!(
+          status: "completed",
+          completed_at: request.completed_at || Time.current,
+          resolution_notes: "Replacement delivered and completed after OTP verification."
+        )
+
+        @deliverable.update!(status: "replacement_delivered", status_note: "Replacement delivered after OTP verification.")
+
+        ReplacementRequestNotificationService.request_completed!(request, actor: @actor)
         return
       end
     end
@@ -267,9 +278,11 @@ class DeliveryConfirmationService
   def send_delivery_emails
     case @deliverable
     when Order
-      # Email already sent by OrderLifecycleService during mark_delivered!
+      # Regular delivery email handled by OrderLifecycleService; replacement handled by ReplacementRequestNotificationService
     when B2bOrder
-      EmailDispatcherService.b2b_order_delivered(@deliverable)
+      unless @deliverable.status.to_s == "replacement_delivered"
+        EmailDispatcherService.b2b_order_delivered(@deliverable)
+      end
     end
   end
 

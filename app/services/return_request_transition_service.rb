@@ -50,12 +50,12 @@ class ReturnRequestTransitionService
   def allowed_statuses
     {
       "requested" => %w[approved rejected cancelled],
-      "approved" => %w[in_transit cancelled],
+      "approved"  => %w[in_transit cancelled],
       "in_transit" => %w[received cancelled],
-      "received" => %w[completed],
-      "completed" => [],
-      "rejected" => [],
-      "cancelled" => []
+      "received"   => %w[completed],
+      "completed"  => [],
+      "rejected"   => [],
+      "cancelled"  => []
     }.fetch(@return_request.status.to_s, [])
   end
 
@@ -93,44 +93,23 @@ class ReturnRequestTransitionService
   end
 
   def reserve_replacement_inventory!(request)
-    request_items(request.requestable)
-      .includes(:dealer_product)
-      .find_each do |item|
-
-      dealer_product = DealerProduct.lock.find_by(id: item.dealer_product_id)
-      raise StandardError, "Dealer product not found" unless dealer_product
-
-      if dealer_product.stock_quantity.to_i < item.quantity.to_i
-        raise StandardError, "Insufficient stock for replacement"
-      end
-
-      dealer_product.update!(
-        stock_quantity: dealer_product.stock_quantity.to_i - item.quantity.to_i
-      )
-    end
-  end
-
-  def reserve_replacement_inventory!(request)
     request_items(request.requestable).find_each do |item|
-
       if item.dealer_product_id.present?
         dealer_product = DealerProduct.lock.find(item.dealer_product_id)
-
-        raise StandardError, "Insufficient stock for replacement" if dealer_product.stock_quantity < item.quantity
-
+        if dealer_product.stock_quantity.to_i < item.quantity.to_i
+          raise StandardError, "Insufficient stock for replacement"
+        end
         dealer_product.update!(
           stock_quantity: dealer_product.stock_quantity.to_i - item.quantity.to_i
         )
-
       elsif item.wholesaler_post_id.present?
         post = WholesalerPost.lock.find(item.wholesaler_post_id)
-
-        raise StandardError, "Insufficient stock for replacement" if post.stock_quantity < item.quantity
-
+        if post.stock_quantity.to_i < item.quantity.to_i
+          raise StandardError, "Insufficient stock for replacement"
+        end
         post.update!(
           stock_quantity: post.stock_quantity.to_i - item.quantity.to_i
         )
-
       else
         raise StandardError, "No inventory source found"
       end

@@ -1,4 +1,7 @@
 class ReplacementRequestNotificationService
+  TOKEN_SALT = "replacement_request_tokens".freeze
+  TOKEN_EXPIRY = 2.days
+
   class << self
     def request_created!(return_request, actor:)
       new(return_request, actor: actor, event: :created).dispatch!
@@ -6,6 +9,66 @@ class ReplacementRequestNotificationService
 
     def request_updated!(return_request, actor:)
       new(return_request, actor: actor, event: :updated).dispatch!
+    end
+
+    def request_shipped!(return_request, actor:)
+      new(return_request, actor: actor, event: :shipped).dispatch!
+    end
+
+    def request_completed!(return_request, actor:)
+      new(return_request, actor: actor, event: :completed).dispatch!
+    end
+
+    def accept_token_for(return_request)
+      verifier.generate(
+        { action: "accept", id: return_request.id },
+        expires_in: TOKEN_EXPIRY,
+        purpose: "replacement_accept"
+      )
+    end
+
+    def reject_token_for(return_request)
+      verifier.generate(
+        { action: "reject", id: return_request.id },
+        expires_in: TOKEN_EXPIRY,
+        purpose: "replacement_reject"
+      )
+    end
+
+    def shipped_token_for(return_request)
+      verifier.generate(
+        { action: "ship", id: return_request.id },
+        expires_in: TOKEN_EXPIRY,
+        purpose: "replacement_ship"
+      )
+    end
+
+    def decode_token(token)
+      purpose = token_purpose(token)
+      return nil if purpose.nil?
+
+      payload = verifier.verified(token, purpose: purpose)
+      return nil if payload.nil?
+
+      { action: payload[:action], id: payload[:id] }
+    rescue StandardError
+      nil
+    end
+
+    private
+
+    def verifier
+      ActiveSupport::MessageVerifier.new(
+        Rails.application.secret_key_base,
+        digest: "SHA256",
+        serializer: JSON
+      )
+    end
+
+    def token_purpose(token)
+      ["replacement_accept", "replacement_reject", "replacement_ship"].find do |purpose|
+        verifier.verified(token, purpose: purpose) rescue nil
+      end
     end
   end
 
@@ -17,10 +80,28 @@ class ReplacementRequestNotificationService
   end
 
   def dispatch!
-    notify_buyer!
-    notify_super_admins!
-    notify_seller_on_create! if created_event?
-    notify_seller_whatsapp_on_create! if created_event?
+    case @event
+    when :created
+      notify_buyer!
+      notify_super_admins!
+      notify_seller_on_create!
+      notify_seller_whatsapp_with_buttons!
+    when :updated
+      notify_buyer!
+      notify_super_admins!
+      notify_seller_on_update!
+      if return_request.status == "approved"
+        notify_seller_whatsapp_approved_with_shipped_button!
+      end
+    when :shipped
+      notify_buyer!
+      notify_super_admins!
+      notify_seller_on_update!
+    when :completed
+      notify_buyer!
+      notify_super_admins!
+      notify_seller_on_update!
+    end
   end
 
   private
@@ -89,32 +170,79 @@ class ReplacementRequestNotificationService
       return_request.id,
       seller.email,
       "seller",
+      "created",
+      changed_fields_payload
+    ).deliver_later
+  end
+
+  def notify_seller_on_update!
+    seller = seller_recipient
+    return if seller.blank? || seller.email.blank?
+
+    ReplacementRequestMailer.lifecycle_update(
+      return_request.id,
+      seller.email,
+      "seller",
       event.to_s,
       changed_fields_payload
     ).deliver_later
   end
 
-  def notify_seller_whatsapp_on_create!
+  def notify_seller_whatsapp_with_buttons!
     seller = seller_recipient
     return if seller.blank?
 
     to = normalized_whatsapp_number(seller)
     return if to.blank?
 
-    MetaWhatsappCloudService.new.send_text_message(
+    accept_tok = self.class.accept_token_for(return_request)
+    reject_tok = self.class.reject_token_for(return_request)
+
+    MetaWhatsappCloudService.new.send_replacement_request(
       to: to,
-      body: whatsapp_message
+      order_ref: request_reference_number,
+      buyer_name: buyer_display_name,
+      items_summary: items_summary,
+      total_amount: "₹#{requestable.total_amount.to_f.round(2)}",
+      address: shipping_address_text,
+      reason: return_request.reason.presence || "Not specified",
+      accept_token: accept_tok,
+      reject_token: reject_tok
     )
   rescue StandardError => e
-    Rails.logger.error("ReplacementRequestNotificationService WhatsApp failed for request #{return_request.id}: #{e.message}")
+    Rails.logger.error("ReplacementRequestNotificationService WhatsApp (create) failed for #{return_request.id}: #{e.message}")
+  end
+
+  def notify_seller_whatsapp_approved_with_shipped_button!
+    seller = seller_recipient
+    return if seller.blank?
+
+    to = normalized_whatsapp_number(seller)
+    return if to.blank?
+
+    shipped_tok = self.class.shipped_token_for(return_request)
+    buyer = buyer_recipient
+
+    buyer_phone = buyer.try(:phone).presence || requestable.try(:shipping_address)&.dig("phone") || "N/A"
+
+    MetaWhatsappCloudService.new.send_order_accept(
+      to: to,
+      dealer_code: buyer_display_name,
+      phone: buyer_phone,
+      address: shipping_address_text,
+      order_id: request_reference_number,
+      payment_mode: requestable.try(:payment_method).to_s.upcase.presence || "COD",
+      total_amount: "₹#{requestable.try(:total_amount).to_f.round(2)}",
+      shipped_token: shipped_tok
+    )
+  rescue StandardError => e
+    Rails.logger.error("ReplacementRequestNotificationService WhatsApp (approved) failed for #{return_request.id}: #{e.message}")
   end
 
   def buyer_recipient
     case requestable
-    when Order
-      requestable.buyer
-    when B2bOrder
-      requestable.buyer_dealer
+    when Order   then requestable.buyer
+    when B2bOrder then requestable.buyer_dealer
     end
   end
 
@@ -126,17 +254,13 @@ class ReplacementRequestNotificationService
     AdminUser.active.select(&:super_admin?)
   end
 
-  def created_event?
-    event == :created
-  end
-
   def email_subject_for(recipient_role)
     order_reference = request_reference_number
     status_label = return_request.status.to_s.humanize
 
     case recipient_role.to_s
     when "seller"
-      "Replacement request raised for order #{order_reference}"
+      created_event? ? "Replacement request raised for order #{order_reference}" : "Replacement request #{status_label} for order #{order_reference}"
     when "super_admin"
       created_event? ? "New replacement request for order #{order_reference}" : "Replacement request #{status_label} for order #{order_reference}"
     else
@@ -200,11 +324,7 @@ class ReplacementRequestNotificationService
   end
 
   def tracked_changes
-    if created_event?
-      build_created_changes
-    else
-      build_updated_changes
-    end
+    created_event? ? build_created_changes : build_updated_changes
   end
 
   def build_created_changes
@@ -290,6 +410,46 @@ class ReplacementRequestNotificationService
       fallback
   end
 
+  def created_event?
+    @event == :created
+  end
+
+  def items_summary
+    items = case requestable
+            when Order    then requestable.order_items
+            when B2bOrder then requestable.b2b_order_items
+            else []
+            end
+
+    return "N/A" if items.blank?
+
+    lines = items.map do |item|
+      name = item.try(:product_name_with_variant) ||
+             item.try(:product_variant)&.product&.name ||
+             item.try(:wholesaler_post)&.title ||
+             "Product"
+      qty  = item.quantity.to_i
+      "#{name} x#{qty}"
+    end
+
+    lines.join(", ").truncate(200)
+  end
+
+  def shipping_address_text
+    addr = requestable.try(:shipping_address)
+    return "Address not available" if addr.blank?
+
+    parts = [
+      addr["address_line1"],
+      addr["address_line2"],
+      addr["city"],
+      addr["state"],
+      addr["postal_code"]
+    ].compact.reject(&:blank?)
+
+    parts.any? ? parts.join(", ") : "Address not available"
+  end
+
   def normalized_whatsapp_number(recipient)
     phone = recipient.try(:phone).to_s.gsub(/\D/, "")
     return nil if phone.blank?
@@ -297,19 +457,5 @@ class ReplacementRequestNotificationService
     country_code = recipient.try(:country_code).to_s.gsub(/\D/, "")
     country_code = "91" if country_code.blank?
     "#{country_code}#{phone}"
-  end
-
-  def whatsapp_message
-    details = [
-      "Replacement request received on SalesPoints",
-      "Order No: #{request_reference_number}",
-      "Seller: #{seller_display_name}",
-      "Request Status: #{return_request.status.to_s.humanize}",
-      "Reason: #{return_request.reason.presence || 'NA'}",
-      "Details: #{return_request.details.presence || 'NA'}",
-      "Requested At: #{return_request.created_at.strftime('%d %b %Y, %I:%M %p')}"
-    ]
-
-    details.join("\n")
   end
 end

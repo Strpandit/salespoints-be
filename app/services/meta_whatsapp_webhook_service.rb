@@ -253,6 +253,18 @@ class MetaWhatsappWebhookService
 
   def process_button_reply(button_id:, from:)
 
+    # ── Replacement request: accept / reject via signed token ──────────────
+    replacement_payload = ReplacementRequestNotificationService.decode_token(button_id)
+    if replacement_payload.present?
+      handle_replacement_response(
+        action: replacement_payload[:action],
+        return_request_id: replacement_payload[:id],
+        from: from
+      )
+      return
+    end
+    # ── End replacement handling ───────────────────────────────────────────
+
     offer = OrderOffer.order(created_at: :desc).find_by(shipped_token: button_id) ||
             B2bOrderOffer.order(created_at: :desc).find_by(shipped_token: button_id)
 
@@ -340,6 +352,85 @@ class MetaWhatsappWebhookService
     end
 
     false
+  end
+
+  def handle_replacement_response(action:, return_request_id:, from:)
+    return_request = ReturnRequest.find_by(id: return_request_id)
+
+    unless return_request
+      send_text_acknowledgement(to: from, message: "❌ Replacement request not found or expired.")
+      return
+    end
+
+    unless return_request.replacement_request?
+      send_text_acknowledgement(to: from, message: "❌ This is not a valid replacement request.")
+      return
+    end
+
+    requestable = return_request.requestable
+    dealer = find_dealer_by_phone(from)
+
+    unless dealer && requestable.try(:seller_dealer_id) == dealer.id
+      send_text_acknowledgement(to: from, message: "❌ You are not authorized to manage this replacement request.")
+      return
+    end
+
+    begin
+      case action
+      when "accept"
+        unless return_request.status == "requested"
+          send_text_acknowledgement(to: from, message: "ℹ️ Replacement request is already #{return_request.status.humanize.downcase}.")
+          return
+        end
+
+        ReturnRequestTransitionService.new(
+          return_request: return_request,
+          actor: dealer,
+          resolution_notes: "Approved via WhatsApp"
+        ).transition!(next_status: "approved")
+
+        ReplacementRequestNotificationService.request_updated!(return_request.reload, actor: dealer)
+        send_text_acknowledgement(to: from, message: "✅ Replacement request ##{return_request.id} approved! Click 'Mark Shipped' when dispatched.")
+
+      when "reject"
+        unless return_request.status == "requested"
+          send_text_acknowledgement(to: from, message: "ℹ️ Replacement request is already #{return_request.status.humanize.downcase}.")
+          return
+        end
+
+        ReturnRequestTransitionService.new(
+          return_request: return_request,
+          actor: dealer,
+          resolution_notes: "Rejected via WhatsApp"
+        ).transition!(next_status: "rejected")
+
+        ReplacementRequestNotificationService.request_updated!(return_request.reload, actor: dealer)
+        send_text_acknowledgement(to: from, message: "❌ Replacement request ##{return_request.id} rejected. Buyer has been notified.")
+
+      when "ship"
+        unless return_request.status == "approved"
+          send_text_acknowledgement(to: from, message: "ℹ️ Replacement request must be approved before marking as shipped. Current status: #{return_request.status.humanize.downcase}.")
+          return
+        end
+
+        updated_request = ReturnRequestTransitionService.new(
+          return_request: return_request,
+          actor: dealer,
+          resolution_notes: "Marked as shipped via WhatsApp"
+        ).transition!(next_status: "in_transit")
+
+        DeliveryConfirmationService.new(deliverable: updated_request.requestable, actor: dealer)
+          .create_replacement!(return_request: updated_request)
+
+        ReplacementRequestNotificationService.request_shipped!(updated_request.reload, actor: dealer)
+        send_text_acknowledgement(to: from, message: "📦 Replacement request ##{return_request.id} marked as shipped! Delivery verification link sent.")
+      else
+        send_text_acknowledgement(to: from, message: "❌ Unknown action.")
+      end
+    rescue StandardError => e
+      send_text_acknowledgement(to: from, message: "❌ Failed to update replacement request: #{e.message}")
+      Rails.logger.error("handle_replacement_response failed for request #{return_request_id}: #{e.message}")
+    end
   end
 
   def handle_accept(offer, order, dealer, from)
@@ -489,6 +580,25 @@ class MetaWhatsappWebhookService
     expected = e164_for(dealer)&.gsub(/\D/, "")
     actual = from.to_s.gsub(/\D/, "")
     expected.present? && actual.present? && expected == actual
+  end
+
+  # Find a dealer by their WhatsApp phone number (used in replacement flow)
+  def find_dealer_by_phone(from)
+    digits = from.to_s.gsub(/\D/, "")
+    return nil if digits.blank?
+
+    # Strip leading country code (try last 10 digits for India)
+    phone_10 = digits.length >= 10 ? digits[-10..] : digits
+
+    Dealer.find_each do |dealer|
+      dealer_phone = dealer.phone.to_s.gsub(/\D/, "")
+      next if dealer_phone.blank?
+
+      dealer_10 = dealer_phone.length >= 10 ? dealer_phone[-10..] : dealer_phone
+      return dealer if dealer_10 == phone_10
+    end
+
+    nil
   end
 
   def mapped_whatsapp_status(status)

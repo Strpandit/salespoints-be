@@ -294,7 +294,7 @@ module Api
         replacement_delivery_confirmation: is_seller && order.replacement_delivery_confirmation ? delivery_confirmation_payload(order.replacement_delivery_confirmation) : nil,
         replacement_request: replacement_request.present? ? ReturnRequestSerializer.new(replacement_request, base_url: request.base_url).serializable_hash : nil,
         can_request_replacement: false,
-        can_manage_replacement: is_seller && replacement_request.present? && replacement_request.status == "requested",
+        can_manage_replacement: is_seller && replacement_request.present? && replacement_request.open?,
         can_update: (order.can_transition_to?("processing") || order.can_transition_to?("shipped")) && order.seller_dealer_id == current_dealer.id,
         next_status: order.status == "pending" ? "processing" : (order.status == "processing" ? "shipped" : nil)
       }
@@ -345,6 +345,14 @@ module Api
         { label: "Shipped", color: "#6B21A8", bg: "#F3E8FF", note: "In transit" }
       elsif order.status == "delivered"
         { label: "Delivered", color: "#0A7B3E", bg: "#E7F8EE", note: "Delivered" }
+      elsif order.status == "replacement_requested"
+        { label: "Replacement Requested", color: "#946200", bg: "#FFF7E6", note: "Awaiting seller response" }
+      elsif order.status == "replacement_approved"
+        { label: "Replacement Approved", color: "#0958D9", bg: "#E6F0FF", note: "Awaiting shipment" }
+      elsif order.status == "replacement_shipped"
+        { label: "Replacement Shipped", color: "#6B21A8", bg: "#F3E8FF", note: "Replacement in transit" }
+      elsif order.status == "replacement_delivered"
+        { label: "Replacement Delivered", color: "#0A7B3E", bg: "#E7F8EE", note: "OTP verification pending" }
       elsif order.status == "cancelled"
         { label: "Closed", color: "#B42318", bg: "#FEECEB", note: order.request_status == "rejected_request" ? "Rejected by seller" : "Cancelled" }
       else
@@ -354,7 +362,7 @@ module Api
 
     def retail_order_meta(order)
       status_meta = {
-        "pending" => { label: "Pending", color: "#946200", bg: "#FFF7E6" },
+        "pending" => { label: "Pending Request", color: "#946200", bg: "#FFF7E6" },
         "processing" => { label: "Processing", color: "#0958D9", bg: "#E6F0FF" },
         "shipped" => { label: "Shipped", color: "#6B21A8", bg: "#F3E8FF" },
         "delivered" => { label: "Delivered", color: "#0A7B3E", bg: "#E7F8EE" },
