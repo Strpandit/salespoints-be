@@ -1,7 +1,12 @@
 module Api
   class DealerPayoutsController < ApplicationController
     def index
-      payouts = scoped_payouts.recent.page(params[:page]).per(params[:per_page] || 20)
+      payouts = apply_filters(scoped_payouts).recent.page(params[:page]).per(params[:per_page] || 20)
+
+      summary_meta = {}
+      if current_dealer.present?
+        summary_meta = DealerPayoutService.new(dealer: current_dealer).summary_balances
+      end
 
       render json: {
         data: DealerPayoutSerializer.render(payouts),
@@ -11,8 +16,30 @@ module Api
           prev_page: payouts.prev_page,
           total_pages: payouts.total_pages,
           total_count: payouts.total_count
-        },
+        }.merge(summary_meta),
         message: "Dealer payouts fetched successfully"
+      }, status: :ok
+    end
+
+    def summary
+      unless current_dealer.present? || current_admin.present?
+        return render json: { error: "Unauthorized" }, status: :forbidden
+      end
+
+      target_dealer =
+        if current_dealer.present?
+          current_dealer
+        elsif params[:dealer_id].present?
+          Dealer.find_by(id: params[:dealer_id])
+        end
+
+      return render json: { error: "Dealer not found" }, status: :not_found unless target_dealer
+
+      data = DealerPayoutService.new(dealer: target_dealer).summary_balances
+
+      render json: {
+        data: data,
+        message: "Payout summary fetched successfully"
       }, status: :ok
     end
 
@@ -80,6 +107,35 @@ module Api
       end
     end
 
+    def apply_filters(scope)
+      if params[:status].present? && params[:status] != "all"
+        scope = scope.where(status: params[:status])
+      end
+
+      if params[:search].present?
+        query = "%#{params[:search].to_s.strip}%"
+        scope = scope.joins("LEFT JOIN dealers ON dealers.id = dealer_payouts.dealer_id")
+                     .where(
+                       "dealer_payouts.request_number ILIKE :q OR " \
+                       "dealer_payouts.payment_reference ILIKE :q OR " \
+                       "dealers.first_name ILIKE :q OR " \
+                       "dealers.last_name ILIKE :q OR " \
+                       "dealers.dealer_code ILIKE :q",
+                       q: query
+                     )
+      end
+
+      if params[:start_date].present?
+        scope = scope.where("dealer_payouts.created_at >= ?", Time.zone.parse(params[:start_date]).beginning_of_day)
+      end
+
+      if params[:end_date].present?
+        scope = scope.where("dealer_payouts.created_at <= ?", Time.zone.parse(params[:end_date]).end_of_day)
+      end
+
+      scope
+    end
+
     def handle_admin_transition!(payout)
       service = DealerPayoutService.new(dealer: payout.dealer)
       action = params[:action_type].to_s
@@ -90,14 +146,11 @@ module Api
       when "reject"
         service.reject!(payout: payout, admin: current_admin, note: params[:admin_note])
       when "processing"
-        if payout.requestable.present?
+        if params[:disburse_via_cashfree].to_s == "true"
           payout = SettlementAndPayoutAutomationService.new.process_cashfree_payout!(
             payout: payout,
             admin: current_admin
           )
-          payout.update!(
-            admin_note: [payout.admin_note, params[:admin_note]].compact.join("\n").presence
-          ) if params[:admin_note].present?
         else
           service.mark_processing!(payout: payout, admin: current_admin, note: params[:admin_note])
         end
@@ -106,8 +159,9 @@ module Api
           payout: payout,
           admin: current_admin,
           payment_reference: params[:payment_reference].to_s,
-          payment_mode: params[:payment_mode].to_s,
-          note: params[:admin_note]
+          payment_mode: params[:payment_mode].to_s.presence || "bank_transfer",
+          note: params[:admin_note],
+          penalty: params[:penalty]
         )
       when "failed"
         service.mark_failed!(payout: payout, admin: current_admin, note: params[:admin_note])

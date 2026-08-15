@@ -209,6 +209,13 @@ class B2bOrderBroadcastService
 
     image_url = get_product_image(product, variant)
 
+    order_type_label =
+      if @order.try(:is_direct_buy?) || @order.try(:source_type) == "WholesalerPost"
+        "Direct Buy"
+      else
+        "B2B"
+      end
+
     MetaWhatsappCloudService.new.send_dealer_order_request(
       to: formatted_phone_for(dealer),
       product: product_name,
@@ -221,6 +228,7 @@ class B2bOrderBroadcastService
       approx_distance: approx_distance,
       accept_token: offer.accept_token,
       reject_token: offer.reject_token,
+      order_type: order_type_label,
       image_url: image_url
     )
 

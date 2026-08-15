@@ -25,6 +25,7 @@ class OrderLifecycleService
       attrs[:settlement_status] = @order.seller_settlement_amount.to_d.positive? ? "pending" : "refunded"
     when "cancelled"
       attrs[:cancelled_at] = @order.cancelled_at || now
+      InstantOrderRefundService.process_refund!(order: @order, reason: @status_note.presence || "Order cancelled")
     end
 
     @order.update!(attrs.compact)

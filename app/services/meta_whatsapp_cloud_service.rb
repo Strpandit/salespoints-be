@@ -14,7 +14,7 @@ class MetaWhatsappCloudService
   TEMPLATE_ACCOUNT_LOGIN_OTP = "login_code"
   TEMPLATE_REPLACEMENT_REQUEST = "replacement_request_dealer"
 
-  def send_dealer_order_request(to:, product:, variant:, sku:, price:, quantity:, total_amount:, delivery_location:, approx_distance:, accept_token:, reject_token:, image_url: nil)
+  def send_dealer_order_request(to:, product:, variant:, sku:, price:, quantity:, total_amount:, delivery_location:, approx_distance:, accept_token:, reject_token:, order_type: "Retail", image_url: nil)
     components = []
     image_to_use = image_url.presence || "#{ENV['FRONTEND_URL']}/images/ac.png"
 
@@ -30,18 +30,22 @@ class MetaWhatsappCloudService
       ]
     }
 
+    body_params = [
+      { type: "text", text: product.to_s },          
+      { type: "text", text: variant.to_s },          
+      { type: "text", text: sku.to_s },              
+      { type: "text", text: price.to_s },            
+      { type: "text", text: quantity.to_s },         
+      { type: "text", text: total_amount.to_s },     
+      { type: "text", text: delivery_location.to_s },
+      { type: "text", text: approx_distance.to_s }   
+    ]
+
+    body_params << { type: "text", text: order_type.to_s } if order_type.present?
+
     components << {
       type: "body",
-      parameters: [
-        { type: "text", text: product.to_s },          
-        { type: "text", text: variant.to_s },          
-        { type: "text", text: sku.to_s },              
-        { type: "text", text: price.to_s },            
-        { type: "text", text: quantity.to_s },         
-        { type: "text", text: total_amount.to_s },     
-        { type: "text", text: delivery_location.to_s },
-        { type: "text", text: approx_distance.to_s }   
-      ]
+      parameters: body_params
     }
 
     components << {

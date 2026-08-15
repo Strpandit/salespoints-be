@@ -66,6 +66,7 @@ Rails.application.routes.draw do
     resources :dealer_payouts, only: [:index, :create, :update] do
       collection do
         get :eligible_orders
+        get :summary
       end
     end
     get "payments/cashfree/verify", to: "payments#verify_cashfree"

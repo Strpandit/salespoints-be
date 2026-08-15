@@ -96,6 +96,7 @@ class B2bOrderDealerResponseService
         status: "cancelled",
         status_note: "All sellers rejected the order"
       )
+      InstantOrderRefundService.process_refund!(order: order, reason: "All sellers rejected the B2C order request")
     end
 
     order
@@ -347,6 +348,7 @@ class B2bOrderDealerResponseService
       )
 
       close_other_b2b_offers!(order)
+      InstantOrderRefundService.process_refund!(order: order, reason: "All sellers rejected the B2B order request")
     end
 
     order
@@ -392,7 +394,7 @@ class B2bOrderDealerResponseService
     order.update!(status: "cancelled", request_status: "rejected_request", rejected_at: Time.current)
     offer.update!(status: "rejected", responded_at: Time.current, whatsapp_status: "replied")
 
-    # refund code here
+    InstantOrderRefundService.process_refund!(order: order, reason: "Seller rejected direct buy order request")
     order
   end
 

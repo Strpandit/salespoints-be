@@ -1,48 +1,62 @@
 class DealerPayoutMailer < ApplicationMailer
-  default from: "Sales Points <salespointecom@gmail.com>"
+  default from: ENV["MAILER_FROM"].presence || "noreply@salespoints.in"
 
-  def dealer_request_confirmation(payout_id)
-    @payout = DealerPayout.includes(:dealer).find(payout_id)
-    return if @payout.dealer.email.blank?
-    attach_gst_invoice_if_present
+  def request_created(payout)
+    @payout = payout
+    @dealer = payout.dealer
+    @admin_emails = admin_emails
 
-    mail(to: @payout.dealer.email, subject: "Payout request #{@payout.request_number} submitted")
+    mail(
+      to: @dealer.email,
+      cc: @admin_emails,
+      subject: "[SalesPoints Payout] Request Received - #{@payout.request_number} (₹#{@payout.amount})"
+    )
   end
 
-  def admin_new_request(payout_id, admin_email)
-    @payout = DealerPayout.includes(:dealer).find(payout_id)
-    return if admin_email.blank?
-    attach_gst_invoice_if_present
+  def status_updated(payout, actor: nil)
+    @payout = payout
+    @dealer = payout.dealer
+    @actor = actor
+    @admin_emails = admin_emails
 
-    mail(to: admin_email, subject: "New dealer payout request #{@payout.request_number}")
+    subject_status = @payout.status.to_s.humanize.titleize
+
+    mail(
+      to: @dealer.email,
+      cc: @admin_emails,
+      subject: "[SalesPoints Payout] Status Update: #{subject_status} - #{@payout.request_number}"
+    )
   end
 
-  def dealer_status_update(payout_id)
-    @payout = DealerPayout.includes(:dealer).find(payout_id)
-    return if @payout.dealer.email.blank?
+  def payout_disbursed(payout)
+    @payout = payout
+    @dealer = payout.dealer
+    @admin_emails = admin_emails
 
-    mail(to: @payout.dealer.email, subject: "Payout request #{@payout.request_number} updated")
+    mail(
+      to: @dealer.email,
+      cc: @admin_emails,
+      subject: "[SalesPoints Payout] Payment Disbursed Successfully - #{@payout.request_number} (UTR: #{@payout.payment_reference})"
+    )
   end
 
-  def admin_status_update(payout_id, admin_email)
-    @payout = DealerPayout.includes(:dealer).find(payout_id)
-    return if admin_email.blank?
+  def payout_failed(payout, error_message: nil)
+    @payout = payout
+    @dealer = payout.dealer
+    @error_message = error_message || payout.admin_note
+    @admin_emails = admin_emails
 
-    mail(to: admin_email, subject: "Payout request #{@payout.request_number} is now #{@payout.status.to_s.humanize}")
+    mail(
+      to: @dealer.email,
+      cc: @admin_emails,
+      subject: "[SalesPoints Payout Action Required] Payment Failed - #{@payout.request_number}"
+    )
   end
 
   private
 
-  def format_amount(value)
-    format("%.2f", value.to_d)
-  end
-
-  def attach_gst_invoice_if_present
-    return unless @payout.gst_invoice.attached?
-
-    attachments[@payout.gst_invoice.filename.to_s] = {
-      mime_type: @payout.gst_invoice.content_type,
-      content: @payout.gst_invoice.download
-    }
+  def admin_emails
+    super_admins = AdminUser.where(is_super_admin: true).pluck(:email).compact
+    super_admins.presence || [ENV["SUPER_ADMIN_EMAIL"].presence || "admin@salespoints.in"]
   end
 end

@@ -1,0 +1,19 @@
+<h2>SalesPoints - Payout Disbursed Successfully</h2>
+<p>Dear <%= @dealer.full_name.presence || @dealer.email %>,</p>
+
+<p>Great news! Your payout request <strong><%= @payout.request_number %></strong> has been successfully processed and transferred to your bank account.</p>
+
+<h3>Disbursement Summary</h3>
+<ul>
+  <li><strong>Request Number:</strong> <%= @payout.request_number %></li>
+  <li><strong>Disbursed Amount:</strong> ₹<%= sprintf("%.2f", @payout.amount) %></li>
+  <li><strong>Bank UTR / Reference:</strong> <%= @payout.payment_reference %></li>
+  <li><strong>Payment Mode:</strong> <%= @payout.payment_mode.presence || 'Cashfree Payout / Bank Transfer' %></li>
+  <li><strong>Bank Name:</strong> <%= @payout.bank_name %></li>
+  <li><strong>Account Number:</strong> XXXXXX<%= @payout.bank_account_number.to_s.last(4) %></li>
+  <li><strong>IFSC Code:</strong> <%= @payout.ifsc_code %></li>
+  <li><strong>Date:</strong> <%= (@payout.paid_at || Time.current).strftime("%d %b %Y, %I:%M %p") %></li>
+</ul>
+
+<p>Thank you for doing business on SalesPoints Marketplace!</p>
+<p>Best Regards,<br><strong>SalesPoints India Pvt. Ltd.</strong></p>

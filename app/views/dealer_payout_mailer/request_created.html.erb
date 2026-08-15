@@ -1,0 +1,19 @@
+<h2>SalesPoints - Payout Request Received</h2>
+<p>Dear <%= @dealer.full_name.presence || @dealer.email %>,</p>
+
+<p>Your payout request <strong><%= @payout.request_number %></strong> has been received and is currently under review by SalesPoints Administration.</p>
+
+<h3>Request Summary</h3>
+<ul>
+  <li><strong>Request Number:</strong> <%= @payout.request_number %></li>
+  <li><strong>Requested Amount:</strong> ₹<%= sprintf("%.2f", @payout.amount) %></li>
+  <li><strong>Bank Name:</strong> <%= @payout.bank_name %></li>
+  <li><strong>Account Number:</strong> XXXXXX<%= @payout.bank_account_number.to_s.last(4) %></li>
+  <li><strong>IFSC Code:</strong> <%= @payout.ifsc_code %></li>
+  <li><strong>Status:</strong> <%= @payout.status.to_s.humanize.titleize %></li>
+  <li><strong>Date:</strong> <%= @payout.created_at.strftime("%d %b %Y, %I:%M %p") %></li>
+</ul>
+
+<p>Our finance team will manually verify the order details, commission breakdown, and bank account details before initiating disbursement.</p>
+
+<p>Best Regards,<br><strong>SalesPoints India Pvt. Ltd.</strong></p>

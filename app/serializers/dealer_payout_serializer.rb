@@ -4,7 +4,8 @@ class DealerPayoutSerializer < ApplicationSerializer
              :approved_at, :processing_at, :paid_at, :rejected_at, :cancelled_at,
              :created_at, :updated_at, :dealer_name, :dealer_code, :order_reference,
              :request_flow, :invoice_number, :gst_invoice, :requestable_type, :requestable_id,
-             :bank_verification_status, :bank_verified, :settlement_ready_for_processing
+             :bank_verification_status, :bank_verified, :settlement_ready_for_processing,
+             :selected_orders, :total_gross, :total_commission, :total_commission_gst, :penalty, :net_payout
 
   def amount
     object.amount.to_f
@@ -24,6 +25,30 @@ class DealerPayoutSerializer < ApplicationSerializer
 
   def request_flow
     object.request_flow
+  end
+
+  def selected_orders
+    (object.metadata || {})["selected_orders"] || []
+  end
+
+  def total_gross
+    ((object.metadata || {})["total_gross"] || object.amount).to_f
+  end
+
+  def total_commission
+    ((object.metadata || {})["total_commission"] || 0.0).to_f
+  end
+
+  def total_commission_gst
+    ((object.metadata || {})["total_commission_gst"] || 0.0).to_f
+  end
+
+  def penalty
+    ((object.metadata || {})["penalty"] || 0.0).to_f
+  end
+
+  def net_payout
+    ((object.metadata || {})["net_payout"] || object.amount).to_f
   end
 
   def gst_invoice

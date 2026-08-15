@@ -1,0 +1,17 @@
+<h2>SalesPoints - Payout Status Update</h2>
+<p>Dear <%= @dealer.full_name.presence || @dealer.email %>,</p>
+
+<p>The status of your payout request <strong><%= @payout.request_number %></strong> has been updated to: <strong><%= @payout.status.to_s.humanize.titleize %></strong>.</p>
+
+<h3>Details</h3>
+<ul>
+  <li><strong>Request Number:</strong> <%= @payout.request_number %></li>
+  <li><strong>Amount:</strong> ₹<%= sprintf("%.2f", @payout.amount) %></li>
+  <li><strong>Status:</strong> <%= @payout.status.to_s.humanize.titleize %></li>
+  <% if @payout.admin_note.present? %>
+    <li><strong>Note:</strong> <%= @payout.admin_note %></li>
+  <% end %>
+</ul>
+
+<p>Thank you for partnering with SalesPoints.</p>
+<p>Best Regards,<br><strong>SalesPoints India Pvt. Ltd.</strong></p>

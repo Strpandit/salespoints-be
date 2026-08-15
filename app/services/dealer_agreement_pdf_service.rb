@@ -92,10 +92,13 @@ class DealerAgreementPdfService
       {
         title: "4. Marketplace Commission",
         body: "B2B Orders:\n" \
-              "Platform Commission: 1.25% (GST treatment shall be as per the Dealer Agreement).\n" \
+              "Platform Commission: 1.50% (GST treatment shall be as per the Dealer Agreement).\n" \
               "Commission will be deducted before settlement.\n\n" \
               "B2C Orders:\n" \
-              "Platform Commission: 2.25%\n" \
+              "Platform Commission: 2.50%\n" \
+              "Commission will be deducted before settlement.\n\n" \
+              "Offer Mart – B2B & B2C:\n" \
+              "Activated Mobile Phones and Reselling Products: Platform Commission: 3.00%\n" \
               "Commission will be deducted before settlement."
       },
       {
@@ -304,15 +307,21 @@ class DealerAgreementPdfService
               "3. Competent Courts having jurisdiction"
       },
       {
-        title: "26. Brand, Intellectual Property & Third-Party Claims",
-        body: "The Dealer agrees that all products, brands, trademarks, images, descriptions, documents, and any other content listed by the Dealer on the SalesPoints Marketplace shall be the sole responsibility of the Dealer.\n\n" \
-              "The Dealer confirms that it has all necessary rights, permissions, authorizations, ownership, or lawful sources required to sell, distribute, and list the products on the Marketplace.\n\n" \
-              "If any brand owner, manufacturer, distributor, trademark owner, intellectual property rights holder, or any third party raises any objection, complaint, claim, legal notice, or dispute regarding the products listed by the Dealer, the Dealer shall be solely responsible for handling and resolving such matters.\n\n" \
-              "The Dealer shall be responsible for addressing and resolving any such claims or disputes independently and, where required, shall provide all necessary documents, invoices, approvals, authorizations, or any other supporting evidence.\n\n" \
-              "SalesPoints India Pvt. Ltd. only provides an online marketplace platform where Dealers can list their products and set up their online store. The Company does not guarantee or take responsibility for product ownership, authenticity, brand authorization, quality, warranty, intellectual property rights, or any third-party approvals.\n\n" \
-              "For any dispute, claim, loss, penalty, damage, or legal action arising between the Dealer and any brand owner, manufacturer, distributor, or third party in relation to product listing, brand usage, trademark, copyright, authorization, or sale, SalesPoints India Pvt. Ltd. shall not be held responsible or liable in any manner.\n\n" \
-              "The Dealer agrees that if any claim, legal action, financial loss, or expense arises against SalesPoints India Pvt. Ltd. due to the Dealer’s product listings, sales activities, unauthorized brand usage, counterfeit or fake products, violation of third-party rights, or any policy breach, the Dealer shall bear full responsibility and shall indemnify the Company.\n\n" \
-              "SalesPoints India Pvt. Ltd. reserves the right to remove, restrict, or disable any disputed, unauthorized, risky, or policy-violating product listing and may also take appropriate action against the Dealer’s account if necessary."
+        title: "26. BRAND, TRADEMARK, PRODUCT IMAGES & THIRD-PARTY CONTENT DISCLAIMER",
+        body: "Product names, brand names, trademarks, logos, product photographs, images, specifications, descriptions, graphics, and other product-related information displayed on Salespoints.in may belong to their respective manufacturers, brands, sellers, distributors, or other lawful rights holders, wherever applicable.\n\n" \
+              "Salespoints.in does not claim any ownership rights over any third-party brand names, trademarks, logos, product images, photographs, descriptions, or other intellectual property, except for content that is independently created, owned, or lawfully licensed by Salespoints.in.\n\n" \
+              "The use of third-party brand names, product names, trademarks, logos, images, and related information on Salespoints.in is intended solely for product identification, listing, customer information, and marketplace facilitation purposes. Such use does not imply or establish any affiliation, sponsorship, partnership, endorsement, authorization, or official association with the respective brand, manufacturer, or company, unless explicitly and expressly stated by Salespoints.in.\n\n" \
+              "The listing or display of any product on Salespoints.in does not automatically mean that Salespoints.in is an authorized dealer, authorized distributor, official partner, or officially appointed marketplace for the respective brand.\n\n" \
+              "Brand / Rights Holder Communication\n" \
+              "If any brand, manufacturer, company, photographer, copyright owner, trademark owner, or other lawful rights holder has any objection, concern, ownership issue, or authorization-related concern regarding any product image, photograph, trademark, logo, description, specification, or any other content displayed on Salespoints.in, they may contact us through the official support or grievance channel.\n\n" \
+              "Upon receiving such a concern, Salespoints.in will review the available information and may, where appropriate, seek clarification or supporting details from the concerned seller or source.\n\n" \
+              "If, after review, any correction, replacement, modification, removal, or other appropriate action is found necessary, Salespoints.in will take reasonable steps in accordance with applicable law and platform policies.\n\n" \
+              "Salespoints.in does not intend to knowingly infringe upon the lawful rights of any brand, manufacturer, copyright owner, trademark owner, or other rights holder.\n\n" \
+              "Rights holders are requested to first notify Salespoints.in directly in case of any genuine concern, so that the Company is given a reasonable opportunity to review the matter and take appropriate corrective action.\n\n" \
+              "Product Information\n" \
+              "Product specifications, features, images, and descriptions available on Salespoints.in may be sourced or compiled from multiple sources. Customers are advised to verify important product details, specifications, and compatibility with the manufacturer’s official website or other trusted sources before making a purchase.\n\n" \
+              "If any brand or rights holder identifies any factual error, outdated information, unauthorized content, or other concern in the information displayed on Salespoints.in, they may inform the Company. Salespoints.in will review the matter and, where appropriate, make reasonable efforts to update, correct, replace, or remove the information.\n\n" \
+              "Nothing in this clause shall be interpreted as an admission of infringement, ownership, liability, or wrongdoing by Salespoints.in, nor shall it limit or exclude any rights or remedies available to any lawful rights holder under applicable law."
       },
       {
         title: "27. Billing, Invoicing & Payment Processing Consent",

@@ -1,26 +1,62 @@
 class DealerPayoutService
   ACTIVE_PAYOUT_STATUSES = %w[pending approved processing paid].freeze
   PAYOUT_READY_ORDER_STATUSES = %w[delivered replacement_delivered].freeze
+  PAYOUT_READY_PAYMENT_STATUSES = %w[paid].freeze
+
+  GST_RATE_ON_COMMISSION = BigDecimal("0.18")
+
+  COMMISSION_RATES = {
+    b2b: BigDecimal("0.015"),
+    b2c: BigDecimal("0.025"),
+    wholesaler: BigDecimal("0.030")
+  }.freeze
 
   def initialize(dealer:)
     @dealer = dealer
   end
 
-  def eligible_orders
-    ensure_settlement_credits!
+  def summary_balances
+    process_cod_commission_deductions!
 
+    online_net_earned = calculate_total_net_online_sales
+    cod_deduction_total = calculate_total_cod_deductions
+
+    total_earnings = [online_net_earned - cod_deduction_total, 0.to_d].max.round(2)
+
+    pending_payout = @dealer.dealer_payouts.where(status: %w[pending approved processing]).sum(:amount).to_d.round(2)
+    paid_balance = @dealer.dealer_payouts.where(status: "paid").sum(:amount).to_d.round(2)
+
+    eligible_rows = eligible_orders
+    eligible_online_net = eligible_rows.sum { |row| BigDecimal(row[:net_payout_amount].to_s) }
+
+    available_balance = [eligible_online_net - pending_payout, 0.to_d].max.round(2)
+
+    {
+      total_earnings: total_earnings.to_f,
+      available_balance: available_balance.to_f,
+      pending_payout: pending_payout.to_f,
+      paid_balance: paid_balance.to_f,
+      dealer_status: @dealer.status,
+      bank_verified: @dealer.dealer_profile&.bank_verified? || false,
+      eligible_orders_count: eligible_rows.length
+    }
+  end
+
+  def eligible_orders
     retail_orders = Order
       .includes(:buyer, :seller_dealer, :return_requests)
       .where(seller_dealer_id: @dealer.id)
       .where(status: PAYOUT_READY_ORDER_STATUSES)
-      .where(payment_status: %w[paid partially_refunded refunded])
+      .where(payment_status: PAYOUT_READY_PAYMENT_STATUSES)
+      .where("delivered_at IS NOT NULL AND delivered_at <= ?", 48.hours.ago)
       .order(delivered_at: :desc)
 
     b2b_orders = B2bOrder
       .includes(:buyer_dealer, :seller_dealer, :return_requests)
       .where(seller_dealer_id: @dealer.id)
       .where(status: PAYOUT_READY_ORDER_STATUSES)
-      .where(payment_status: "paid")
+      .where(payment_status: PAYOUT_READY_PAYMENT_STATUSES)
+      .where("delivered_at IS NOT NULL AND delivered_at <= ?", 48.hours.ago)
       .order(delivered_at: :desc)
 
     payload = []
@@ -30,6 +66,8 @@ class DealerPayoutService
   end
 
   def request!(amount: nil, note: nil, order_id: nil, order_type: nil, orders: nil, invoice_number: nil, gst_invoice: nil)
+    raise StandardError, "Dealer account must be active to request payout" unless @dealer.active?
+
     profile = @dealer.dealer_profile
     raise StandardError, "Dealer bank details are incomplete" if profile.blank? || profile.bank_name.blank? || profile.bank_account_number.blank? || profile.ifsc_code.blank?
     raise StandardError, "Please verify your bank account before requesting payout" unless profile.bank_verified?
@@ -52,84 +90,85 @@ class DealerPayoutService
 
     payout = nil
 
-    if target_orders.any?
-      raise StandardError, "GST invoice is required" if gst_invoice.blank?
+    Dealer.transaction do
+      if target_orders.any?
+        total_gross = 0.to_d
+        total_commission = 0.to_d
+        total_commission_gst = 0.to_d
+        total_net_payout = 0.to_d
+        order_summaries = []
 
-      total_payout_amount = 0.to_d
-      order_summaries = []
+        target_orders.each do |order|
+          validate_requestable_eligibility!(order)
+          breakdown = calculate_order_financials(order)
 
-      target_orders.each do |order|
-        validate_requestable_eligibility!(order)
-        amt = payout_amount_for(order)
-        total_payout_amount += amt
-        order_summaries << {
-          order_id: order.id,
-          order_type: requestable_type_param(order),
-          reference_number: request_reference(order),
-          flow_type: requestable_flow(order),
-          buyer_name: buyer_name_for(order),
-          amount: amt.to_f,
-          delivered_at: order.delivered_at&.iso8601
-        }
-      end
+          total_gross += breakdown[:gross_amount]
+          total_commission += breakdown[:commission_fee]
+          total_commission_gst += breakdown[:commission_gst]
+          total_net_payout += breakdown[:net_payout_amount]
 
-      primary_requestable = target_orders.first
+          order_summaries << {
+            order_id: order.id,
+            order_type: requestable_type_param(order),
+            reference_number: request_reference(order),
+            flow_type: requestable_flow(order),
+            buyer_name: buyer_name_for(order),
+            gross_amount: breakdown[:gross_amount].to_f,
+            commission_rate: (breakdown[:commission_rate] * 100).to_f,
+            commission_fee: breakdown[:commission_fee].to_f,
+            commission_gst: breakdown[:commission_gst].to_f,
+            net_payout_amount: breakdown[:net_payout_amount].to_f,
+            delivered_at: order.delivered_at&.iso8601
+          }
+        end
 
-      payout = DealerPayout.create!(
-        dealer: @dealer,
-        requestable: primary_requestable,
-        amount: total_payout_amount.round(2),
-        bank_name: profile.bank_name,
-        bank_account_number: profile.bank_account_number,
-        ifsc_code: profile.ifsc_code,
-        account_holder_name: profile.account_holder_name.presence || @dealer.full_name.presence || profile.business_name,
-        invoice_number: invoice_number.presence,
-        admin_note: note,
-        metadata: payout_metadata(profile, primary_requestable, invoice_number, note).merge(
-          "selected_orders" => order_summaries,
-          "order_count" => target_orders.length
-        )
-      )
+        primary_requestable = target_orders.first
 
-      target_orders.drop(1).each do |sec_order|
-        DealerPayout.create!(
+        payout = DealerPayout.create!(
           dealer: @dealer,
-          requestable: sec_order,
-          amount: payout_amount_for(sec_order).round(2),
+          requestable: primary_requestable,
+          amount: total_net_payout.round(2),
           bank_name: profile.bank_name,
           bank_account_number: profile.bank_account_number,
           ifsc_code: profile.ifsc_code,
           account_holder_name: profile.account_holder_name.presence || @dealer.full_name.presence || profile.business_name,
           invoice_number: invoice_number.presence,
-          admin_note: "Batch payout linked to #{payout.request_number}",
-          metadata: payout_metadata(profile, sec_order, invoice_number, note).merge(
-            "parent_payout_id" => payout.id,
-            "parent_payout_number" => payout.request_number
+          admin_note: note,
+          metadata: payout_metadata(profile, primary_requestable, invoice_number, note).merge(
+            "selected_orders" => order_summaries,
+            "order_count" => target_orders.length,
+            "total_gross" => total_gross.to_f,
+            "total_commission" => total_commission.to_f,
+            "total_commission_gst" => total_commission_gst.to_f,
+            "penalty" => 0.0,
+            "net_payout" => total_net_payout.to_f
           )
         )
-      end
-    else
-      value = BigDecimal(amount.to_s).round(2)
-      raise StandardError, "Payout amount must be greater than 0" unless value.positive?
-      ensure_settlement_credits!
-      raise StandardError, "Insufficient settlement balance" if value > @dealer.reload.settlement_balance.to_d
+      else
+        value = BigDecimal(amount.to_s).round(2)
+        raise StandardError, "Payout amount must be greater than 0" unless value.positive?
 
-      payout = DealerPayout.create!(
-        dealer: @dealer,
-        requestable: nil,
-        amount: value,
-        bank_name: profile.bank_name,
-        bank_account_number: profile.bank_account_number,
-        ifsc_code: profile.ifsc_code,
-        account_holder_name: profile.account_holder_name.presence || @dealer.full_name.presence || profile.business_name,
-        invoice_number: invoice_number.presence,
-        admin_note: note,
-        metadata: payout_metadata(profile, nil, invoice_number, note)
-      )
+        summary = summary_balances
+        raise StandardError, "Insufficient available balance" if value > BigDecimal(summary[:available_balance].to_s)
+
+        payout = DealerPayout.create!(
+          dealer: @dealer,
+          requestable: nil,
+          amount: value,
+          bank_name: profile.bank_name,
+          bank_account_number: profile.bank_account_number,
+          ifsc_code: profile.ifsc_code,
+          account_holder_name: profile.account_holder_name.presence || @dealer.full_name.presence || profile.business_name,
+          invoice_number: invoice_number.presence,
+          admin_note: note,
+          metadata: payout_metadata(profile, nil, invoice_number, note)
+        )
+      end
+
+      payout.gst_invoice.attach(gst_invoice) if gst_invoice.present?
     end
 
-    payout.gst_invoice.attach(gst_invoice) if gst_invoice.present?
-    DealerPayoutNotificationService.request_created!(payout.reload)
+    DealerPayoutMailer.request_created(payout.reload).deliver_later rescue nil
     payout
   end
 
@@ -142,7 +181,7 @@ class DealerPayoutService
       approved_by_admin: admin,
       admin_note: [payout.admin_note, note].compact.join("\n").presence
     )
-    DealerPayoutNotificationService.status_updated!(payout.reload, actor: admin)
+    DealerPayoutMailer.status_updated(payout.reload, actor: admin).deliver_later rescue nil
   end
 
   def reject!(payout:, admin:, note:)
@@ -154,7 +193,7 @@ class DealerPayoutService
       approved_by_admin: admin,
       admin_note: [payout.admin_note, note].compact.join("\n").presence
     )
-    DealerPayoutNotificationService.status_updated!(payout.reload, actor: admin)
+    DealerPayoutMailer.status_updated(payout.reload, actor: admin).deliver_later rescue nil
   end
 
   def mark_processing!(payout:, admin:, note: nil)
@@ -166,54 +205,58 @@ class DealerPayoutService
       processed_by_admin: admin,
       admin_note: [payout.admin_note, note].compact.join("\n").presence
     )
-    DealerPayoutNotificationService.status_updated!(payout.reload, actor: admin)
+    DealerPayoutMailer.status_updated(payout.reload, actor: admin).deliver_later rescue nil
   end
 
-  def mark_paid!(payout:, admin:, payment_reference:, payment_mode:, note: nil)
+  def mark_paid!(payout:, admin:, payment_reference:, payment_mode:, note: nil, penalty: 0)
     raise StandardError, "Only pending, approved or processing payouts can be paid" unless payout.status.in?(%w[pending approved processing])
+
+    penalty_val = BigDecimal(penalty.to_s).round(2)
+    penalty_val = 0.to_d if penalty_val.negative?
 
     Dealer.transaction do
       locked_payout = DealerPayout.lock.find(payout.id)
       locked_dealer = Dealer.lock.find(locked_payout.dealer_id)
 
-      ensure_requestable_settlement_balance!(payout: locked_payout, dealer: locked_dealer)
-      raise StandardError, "Dealer settlement balance is insufficient" if locked_payout.amount.to_d > locked_dealer.reload.settlement_balance.to_d
+      final_amount = [locked_payout.amount.to_d - penalty_val, 0.to_d].max.round(2)
 
       DealerLedgerService.debit!(
         dealer: locked_dealer,
-        amount: locked_payout.amount,
+        amount: final_amount,
         entry_type: "payout_disbursement",
-        description: "Payout disbursed for request #{locked_payout.request_number}",
+        description: "Payout disbursed for request #{locked_payout.request_number}#{penalty_val.positive? ? " (Penalty deducted: ₹#{penalty_val})" : ''}",
         order: locked_payout.requestable.is_a?(Order) ? locked_payout.requestable : nil,
         metadata: payout_ledger_metadata(locked_payout).merge(
           payment_reference: payment_reference,
           payment_mode: payment_mode,
-          admin_id: admin.id
+          admin_id: admin.id,
+          penalty: penalty_val.to_f
         )
       )
 
       locked_payout.update!(
+        amount: final_amount,
         status: "paid",
         paid_at: Time.current,
         processing_at: locked_payout.processing_at || Time.current,
         processed_by_admin: admin,
         payment_reference: payment_reference,
         payment_mode: payment_mode,
-        admin_note: [locked_payout.admin_note, note].compact.join("\n").presence
+        admin_note: [locked_payout.admin_note, note].compact.join("\n").presence,
+        metadata: locked_payout.metadata.merge("penalty" => penalty_val.to_f)
       )
-      DealerPayoutNotificationService.status_updated!(locked_payout.reload, actor: admin)
+
+      DealerPayoutMailer.payout_disbursed(locked_payout.reload).deliver_later rescue nil
     end
   end
 
   def mark_failed!(payout:, admin:, note:)
-    raise StandardError, "Only approved or processing payouts can fail" unless payout.status.in?(%w[approved processing])
-
     payout.update!(
       status: "failed",
       processed_by_admin: admin,
       admin_note: [payout.admin_note, note].compact.join("\n").presence
     )
-    DealerPayoutNotificationService.status_updated!(payout.reload, actor: admin)
+    DealerPayoutMailer.payout_failed(payout.reload, error_message: note).deliver_later rescue nil
   end
 
   def cancel!(payout:)
@@ -223,43 +266,98 @@ class DealerPayoutService
       status: "cancelled",
       cancelled_at: Time.current
     )
-    DealerPayoutNotificationService.status_updated!(payout.reload, actor: @dealer)
+    DealerPayoutMailer.status_updated(payout.reload, actor: @dealer).deliver_later rescue nil
   end
 
-  def ensure_requestable_settlement_balance!(payout:, dealer:)
-    requestable = payout.requestable
-    return if requestable.blank?
-    return if requestable_credit_exists?(dealer: dealer, requestable: requestable)
+  def calculate_order_financials(order)
+    gross = gross_amount_for(order)
+    rate = commission_rate_for(order)
 
-    amount = payout_amount_for(requestable)
-    description = "Settlement released for payout request #{payout.request_number}"
+    commission_fee = (gross * rate).round(2)
+    commission_gst = (commission_fee * GST_RATE_ON_COMMISSION).round(2)
+    net_payout = [gross - commission_fee - commission_gst, 0.to_d].max.round(2)
 
-    DealerLedgerService.credit!(
-      dealer: dealer,
-      amount: amount,
-      entry_type: "order_settlement",
-      description: description,
-      order: requestable.is_a?(Order) ? requestable : nil,
-      metadata: payout_ledger_metadata(payout).merge(
-        invoice_number: payout.invoice_number,
-        released_for_payout: true
-      )
-    )
-
-    if requestable.is_a?(Order)
-      requestable.update!(
-        settlement_status: "settled",
-        settled_at: requestable.try(:settled_at) || Time.current,
-        hold_released_at: requestable.try(:hold_released_at) || Time.current
-      )
-    end
+    {
+      gross_amount: gross,
+      commission_rate: rate,
+      commission_fee: commission_fee,
+      commission_gst: commission_gst,
+      net_payout_amount: net_payout
+    }
   end
 
   private
 
+  def process_cod_commission_deductions!
+    cod_orders = Order
+      .where(seller_dealer_id: @dealer.id)
+      .where(status: PAYOUT_READY_ORDER_STATUSES)
+      .where(payment_method: "cod")
+      .where("delivered_at IS NOT NULL AND delivered_at <= ?", 48.hours.ago)
+
+    cod_orders.each do |order|
+      already_deducted = DealerLedgerEntry.where(
+        dealer_id: @dealer.id,
+        order_id: order.id,
+        entry_type: "cod_commission_deduction"
+      ).exists?
+
+      next if already_deducted
+
+      breakdown = calculate_order_financials(order)
+      deduction_total = breakdown[:commission_fee] + breakdown[:commission_gst]
+
+      next if deduction_total <= 0
+
+      DealerLedgerService.debit!(
+        dealer: @dealer,
+        amount: deduction_total,
+        entry_type: "cod_commission_deduction",
+        description: "COD Commission & GST deduction for order #{order.order_number}",
+        order: order,
+        metadata: {
+          order_id: order.id,
+          gross_amount: breakdown[:gross_amount].to_f,
+          commission_fee: breakdown[:commission_fee].to_f,
+          commission_gst: breakdown[:commission_gst].to_f
+        }
+      )
+    end
+  end
+
+  def calculate_total_net_online_sales
+    online_orders = Order
+      .where(seller_dealer_id: @dealer.id)
+      .where(status: PAYOUT_READY_ORDER_STATUSES)
+      .where(payment_status: PAYOUT_READY_PAYMENT_STATUSES)
+      .where.not(payment_method: "cod")
+      .where("delivered_at IS NOT NULL AND delivered_at <= ?", 48.hours.ago)
+
+    b2b_orders = B2bOrder
+      .where(seller_dealer_id: @dealer.id)
+      .where(status: PAYOUT_READY_ORDER_STATUSES)
+      .where(payment_status: PAYOUT_READY_PAYMENT_STATUSES)
+      .where("delivered_at IS NOT NULL AND delivered_at <= ?", 48.hours.ago)
+
+    total = 0.to_d
+    online_orders.each { |o| total += calculate_order_financials(o)[:net_payout_amount] }
+    b2b_orders.each { |o| total += calculate_order_financials(o)[:net_payout_amount] }
+    total.round(2)
+  end
+
+  def calculate_total_cod_deductions
+    DealerLedgerEntry
+      .where(dealer_id: @dealer.id, entry_type: "cod_commission_deduction")
+      .sum(:amount).to_d.round(2)
+  end
+
   def append_eligible_order(collection, requestable)
+    return if requestable.try(:payment_method).to_s.downcase == "cod"
+
     eligibility = payout_eligibility_for(requestable)
     return unless eligibility[:eligible]
+
+    breakdown = calculate_order_financials(requestable)
 
     collection << {
       order_id: requestable.id,
@@ -268,29 +366,61 @@ class DealerPayoutService
       reference_number: request_reference(requestable),
       flow_type: requestable_flow(requestable),
       buyer_name: buyer_name_for(requestable),
-      amount: payout_amount_for(requestable).to_f,
+      gross_amount: breakdown[:gross_amount].to_f,
+      commission_rate: (breakdown[:commission_rate] * 100).to_f,
+      commission_fee: breakdown[:commission_fee].to_f,
+      commission_gst: breakdown[:commission_gst].to_f,
+      net_payout_amount: breakdown[:net_payout_amount].to_f,
       status: requestable.status,
       payment_status: requestable.payment_status,
-      settlement_hold_until: settlement_hold_until_for(requestable)&.iso8601,
-      delivered_at: requestable.delivered_at&.iso8601,
-      replacement_request_open: false
+      delivered_at: requestable.delivered_at&.iso8601
     }
   end
 
-  def payout_metadata(profile, requestable, invoice_number, note)
-    {
-      dealer_profile_id: profile.id,
-      business_name: profile.business_name,
-      gst_number: profile.gst_number,
-      note: note,
-      invoice_number: invoice_number,
-      bank_verified_at: profile.bank_verified_at&.iso8601,
-      bank_verification_status: profile.bank_verification_status,
-      requestable_type: requestable&.class&.name,
-      requestable_id: requestable&.id,
-      request_flow: requestable.present? ? requestable_flow(requestable) : "dealer_balance",
-      order_reference: requestable.present? ? request_reference(requestable) : nil
-    }.compact
+  def payout_eligibility_for(requestable)
+    return { eligible: false, reason: "Order not found" } if requestable.blank?
+    return { eligible: false, reason: "Unauthorized seller" } unless requestable.try(:seller_dealer_id) == @dealer.id
+    return { eligible: false, reason: "Order must be delivered or replacement delivered" } unless requestable.status.to_s.in?(PAYOUT_READY_ORDER_STATUSES)
+    return { eligible: false, reason: "Order payment must be verified as paid" } unless requestable.payment_status.to_s.in?(PAYOUT_READY_PAYMENT_STATUSES)
+    return { eligible: false, reason: "Order is in the 48-hour hold window" } if requestable.delivered_at.blank? || requestable.delivered_at > 48.hours.ago
+    return { eligible: false, reason: "COD orders cannot be directly requested for payout" } if requestable.try(:payment_method).to_s.downcase == "cod"
+    return { eligible: false, reason: "Replacement request open" } if replacement_request_open?(requestable)
+    return { eligible: false, reason: "Payout request already exists" } if active_payout_exists_for?(requestable)
+
+    { eligible: true }
+  end
+
+  def gross_amount_for(requestable)
+    case requestable
+    when Order
+      requestable.total_amount.to_d.round(2)
+    when B2bOrder
+      requestable.total_amount.to_d.round(2)
+    else
+      0.to_d
+    end
+  end
+
+  def commission_rate_for(requestable)
+    flow = requestable_flow(requestable)
+    case flow
+    when "wholesaler", "offermart"
+      COMMISSION_RATES[:wholesaler]
+    when "b2b"
+      COMMISSION_RATES[:b2b]
+    else
+      COMMISSION_RATES[:b2c]
+    end
+  end
+
+  def replacement_request_open?(requestable)
+    requestable.return_requests.where(request_type: "replacement", status: ReturnRequest::ACTIVE_STATUSES).exists?
+  end
+
+  def active_payout_exists_for?(requestable)
+    DealerPayout
+      .where(dealer_id: @dealer.id, requestable: requestable, status: ACTIVE_PAYOUT_STATUSES)
+      .exists?
   end
 
   def find_requestable(order_id:, order_type:)
@@ -311,77 +441,20 @@ class DealerPayoutService
     raise StandardError, eligibility[:reason] unless eligibility[:eligible]
   end
 
-  def payout_eligibility_for(requestable)
-    return { eligible: false, reason: "Order not found" } if requestable.blank?
-    return { eligible: false, reason: "Unauthorized seller" } unless requestable.try(:seller_dealer_id) == @dealer.id
-    return { eligible: false, reason: "Order must be delivered or replacement delivered before payout request" } unless requestable.status.to_s.in?(PAYOUT_READY_ORDER_STATUSES)
-    return { eligible: false, reason: "Order payment must be completed before payout request" } unless payment_completed_for_payout?(requestable)
-    return { eligible: false, reason: "Order is still in the 48-hour settlement hold window" } if settlement_hold_active?(requestable)
-    return { eligible: false, reason: "Replacement request is still open for this order" } if replacement_request_open?(requestable)
-    return { eligible: false, reason: "A payout request already exists for this order" } if active_payout_exists_for?(requestable)
-    return { eligible: false, reason: "No payout amount available for this order" } unless payout_amount_for(requestable).positive?
-
-    { eligible: true }
-  end
-
-  def payment_completed_for_payout?(requestable)
-    case requestable
-    when Order
-      requestable.payment_status.in?(%w[paid partially_refunded refunded])
-    when B2bOrder
-      requestable.payment_status == "paid"
-    else
-      false
-    end
-  end
-
-  def payout_amount_for(requestable)
-    case requestable
-    when Order
-      value = requestable.seller_settlement_amount.to_d
-      value.positive? ? value.round(2) : [requestable.total_amount.to_d - requestable.refund_amount.to_d, 0.to_d].max.round(2)
-    when B2bOrder
-      requestable.total_amount.to_d.round(2)
-    else
-      0.to_d
-    end
-  end
-
-  def replacement_request_open?(requestable)
-    requestable.return_requests.where(request_type: "replacement", status: ReturnRequest::ACTIVE_STATUSES).exists?
-  end
-
-  def active_payout_exists_for?(requestable)
-    DealerPayout
-      .where(dealer_id: @dealer.id, requestable: requestable, status: ACTIVE_PAYOUT_STATUSES)
-      .exists?
-  end
-
-  def requestable_credit_exists?(dealer:, requestable:)
-    scope = DealerLedgerEntry.where(
-      dealer_id: dealer.id,
-      entry_type: "order_settlement",
-      direction: "credit"
-    )
-
-    if requestable.is_a?(Order)
-      scope.where(order_id: requestable.id).exists?
-    else
-      scope.where("metadata ->> 'requestable_type' = ? AND metadata ->> 'requestable_id' = ?", requestable.class.name, requestable.id.to_s).exists?
-    end
-  end
-
-  def settlement_hold_active?(requestable)
-    hold_until = settlement_hold_until_for(requestable)
-    hold_until.present? && hold_until > Time.current
-  end
-
-  def settlement_hold_until_for(requestable)
-    if requestable.respond_to?(:settlement_due_at) && requestable.try(:settlement_due_at).present?
-      requestable.settlement_due_at
-    elsif requestable.delivered_at.present?
-      requestable.delivered_at + 48.hours
-    end
+  def payout_metadata(profile, requestable, invoice_number, note)
+    {
+      dealer_profile_id: profile.id,
+      business_name: profile.business_name,
+      gst_number: profile.gst_number,
+      note: note,
+      invoice_number: invoice_number,
+      bank_verified_at: profile.bank_verified_at&.iso8601,
+      bank_verification_status: profile.bank_verification_status,
+      requestable_type: requestable&.class&.name,
+      requestable_id: requestable&.id,
+      request_flow: requestable.present? ? requestable_flow(requestable) : "dealer_balance",
+      order_reference: requestable.present? ? request_reference(requestable) : nil
+    }.compact
   end
 
   def payout_ledger_metadata(payout)
@@ -405,7 +478,7 @@ class DealerPayoutService
 
   def requestable_flow(requestable)
     return "b2c" if requestable.is_a?(Order)
-    return "wholesale" if requestable.is_a?(B2bOrder) && requestable.source_type == "WholesalerPost"
+    return "wholesaler" if requestable.is_a?(B2bOrder) && requestable.source_type == "WholesalerPost"
 
     "b2b"
   end
@@ -420,15 +493,6 @@ class DealerPayoutService
       buyer.try(:full_name).presence || buyer.try(:dealer_code).presence || "Buyer"
     else
       "Buyer"
-    end
-  end
-
-  def ensure_settlement_credits!
-    orders = Order.where(seller_dealer_id: @dealer.id, status: PAYOUT_READY_ORDER_STATUSES) +
-             B2bOrder.where(seller_dealer_id: @dealer.id, status: PAYOUT_READY_ORDER_STATUSES)
-
-    orders.each do |ord|
-      OrderSettlementService.settle_order!(ord)
     end
   end
 end

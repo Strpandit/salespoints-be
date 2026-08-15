@@ -223,6 +223,14 @@ class PaymentAttemptFinalizationService
 
     accept_token = offer.accept_token
     reject_token = offer.reject_token
+    order_type_label =
+      if order.try(:is_direct_buy?) || wholesaler_post.present? || order.try(:source_type) == "WholesalerPost"
+        "Direct Buy"
+      elsif order.is_a?(Order)
+        "Retail"
+      else
+        "B2B"
+      end
 
     MetaWhatsappCloudService.new.send_dealer_order_request(
       to: formatted_phone_for(seller),
@@ -236,6 +244,7 @@ class PaymentAttemptFinalizationService
       approx_distance: approx_distance,
       accept_token: accept_token,
       reject_token: reject_token,
+      order_type: order_type_label,
       image_url: image_url
     )
 

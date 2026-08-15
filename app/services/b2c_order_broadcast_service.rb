@@ -167,6 +167,7 @@ class B2cOrderBroadcastService
       approx_distance: approx_distance,
       accept_token: offer.accept_token,
       reject_token: offer.reject_token,
+      order_type: "Retail",
       image_url: image_url
     )
 
