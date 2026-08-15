@@ -1,6 +1,12 @@
 module Api
   class DealerPayoutsController < ApplicationController
     def index
+      if current_admin.present?
+        unless current_admin.super_admin? || current_admin.can_access?(:payouts, :read) || current_admin.can_access?(:orders, :read)
+          return render json: { error: "Access denied: You do not have permission to view payout requests." }, status: :forbidden
+        end
+      end
+
       payouts = apply_filters(scoped_payouts).recent.page(params[:page]).per(params[:per_page] || 20)
 
       summary_meta = {}
@@ -26,6 +32,12 @@ module Api
         return render json: { error: "Unauthorized" }, status: :forbidden
       end
 
+      if current_admin.present?
+        unless current_admin.super_admin? || current_admin.can_access?(:payouts, :read) || current_admin.can_access?(:orders, :read)
+          return render json: { error: "Access denied: You do not have permission to view dealer payout summaries." }, status: :forbidden
+        end
+      end
+
       target_dealer =
         if current_dealer.present?
           current_dealer
@@ -35,7 +47,76 @@ module Api
 
       return render json: { error: "Dealer not found" }, status: :not_found unless target_dealer
 
-      data = DealerPayoutService.new(dealer: target_dealer).summary_balances
+      service = DealerPayoutService.new(dealer: target_dealer)
+      data = service.summary_balances
+
+      if current_admin.present?
+        eligible = service.eligible_orders
+        
+        # Build comprehensive order log for dealer
+        retail_orders = Order.where(seller_dealer_id: target_dealer.id).order(created_at: :desc).limit(50)
+        b2b_orders = B2bOrder.where(seller_dealer_id: target_dealer.id).order(created_at: :desc).limit(50)
+
+        orders_list = []
+        retail_orders.each do |o|
+          fin = service.calculate_order_financials(o) rescue { net_payout_amount: o.total_amount }
+          orders_list << {
+            id: o.id,
+            reference_number: o.order_number,
+            order_type: "b2c",
+            payment_method: o.payment_method.presence || "online",
+            payment_status: o.payment_status,
+            status: o.status,
+            total_amount: o.total_amount.to_f,
+            net_payout_amount: fin[:net_payout_amount].to_f,
+            buyer_name: o.buyer&.full_name || "Buyer",
+            created_at: o.created_at&.iso8601,
+            delivered_at: o.delivered_at&.iso8601
+          }
+        end
+
+        b2b_orders.each do |o|
+          fin = service.calculate_order_financials(o) rescue { net_payout_amount: o.total_amount }
+          orders_list << {
+            id: o.id,
+            reference_number: "B2B-#{o.id}",
+            order_type: "b2b",
+            payment_method: o.payment_method.presence || "online",
+            payment_status: o.payment_status,
+            status: o.status,
+            total_amount: o.total_amount.to_f,
+            net_payout_amount: fin[:net_payout_amount].to_f,
+            buyer_name: o.buyer_dealer&.full_name || "Dealer",
+            created_at: o.created_at&.iso8601,
+            delivered_at: o.delivered_at&.iso8601
+          }
+        end
+
+        orders_list.sort_by! { |item| item[:created_at].to_s }.reverse!
+
+        payout_history = target_dealer.dealer_payouts.order(created_at: :desc).limit(30).map do |p|
+          {
+            id: p.id,
+            request_number: p.request_number,
+            amount: p.amount.to_f,
+            status: p.status,
+            payment_reference: p.payment_reference,
+            payment_mode: p.payment_mode,
+            created_at: p.created_at&.iso8601,
+            paid_at: p.paid_at&.iso8601
+          }
+        end
+
+        data = data.merge(
+          eligible_orders: eligible,
+          all_orders: orders_list,
+          payout_history: payout_history,
+          dealer_name: target_dealer.full_name,
+          dealer_code: target_dealer.dealer_code,
+          dealer_email: target_dealer.email,
+          dealer_phone: target_dealer.phone
+        )
+      end
 
       render json: {
         data: data,

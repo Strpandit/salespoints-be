@@ -2,13 +2,17 @@ class DealerPayoutSerializer < ApplicationSerializer
   attributes :request_number, :amount, :status, :bank_name, :bank_account_number, :ifsc_code,
              :account_holder_name, :payment_reference, :payment_mode, :admin_note,
              :approved_at, :processing_at, :paid_at, :rejected_at, :cancelled_at,
-             :created_at, :updated_at, :dealer_name, :dealer_code, :order_reference,
+             :created_at, :updated_at, :dealer_id, :dealer_name, :dealer_code, :order_reference,
              :request_flow, :invoice_number, :gst_invoice, :requestable_type, :requestable_id,
              :bank_verification_status, :bank_verified, :settlement_ready_for_processing,
              :selected_orders, :total_gross, :total_commission, :total_commission_gst, :penalty, :net_payout
 
   def amount
     object.amount.to_f
+  end
+
+  def dealer_id
+    object.dealer_id
   end
 
   def dealer_name
@@ -28,7 +32,50 @@ class DealerPayoutSerializer < ApplicationSerializer
   end
 
   def selected_orders
-    (object.metadata || {})["selected_orders"] || []
+    raw_orders = (object.metadata || {})["selected_orders"] || []
+    if raw_orders.empty? && object.requestable.present?
+      breakdown = DealerPayoutService.new(dealer: object.dealer).calculate_order_financials(object.requestable)
+      raw_orders = [{
+        "order_id" => object.requestable_id,
+        "order_type" => object.requestable_type == "Order" ? "b2c" : "b2b",
+        "reference_number" => object.order_reference || "##{object.requestable_id}",
+        "flow_type" => object.request_flow || "b2c",
+        "buyer_name" => object.requestable.try(:buyer)&.try(:full_name) || "Buyer",
+        "payment_method" => object.requestable.try(:payment_method).presence || "online",
+        "payment_status" => object.requestable.try(:payment_status) || "paid",
+        "gross_amount" => breakdown[:gross_amount].to_f,
+        "commission_rate" => (breakdown[:commission_rate] * 100).to_f,
+        "commission_fee" => breakdown[:commission_fee].to_f,
+        "commission_gst" => breakdown[:commission_gst].to_f,
+        "net_payout_amount" => breakdown[:net_payout_amount].to_f,
+        "created_at" => object.requestable.created_at&.iso8601,
+        "delivered_at" => object.requestable.try(:delivered_at)&.iso8601
+      }]
+    end
+
+    raw_orders.map do |ord|
+      item = ord.is_a?(Hash) ? ord.dup : {}
+      unless item.key?("payment_method") && item.key?("created_at")
+        actual_order =
+          if item["order_type"].to_s.downcase.in?(%w[b2c order retail])
+            Order.find_by(id: item["order_id"])
+          else
+            B2bOrder.find_by(id: item["order_id"])
+          end
+
+        if actual_order
+          item["payment_method"] ||= actual_order.try(:payment_method).presence || "online"
+          item["payment_status"] ||= actual_order.try(:payment_status) || "paid"
+          item["created_at"] ||= actual_order.created_at&.iso8601
+          item["delivered_at"] ||= actual_order.try(:delivered_at)&.iso8601
+          item["order_status"] ||= actual_order.status
+        else
+          item["payment_method"] ||= "online"
+          item["payment_status"] ||= "paid"
+        end
+      end
+      item
+    end
   end
 
   def total_gross

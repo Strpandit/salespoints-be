@@ -9,6 +9,7 @@ class DealerProfile < ApplicationRecord
   has_one_attached :pan_card
   has_one_attached :gst_certificate
   has_one_attached :cancel_cheque
+  has_many_attached :brand_invoices
 
   validates :business_name, :aadhar_number, presence: true
   validates :bank_verification_status, inclusion: { in: BANK_VERIFICATION_STATUSES }
@@ -35,5 +36,6 @@ class DealerProfile < ApplicationRecord
     validate_document_attachment(:pan_card)
     validate_document_attachment(:gst_certificate)
     validate_document_attachment(:cancel_cheque)
+    validate_document_attachment_set(:brand_invoices, required: false)
   end
 end

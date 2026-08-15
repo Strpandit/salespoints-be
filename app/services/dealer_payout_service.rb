@@ -113,11 +113,14 @@ class DealerPayoutService
             reference_number: request_reference(order),
             flow_type: requestable_flow(order),
             buyer_name: buyer_name_for(order),
+            payment_method: order.try(:payment_method).presence || "online",
+            payment_status: order.try(:payment_status) || "paid",
             gross_amount: breakdown[:gross_amount].to_f,
             commission_rate: (breakdown[:commission_rate] * 100).to_f,
             commission_fee: breakdown[:commission_fee].to_f,
             commission_gst: breakdown[:commission_gst].to_f,
             net_payout_amount: breakdown[:net_payout_amount].to_f,
+            created_at: order.created_at&.iso8601,
             delivered_at: order.delivered_at&.iso8601
           }
         end

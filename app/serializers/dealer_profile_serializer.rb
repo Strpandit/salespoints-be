@@ -5,7 +5,7 @@ class DealerProfileSerializer < ApplicationSerializer
              :bank_verified_at, :verified_bank_name, :verified_name_at_bank, :last_bank_verification_error,
              :business_address, :business_contact_number, :business_email,
              :work_category, :associated_brands, :store_image, :aadhar_card, :pan_card, 
-             :gst_certificate, :cancel_cheque, :is_verified, :created_at, :updated_at
+             :gst_certificate, :cancel_cheque, :brand_invoices, :is_verified, :created_at, :updated_at
 
   def store_image
     object.store_image.map { |file| file_payload(file) }
@@ -31,6 +31,10 @@ class DealerProfileSerializer < ApplicationSerializer
     return nil unless object.cancel_cheque.attached?
 
     file_payload(object.cancel_cheque)
+  end
+
+  def brand_invoices
+    object.brand_invoices.map { |file| file_payload(file) }
   end
 
   private

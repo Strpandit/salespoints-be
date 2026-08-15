@@ -375,7 +375,7 @@ module Api
           :bank_name, :bank_account_number, :ifsc_code, :account_holder_name, :business_address,
           :business_contact_number, :business_email, :associated_brands,
           :is_verified, :bank_verification_reference, :pan_card, :gst_certificate, :cancel_cheque, 
-          { business_type: [], work_category: [], store_image: [], aadhar_card: [] }
+          { business_type: [], work_category: [], store_image: [], aadhar_card: [], brand_invoices: [] }
         ],
         dealer_location_attributes: [:id, :latitude, :longitude, :service_radius_km, :is_active]
       )
