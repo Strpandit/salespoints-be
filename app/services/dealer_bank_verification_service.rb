@@ -4,6 +4,8 @@ class DealerBankVerificationService
 
   VerificationResult = Struct.new(
     :verification_reference,
+    :cashfree_reference_id,
+    :status,
     :bank_name,
     :name_at_bank,
     :account_number,
@@ -30,7 +32,7 @@ class DealerBankVerificationService
     raise StandardError, "Account numbers do not match" unless normalized_account_number == normalized_confirm_account
     raise StandardError, "Account holder name is required" if normalized_holder_name.blank?
     raise StandardError, "IFSC code is required" if normalized_ifsc.blank?
-    # raise StandardError, "Cashfree payout is not configured" unless @cashfree.payout_configured?
+    raise StandardError, "Cashfree is not configured" unless @cashfree.configured?
 
     ifsc_payload = @cashfree.verify_ifsc(ifsc_code: normalized_ifsc)
     bank_name = extract_bank_name(ifsc_payload)
@@ -45,6 +47,32 @@ class DealerBankVerificationService
       reference_id: verification_reference
     )
 
+    cashfree_reference_id = bank_payload["reference_id"]
+
+    account_status = bank_payload["account_status"].to_s.upcase
+    account_status_code = bank_payload["account_status_code"].to_s.upcase
+
+    if account_status == "RECEIVED" &&
+     account_status_code == "VALIDATION_IN_PROGRESS"
+
+      result = VerificationResult.new(
+        verification_reference: verification_reference,
+        cashfree_reference_id: cashfree_reference_id,
+        status: "pending",
+        bank_name: bank_name,
+        name_at_bank: nil,
+        account_number: normalized_account_number,
+        ifsc_code: normalized_ifsc,
+        account_holder_name: normalized_holder_name,
+        bank_payload: bank_payload,
+        ifsc_payload: ifsc_payload
+      )
+
+      cache_verification(result)
+
+      return result
+    end
+
     ensure_bank_account_verified!(bank_payload)
     name_at_bank = extract_name_at_bank(bank_payload)
 
@@ -54,6 +82,8 @@ class DealerBankVerificationService
 
     result = VerificationResult.new(
       verification_reference: verification_reference,
+      cashfree_reference_id: cashfree_reference_id,
+      status: "verified",
       bank_name: bank_name,
       name_at_bank: name_at_bank.presence || normalized_holder_name,
       account_number: normalized_account_number,
@@ -129,6 +159,8 @@ class DealerBankVerificationService
       {
         dealer_id: @dealer.id,
         verification_reference: result.verification_reference,
+        cashfree_reference_id: result.cashfree_reference_id,
+        status: result.status,
         bank_name: result.bank_name,
         name_at_bank: result.name_at_bank,
         account_number: result.account_number,

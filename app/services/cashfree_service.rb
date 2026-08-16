@@ -263,7 +263,7 @@ class CashfreeService
 
 
     response = self.class.post(
-      "#{verification_base_url}/bank-account/async",
+      "#{verification_base_url}/bank-account/sync",
       headers: verification_headers,
       body: body.to_json,
       timeout: REQUEST_TIMEOUT

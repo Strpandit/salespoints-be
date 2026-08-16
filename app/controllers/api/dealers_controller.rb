@@ -219,14 +219,34 @@ module Api
         ifsc_code: params[:ifsc_code]
       )
 
+      if result.status == "pending"
+        render json: {
+          data: {
+            verification_reference: result.verification_reference,
+            cashfree_reference_id: result.cashfree_reference_id,
+            bank_name: result.bank_name,
+            name_at_bank: result.name_at_bank,
+            account_holder_name: result.account_holder_name,
+            ifsc_code: result.ifsc_code,
+            masked_account_number: "XXXXXX#{result.account_number.to_s.last(4)}",
+            status: "pending"
+          },
+          message: "Bank account verification is in progress"
+        }, status: :accepted
+
+        return
+      end
+
       render json: {
         data: {
           verification_reference: result.verification_reference,
+          cashfree_reference_id: result.cashfree_reference_id,
           bank_name: result.bank_name,
           name_at_bank: result.name_at_bank,
           account_holder_name: result.account_holder_name,
           ifsc_code: result.ifsc_code,
-          masked_account_number: "XXXXXX#{result.account_number.to_s.last(4)}"
+          masked_account_number: "XXXXXX#{result.account_number.to_s.last(4)}",
+          status: "verified"
         },
         message: "Bank account verified successfully"
       }, status: :ok
