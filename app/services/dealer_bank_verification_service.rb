@@ -30,7 +30,7 @@ class DealerBankVerificationService
     raise StandardError, "Account numbers do not match" unless normalized_account_number == normalized_confirm_account
     raise StandardError, "Account holder name is required" if normalized_holder_name.blank?
     raise StandardError, "IFSC code is required" if normalized_ifsc.blank?
-    raise StandardError, "Cashfree payout is not configured" unless @cashfree.payout_configured?
+    # raise StandardError, "Cashfree payout is not configured" unless @cashfree.payout_configured?
 
     ifsc_payload = @cashfree.verify_ifsc(ifsc_code: normalized_ifsc)
     bank_name = extract_bank_name(ifsc_payload)

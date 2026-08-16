@@ -237,6 +237,9 @@ class CashfreeService
     )
 
     parsed = parse_response(response)
+    Rails.logger.info "========== CASHFREE IFSC =========="
+    Rails.logger.info "IFSC RESPONSE: #{ifsc_payload.inspect}"
+    Rails.logger.info "=================================="
     raise StandardError, parsed["message"].presence || "Unable to verify IFSC code" unless response.success?
 
     parsed
@@ -260,13 +263,18 @@ class CashfreeService
 
 
     response = self.class.post(
-      "#{verification_base_url}/bank-account/sync",
+      "#{verification_base_url}/bank-account/async",
       headers: verification_headers,
       body: body.to_json,
       timeout: REQUEST_TIMEOUT
     )
 
     parsed = parse_response(response)
+    Rails.logger.info "========== CASHFREE BANK VERIFICATION =========="
+    Rails.logger.info "HTTP STATUS: #{response.code}"
+    Rails.logger.info "RAW RESPONSE: #{response.body}"
+    Rails.logger.info "PARSED RESPONSE: #{parsed.inspect}"
+    Rails.logger.info "==============================================="
     if response.code == 422
       raise StandardError,
             "#{parsed['code']}: #{parsed['message']} (Ref: #{parsed.dig('error', 'reference_id')})"
