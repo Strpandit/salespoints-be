@@ -238,7 +238,7 @@ class CashfreeService
 
     parsed = parse_response(response)
     Rails.logger.info "========== CASHFREE IFSC =========="
-    Rails.logger.info "IFSC RESPONSE: #{ifsc_payload.inspect}"
+    Rails.logger.info "IFSC RESPONSE: #{parsed.inspect}"
     Rails.logger.info "=================================="
     raise StandardError, parsed["message"].presence || "Unable to verify IFSC code" unless response.success?
 
