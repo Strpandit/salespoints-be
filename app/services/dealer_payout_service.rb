@@ -289,6 +289,15 @@ class DealerPayoutService
     }
   end
 
+  def ensure_requestable_settlement_balance!(payout:, dealer:)
+    payout_amount = payout.amount.to_d
+    settlement_balance = dealer.reload.settlement_balance.to_d
+
+    raise StandardError, "Dealer settlement balance is insufficient" if payout_amount > settlement_balance
+
+    true
+  end
+
   private
 
   def process_cod_commission_deductions!

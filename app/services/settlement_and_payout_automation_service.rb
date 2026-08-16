@@ -140,7 +140,6 @@ class SettlementAndPayoutAutomationService
       raise StandardError, "Dealer bank account is not verified" unless profile&.bank_verified?
 
       DealerPayoutService.new(dealer: dealer).ensure_requestable_settlement_balance!(payout: payout, dealer: dealer)
-      raise StandardError, "Dealer settlement balance is insufficient" if payout.amount.to_d > dealer.reload.settlement_balance.to_d
 
       # Step 1: Ensure beneficiary is onboarded
       ensure_beneficiary_onboarded!(dealer)
