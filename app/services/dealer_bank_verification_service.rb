@@ -184,19 +184,28 @@ class DealerBankVerificationService
   end
 
   def extract_name_at_bank(bank_payload)
-    bank_payload["nameAtBank"].presence ||
+    bank_payload["name_at_bank"].presence ||
+      bank_payload["nameAtBank"].presence ||
       bank_payload["beneName"].presence ||
+      bank_payload.dig("data", "name_at_bank").presence ||
       bank_payload.dig("data", "nameAtBank").presence ||
       bank_payload.dig("data", "beneficiary_name").presence
   end
 
   def ensure_bank_account_verified!(bank_payload)
+    account_status = bank_payload["account_status"].to_s.upcase
+    account_status_code = bank_payload["account_status_code"].to_s.upcase
+
+    return if account_status == "VALID" &&
+            account_status_code == "ACCOUNT_IS_VALID"
+
     account_exists = bank_payload["accountExists"]
     account_exists = bank_payload.dig("data", "accountExists") if account_exists.nil?
     account_exists = bank_payload.dig("data", "account_exists") if account_exists.nil?
-    account_exists = bank_payload["status"].to_s.casecmp("VALID").zero? if account_exists.nil?
 
-    return if ActiveModel::Type::Boolean.new.cast(account_exists)
+    if account_exists.present?
+      return if ActiveModel::Type::Boolean.new.cast(account_exists)
+    end
 
     message = bank_payload["message"].presence ||
               bank_payload["subCodeMessage"].presence ||
