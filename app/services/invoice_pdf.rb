@@ -131,17 +131,17 @@ class InvoicePdf
   end
 
   def seller_name
-    seller&.dealer_code || "SalesPoints Seller"
+    seller&.try(:dealer_code).presence || seller&.try(:full_name).presence || "SalesPoints Seller"
   end
 
   def seller_gstin
     return "N/A" if seller.blank?
-    seller.dealer_profile&.gst_number || "N/A"
+    seller.try(:dealer_profile)&.gst_number.presence || "N/A"
   end
 
   def seller_pan
     return "N/A" if seller.blank?
-    seller.dealer_profile&.pan_number || "N/A"
+    seller.try(:dealer_profile)&.pan_number.presence || "N/A"
   end
 
   def seller_cin
@@ -150,7 +150,7 @@ class InvoicePdf
   end
 
   def seller_address
-    seller&.dealer_profile&.business_address || "302, Solitaire, Sunrise Park, Vastrapur, AHMEDABAD, GUJARAT - 380054"
+    seller.try(:dealer_profile)&.business_address.presence || "302, Solitaire, Sunrise Park, Vastrapur, AHMEDABAD, GUJARAT - 380054"
   end
 
   def seller_state
@@ -168,18 +168,20 @@ class InvoicePdf
   end
 
   def buyer_name
-    if buyer.present?
-      buyer.dealer_profile&.business_name || buyer.full_name || buyer.dealer_code || "Customer"
-    else
-      "Customer"
+    return "Customer" if buyer.blank?
+    name = nil
+    if buyer.respond_to?(:dealer_profile)
+      name = buyer.dealer_profile&.business_name.presence
     end
+    name ||= buyer.try(:full_name).presence || buyer.try(:name).presence || buyer.try(:dealer_code).presence || "Customer"
+    name
   end
 
   def buyer_gstin
     return "N/A" if buyer.blank?
-    if buyer.respond_to?(:gst_number)
-      buyer.gst_number || "N/A"
-    elsif buyer.respond_to?(:dealer_profile) && buyer.dealer_profile&.gst_number
+    if buyer.respond_to?(:gst_number) && buyer.gst_number.present?
+      buyer.gst_number
+    elsif buyer.respond_to?(:dealer_profile) && buyer.dealer_profile&.gst_number.present?
       buyer.dealer_profile.gst_number
     else
       "N/A"
