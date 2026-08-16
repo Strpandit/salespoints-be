@@ -66,7 +66,7 @@ module Api
         status: :ok
 
     rescue => e
-      render json: { error: "Failed to generate invoice" }, status: :internal_server_error
+      render json: { error: "Failed to generate invoice: #{e.message}" }, status: :internal_server_error
     end
 
     def show

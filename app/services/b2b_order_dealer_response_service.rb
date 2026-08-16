@@ -180,7 +180,7 @@ class B2bOrderDealerResponseService
       payment_mode: order.payment_method.to_s.upcase,
       total_amount: total_amount,
       latitude: latitude.to_s,
-      longitude: latitude.to_s,
+      longitude: longitude.to_s,
       location_name: location_name,
       shipped_token: shipped_token
     )

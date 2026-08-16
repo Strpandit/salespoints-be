@@ -372,7 +372,7 @@ class CashfreeService
     {
       customer_id: "#{customer.class.name.first(3).upcase}-#{customer.id}",
       customer_name: customer_name,
-      customer_email: customer.try(:email).presence || "support@salespoints.in",
+      customer_email: customer.try(:email).presence || "support.salespoints.in@gmail.com",
       customer_phone: safe_phone
     }
   end

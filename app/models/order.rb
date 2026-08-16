@@ -166,21 +166,23 @@ class Order < ApplicationRecord
   end
 
   def generate_order_number
-    date_prefix = Time.current.strftime("%d%m%Y")
+    date_prefix = Time.current.strftime("%m%y")
     
     self.class.transaction do
       last_order = self.class.where("order_number LIKE ?", "SPIN#{date_prefix}%")
+                             .or(self.class.where("order_number LIKE ?", "SPIN#{date_prefix}%"))
                              .order(order_number: :desc)
                              .lock
                              .first
       
       serial = if last_order.present?
-                 last_order.order_number[-6..-1].to_i + 1
+                 last_num = last_order.order_number.split("-").last.to_i
+                 last_num.positive? ? last_num + 1 : (last_order.order_number[-4..-1].to_i + 1)
                else
                  1
                end
       
-      "SPIN#{date_prefix}#{serial.to_s.rjust(6, '0')}"
+      "SPIN#{date_prefix}#{serial.to_s.rjust(4, '0')}"
     end
   end
 

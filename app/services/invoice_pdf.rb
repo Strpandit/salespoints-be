@@ -380,7 +380,7 @@ class InvoicePdf
     pdf.bounding_box([0, pdf.cursor], width: pdf.bounds.width) do
       pdf.text "SALESPOINTS INDIA PRIVATE LIMITED", size: 10, style: :bold, align: :center
       pdf.text "Reg. Off: Prop No-49, Kh No. 70, Road Sadatpur, Karawal  Nagar, New Delhi - 110094", size: 8, align: :center
-      pdf.text "support@salespoints.in | +91-8368835228 | www.salespoints.in", size: 8, align: :center
+      pdf.text "support.salespoints.in@gmail.com | +91-8368835228 | www.salespoints.in", size: 8, align: :center
       pdf.text "GSTIN - 07ABTCS6593H1ZH | CIN - U46524DC2026PTC471107", size: 8, align: :center
     end
     pdf.move_down 12
@@ -613,7 +613,7 @@ class InvoicePdf
 
     pdf.text(
       "Return/Replacement: Returns/Replacement accepted within 48 hours of delivery. Product must be unused with original packaging. " \
-      "Refund processed within 5-7 working days post-quality check. Contact support@salespoints.in directly for replacement initiation. " ,
+      "Refund processed within 5-7 working days post-quality check. Contact support.salespoints.in@gmail.com directly for replacement initiation. " ,
       size: 7,
       color: "666666"
     )
