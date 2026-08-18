@@ -5,7 +5,7 @@ class DealerPayoutSerializer < ApplicationSerializer
              :created_at, :updated_at, :dealer_id, :dealer_name, :dealer_code, :order_reference,
              :request_flow, :invoice_number, :gst_invoice, :requestable_type, :requestable_id,
              :bank_verification_status, :bank_verified, :settlement_ready_for_processing,
-             :selected_orders, :total_gross, :total_commission, :total_commission_gst, :penalty, :net_payout
+             :selected_orders, :total_gross, :total_commission, :penalty, :net_payout
 
   def amount
     object.amount.to_f
@@ -46,7 +46,6 @@ class DealerPayoutSerializer < ApplicationSerializer
         "gross_amount" => breakdown[:gross_amount].to_f,
         "commission_rate" => (breakdown[:commission_rate] * 100).to_f,
         "commission_fee" => breakdown[:commission_fee].to_f,
-        "commission_gst" => breakdown[:commission_gst].to_f,
         "net_payout_amount" => breakdown[:net_payout_amount].to_f,
         "created_at" => object.requestable.created_at&.iso8601,
         "delivered_at" => object.requestable.try(:delivered_at)&.iso8601
@@ -55,6 +54,7 @@ class DealerPayoutSerializer < ApplicationSerializer
 
     raw_orders.map do |ord|
       item = ord.is_a?(Hash) ? ord.dup : {}
+      item.delete("commission_gst")
       unless item.key?("payment_method") && item.key?("created_at")
         actual_order =
           if item["order_type"].to_s.downcase.in?(%w[b2c order retail])
@@ -84,10 +84,6 @@ class DealerPayoutSerializer < ApplicationSerializer
 
   def total_commission
     ((object.metadata || {})["total_commission"] || 0.0).to_f
-  end
-
-  def total_commission_gst
-    ((object.metadata || {})["total_commission_gst"] || 0.0).to_f
   end
 
   def penalty

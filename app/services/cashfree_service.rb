@@ -198,11 +198,22 @@ class CashfreeService
 
     parsed = parse_response(response)
 
+    Rails.logger.error(
+      "CASHFREE PAYOUT TRANSFER DEBUG | " \
+      "HTTP=#{response.code} | " \
+      "URL=#{@payout_base_url}/requestTransfer | " \
+      "BODY=#{parsed.inspect}"
+    )
+
     if response.success? && parsed["subCode"] == "200"
       parsed
     else
-      raise StandardError, parsed["message"].presence || "Unable to request transfer"
+      raise StandardError,
+            parsed["message"].presence ||
+            parsed["error"].presence ||
+            "Unable to request transfer"
     end
+
   rescue => e
     raise StandardError, "Cashfree Transfer Request Error: #{e.message}"
   end
@@ -237,9 +248,6 @@ class CashfreeService
     )
 
     parsed = parse_response(response)
-    Rails.logger.info "========== CASHFREE IFSC =========="
-    Rails.logger.info "IFSC RESPONSE: #{parsed.inspect}"
-    Rails.logger.info "=================================="
     raise StandardError, parsed["message"].presence || "Unable to verify IFSC code" unless response.success?
 
     parsed
@@ -270,11 +278,6 @@ class CashfreeService
     )
 
     parsed = parse_response(response)
-    Rails.logger.info "========== CASHFREE BANK VERIFICATION =========="
-    Rails.logger.info "HTTP STATUS: #{response.code}"
-    Rails.logger.info "RAW RESPONSE: #{response.body}"
-    Rails.logger.info "PARSED RESPONSE: #{parsed.inspect}"
-    Rails.logger.info "==============================================="
     if response.code == 422
       raise StandardError,
             "#{parsed['code']}: #{parsed['message']} (Ref: #{parsed.dig('error', 'reference_id')})"

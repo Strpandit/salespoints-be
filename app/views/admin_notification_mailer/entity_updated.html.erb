@@ -1,99 +1,57 @@
-<%= render 'admin_notification_mailer/email_header' %>
+<div style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); padding: 24px 32px; color: #ffffff;">
+  <div style="font-size: 11px; letter-spacing: 1.2px; text-transform: uppercase; color: #10b981; font-weight: 700;">SalesPoints Admin Notification</div>
+  <h1 style="margin: 8px 0 0; font-size: 22px; font-weight: 800; color: #ffffff;"><%= @entity_type %> Record Updated</h1>
+</div>
 
-      <!-- Card -->
-      <div class="card" style="padding:0; overflow:hidden;">
+<div style="padding: 28px 32px; font-family: Arial, sans-serif; color: #1e293b;">
+  <div style="display: inline-block; padding: 4px 12px; background: #e0f2fe; color: #0369a1; border-radius: 9999px; font-size: 12px; font-weight: 700; margin-bottom: 16px;">
+    📋 <%= @entity_type %> — Modified
+  </div>
 
-        <!-- Header banner -->
-        <div class="header" style="background: linear-gradient(135deg, #d97706 0%, #b45309 100%);">
-          <div class="header-icon">✏️</div>
-          <div class="header-text">
-            <h1><%= @entity_type %> Updated</h1>
-            <p>SalesPoints Admin Notification</p>
-          </div>
-        </div>
+  <p style="font-size: 14px; line-height: 1.6; color: #334155; margin-bottom: 20px;">
+    The <strong><%= @entity_type %></strong> record 
+    <strong>&ldquo;<%= @entity_name %>&rdquo;</strong> has been updated. Details of the changes are listed below:
+  </p>
 
-        <div style="padding:28px 32px;">
-
-          <!-- Entity badge -->
-          <span class="entity-badge" style="background:#fffbeb; color:#d97706;">
-            📋 <%= @entity_type %> — Modified
-          </span>
-
-          <!-- Intro -->
-          <p class="intro">
-            The <strong><%= @entity_type %></strong> record
-            <strong>&ldquo;<%= @entity_name %>&rdquo;</strong>
-            has been <strong>modified</strong>.
-            The following changes were made:
-          </p>
-
-          <!-- Who did it -->
-          <div class="actor-label">Updated By</div>
-          <div class="actor-block" style="background:#fffbeb; border-color:#fde68a;">
-            <div class="actor-avatar" style="background:#d97706;">
-              <%= (@actor[:name].presence || @actor[:email] || "?")[0] %>
-            </div>
-            <div class="actor-info">
-              <div class="actor-name" style="color:#92400e;"><%= @actor[:name].presence || "Unknown" %></div>
-              <div class="actor-email"><%= @actor[:email].presence || "—" %></div>
-            </div>
-          </div>
-
-          <!-- Before → After changes table -->
-          <% if @changes.present? %>
-            <div class="changes-section">
-              <div class="section-title">🔄 What Changed</div>
-              <table class="changes-table">
-                <thead>
-                  <tr>
-                    <th>Field</th>
-                    <th>Before</th>
-                    <th>After</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <% @changes.each do |field, diff| %>
-                    <tr>
-                      <td><%= field.to_s.humanize %></td>
-                      <td>
-                        <span class="val-old">
-                          <%= diff[:from].presence || diff["from"].presence || "—" %>
-                        </span>
-                      </td>
-                      <td>
-                        <span class="val-new">
-                          <%= diff[:to].presence || diff["to"].presence || "—" %>
-                        </span>
-                      </td>
-                    </tr>
-                  <% end %>
-                </tbody>
-              </table>
-            </div>
-          <% else %>
-            <p style="color:#9ca3af; font-size:13px; margin-bottom:16px;">
-              No field-level diff was recorded for this update.
-            </p>
-          <% end %>
-
-          <!-- Timestamp -->
-          <div class="timestamp-strip">
-            🕐 <span>Updated at:</span>
-            <%= Time.current.strftime("%d %b %Y, %I:%M %p %Z") %>
-          </div>
-
-          <div class="warning-box">
-            ⚠️ Review these changes in the admin dashboard. If this action was unintended, contact your team immediately.
-          </div>
-
-          <!-- Footer -->
-          <div class="footer">
-            <p>This is an automated notification from <strong>SalesPoints</strong>.</p>
-            <p style="margin-top:6px;">© 2026 SalesPoints. All rights reserved.</p>
-          </div>
-
-        </div>
-      </div>
+  <% if @actor.present? && (@actor[:name].present? || @actor[:email].present?) %>
+    <div style="padding: 14px 18px; border-radius: 12px; background: #f8fafc; border: 1px solid #e2e8f0; margin-bottom: 24px;">
+      <span style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; display: block; margin-bottom: 4px;">Updated By</span>
+      <span style="font-size: 14px; font-weight: 700; color: #0f172a;"><%= @actor[:name].presence || @actor[:email] %></span>
+      <% if @actor[:email].present? && @actor[:name] != @actor[:email] %>
+        <span style="font-size: 12px; color: #64748b; margin-left: 6px;">(<%= @actor[:email] %>)</span>
+      <% end %>
     </div>
-  </body>
-</html>
+  <% end %>
+
+  <% if @changes.present? %>
+    <div style="margin-bottom: 24px;">
+      <h3 style="font-size: 14px; font-weight: 700; color: #0f172a; margin-bottom: 12px;">🔄 Field Changes</h3>
+      <table width="100%" cellpadding="10" cellspacing="0" style="border-collapse: collapse; font-size: 13px; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
+        <thead>
+          <tr style="background: #f1f5f9; color: #475569; text-align: left;">
+            <th style="border-bottom: 1px solid #e2e8f0; padding: 10px;">Field</th>
+            <th style="border-bottom: 1px solid #e2e8f0; padding: 10px;">Previous Value</th>
+            <th style="border-bottom: 1px solid #e2e8f0; padding: 10px;">New Value</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% @changes.each do |field, diff| %>
+            <tr style="border-bottom: 1px solid #f1f5f9;">
+              <td style="padding: 10px; font-weight: 600; color: #334155;"><%= field.to_s.humanize %></td>
+              <td style="padding: 10px; color: #94a3b8;"><%= diff[:from].presence || diff["from"].presence || "—" %></td>
+              <td style="padding: 10px; font-weight: 700; color: #059669;"><%= diff[:to].presence || diff["to"].presence || "—" %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  <% end %>
+
+  <div style="padding: 12px 16px; border-radius: 8px; background: #f1f5f9; font-size: 12px; color: #64748b; border: 1px solid #e2e8f0;">
+    🕐 <strong>Updated At:</strong> <%= Time.current.strftime("%d %b %Y, %I:%M %p %Z") %>
+  </div>
+
+  <div style="margin-top: 24px; pt: 16px; border-top: 1px solid #f1f5f9; font-size: 12px; color: #94a3b8; text-align: center;">
+    This is an automated administrative notification from <strong>SalesPoints India Pvt. Ltd.</strong>
+  </div>
+</div>

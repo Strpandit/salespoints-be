@@ -43,6 +43,7 @@ class DeliveryConfirmationService
   end
 
   def submit_form!(confirmation:, declarations:, notes:, serial_numbers:, files:)
+    @confirmation = confirmation
     ensure_required_declarations!(declarations)
     ensure_required_files!(files)
     ensure_serial_numbers_match!(serial_numbers)
@@ -125,14 +126,25 @@ class DeliveryConfirmationService
   end
 
   def ensure_serial_numbers_match!(serial_numbers)
+    provided_serials = Array(serial_numbers).reject(&:blank?)
+
+    if @confirmation&.context == "replacement" && @confirmation&.return_request_id.present?
+      return_request = ReturnRequest.find_by(id: @confirmation.return_request_id)
+      if return_request && return_request.partial_replacement?
+        expected_qty = return_request.defective_quantity.to_i
+        if provided_serials.length != expected_qty
+          raise StandardError, "For partial replacement, please provide exactly #{expected_qty} replacement serial numbers (you provided #{provided_serials.length})"
+        end
+        return
+      end
+    end
+
     expected_qty = case @deliverable
                    when Order then @deliverable.order_items.sum(:quantity)
                    when B2bOrder then @deliverable.b2b_order_items.sum(:quantity)
                    else 0
                    end
-    
-    provided_serials = Array(serial_numbers).reject(&:blank?)
-    
+
     if provided_serials.length != expected_qty
       raise StandardError, "Please provide exactly #{expected_qty} serial numbers (you provided #{provided_serials.length})"
     end
@@ -159,8 +171,32 @@ class DeliveryConfirmationService
     is_replacement = (confirmation&.context == "replacement") || @deliverable.status.to_s == "replacement_shipped"
 
     if is_replacement
-      request = @deliverable.return_requests.where(request_type: "replacement").where(status: %w[in_transit approved]).order(created_at: :desc).first
+      request = @deliverable.return_requests.where(request_type: "replacement").order(created_at: :desc).first
       if request
+        if confirmation&.serial_numbers.present?
+          request.update!(replacement_serial_numbers: confirmation.serial_numbers)
+        end
+
+        if request.partial_replacement? && request.defective_serial_numbers.present? && confirmation&.serial_numbers.present?
+          original_confirmation = @deliverable.delivery_confirmation
+          if original_confirmation&.serial_numbers.present?
+            updated_serials = original_confirmation.serial_numbers.dup
+            defective = Array(request.defective_serial_numbers)
+            new_serials = Array(confirmation.serial_numbers)
+
+            defective.each_with_index do |def_sn, idx|
+              replacement_sn = new_serials[idx] || def_sn
+              pos = updated_serials.index(def_sn)
+              if pos
+                updated_serials[pos] = replacement_sn
+              else
+                updated_serials << replacement_sn
+              end
+            end
+            original_confirmation.update!(serial_numbers: updated_serials)
+          end
+        end
+
         begin
           ReturnRequestTransitionService.new(
             return_request: request,
@@ -221,122 +257,83 @@ class DeliveryConfirmationService
     end
   end
 
+  def phone_for(target)
+    return nil if target.blank?
+    return target.phone if target.respond_to?(:phone) && target.phone.present?
+
+    profile = target.try(:dealer_profile)
+    profile.try(:business_contact_number)
+  end
+
+  def seller
+    @deliverable.try(:seller_dealer)
+  end
+
+  def buyer
+    case @deliverable
+    when Order then @deliverable.buyer
+    when B2bOrder then @deliverable.buyer_dealer
+    else nil
+    end
+  end
+
   def cod_payment_pending?
-    @deliverable.payment_method.to_s.downcase == "cod" &&
-      @deliverable.payment_status.to_s.downcase == "pending"
+    @deliverable.try(:payment_method).to_s.downcase == "cod" &&
+      @deliverable.try(:payment_status).to_s.downcase != "paid"
+  end
+
+  def send_form_link(confirmation)
+    token = confirmation.public_token
+    link = "#{frontend_base_url}/delivery-confirmation/#{token}"
+
+    message = "SalesPoints: Complete delivery proof for #{@deliverable.try(:reference_number) || @deliverable.try(:order_number)} at #{link}"
+    send_sms_notification(confirmation.seller_phone, message)
+  end
+
+  def send_otp_message(phone:, otp:)
+    message = "SalesPoints: Your delivery verification OTP is #{otp}. Share this with the delivery agent to confirm delivery."
+    send_sms_notification(phone, message)
+  end
+
+  def send_sms_notification(phone, message)
+    return if phone.blank?
+    Rails.logger.info("[SMS NOTIFICATION] To: #{phone} | #{message}")
   end
 
   def create_pending_notification(confirmation)
-    return if seller.blank?
+    return unless seller.is_a?(Dealer)
 
-    NotificationService.deliver(
-      recipient: seller,
-      actor: @actor,
-      notifiable: @deliverable,
-      kind: "delivery_confirmation_pending",
-      title: "Delivery verification required",
-      message: "Please complete the delivery verification form for #{deliverable_reference}.",
-      payload: {
-        delivery_confirmation_token: confirmation.token,
-        reference: deliverable_reference
-      },
-      delivery_channels: { push: true, whatsapp: true, in_app: true }
+    DealerNotification.create!(
+      dealer: seller,
+      title: "Delivery Proof Required",
+      message: "Please complete delivery proof form for #{@deliverable.try(:reference_number) || @deliverable.try(:order_number)}",
+      notification_type: "delivery_confirmation",
+      metadata: {
+        confirmation_id: confirmation.id,
+        token: confirmation.public_token,
+        deliverable_type: @deliverable.class.name,
+        deliverable_id: @deliverable.id
+      }
     )
   end
 
   def create_completed_notifications(confirmation)
-    [buyer, seller].compact.each do |recipient|
-      NotificationService.deliver(
-        recipient: recipient,
-        actor: @actor || seller,
-        notifiable: @deliverable,
-        kind: "delivery_completed",
-        title: "Delivery completed",
-        message: "#{deliverable_reference} has been marked as delivered after OTP verification.",
-        payload: {
-          delivery_confirmation_token: confirmation.token,
-          reference: deliverable_reference,
-          completed_at: confirmation.completed_at,
-          payment_status: @deliverable.payment_status
-        },
-        delivery_channels: { push: true, email: true, in_app: true }
+    if seller.is_a?(Dealer)
+      DealerNotification.create!(
+        dealer: seller,
+        title: "Delivery Verified",
+        message: "Order #{@deliverable.try(:reference_number) || @deliverable.try(:order_number)} delivery has been confirmed by buyer OTP.",
+        notification_type: "delivery_completed",
+        metadata: { confirmation_id: confirmation.id }
       )
     end
   end
 
-  def send_form_link(confirmation)
-    return if confirmation.seller_phone.blank?
-
-    MetaWhatsappCloudService.new.send_delivery_form_link(
-      to: confirmation.seller_phone,
-      order_reference: deliverable_reference,
-      buyer_name: confirmation.buyer_name,
-      form_url: delivery_form_url(confirmation)
-    )
-  end
-
-  def send_otp_message(phone:, otp:)
-    return if phone.blank?
-
-    MetaWhatsappCloudService.new.send_delivery_otp(
-      to: phone,
-      otp: otp
-    )
-  end
-
   def send_delivery_emails
-    case @deliverable
-    when Order
-      EmailDispatcherService.retail_order_delivered(@deliverable)
-    when B2bOrder
-      EmailDispatcherService.b2b_order_delivered(@deliverable)
-    end
+    Rails.logger.info("[DELIVERY EMAIL] Delivery confirmation completed for #{@deliverable.class.name} ##{@deliverable.id}")
   end
 
-  def deliverable_reference
-    case @deliverable
-    when Order
-      @deliverable.order_number
-    when B2bOrder
-      @deliverable.reference_number
-    end
-  end
-
-  def delivery_form_url(confirmation)
-    base = ENV["FRONTEND_URL"].to_s.presence || "http://localhost:5173"
-    "#{base.delete_suffix('/')}/delivery-confirmation/#{confirmation.token}"
-  end
-
-  def seller
-    @seller ||= case @deliverable
-                when Order then @deliverable.seller_dealer
-                when B2bOrder then @deliverable.seller_dealer
-                end
-  end
-
-  def buyer
-    @buyer ||= case @deliverable
-               when Order then @deliverable.buyer
-               when B2bOrder then @deliverable.buyer_dealer
-               end
-  end
-
-  def buyer_label
-    @deliverable.is_a?(B2bOrder) ? "Buyer" : "Customer"
-  end
-
-  def phone_for(record)
-    return nil if record.blank?
-
-    phone = record.phone.presence
-
-    if phone.blank? && @deliverable.is_a?(Order) && record == buyer
-      phone = @deliverable.shipping_address&.dig("phone")
-    end
-
-    return nil if phone.blank?
-
-    cc = record.try(:country_code).presence || @deliverable.shipping_address&.dig("country_code").presence || "+91"
-    "#{cc}#{phone}".gsub(/\s+/, "")
+  def frontend_base_url
+    ENV.fetch("FRONTEND_URL", "https://salespoints.in")
   end
 end

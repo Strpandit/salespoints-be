@@ -1,6 +1,7 @@
 class ReturnRequestSerializer < ApplicationSerializer
   attributes :request_type, :status, :reason, :details, :refund_amount, :seller_adjustment_amount,
              :resolution_notes, :approved_at, :shipped_at, :received_at, :completed_at, :rejected_at, :cancelled_at,
+             :replacement_mode, :defective_quantity, :defective_serial_numbers, :replacement_serial_numbers,
              :created_at, :updated_at, :requester_name, :media
 
   def refund_amount
@@ -9,6 +10,18 @@ class ReturnRequestSerializer < ApplicationSerializer
 
   def seller_adjustment_amount
     object.seller_adjustment_amount.to_f
+  end
+
+  def defective_quantity
+    object.defective_quantity.to_i
+  end
+
+  def defective_serial_numbers
+    Array(object.defective_serial_numbers).reject(&:blank?)
+  end
+
+  def replacement_serial_numbers
+    Array(object.replacement_serial_numbers).reject(&:blank?)
   end
 
   def requester_name

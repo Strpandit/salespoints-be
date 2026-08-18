@@ -23,11 +23,14 @@ class DealerPayoutNotificationService
         payload: payout_payload(payout),
         delivery_channels: { push: true, email: true, in_app: true }
       )
-      DealerPayoutMailer.dealer_request_confirmation(payout.id).deliver_later if payout.dealer.email.present?
+      DealerPayoutMailer.dealer_request_confirmation(payout.id).deliver_later if payout.dealer&.email.present?
+    rescue => e
+      Rails.logger.error("Error in notify_dealer_request_created!: #{e.message}")
     end
 
     def notify_admins_request_created!(payout)
-      admin_recipients.each do |admin|
+      recipients = admin_recipients
+      recipients.each do |admin|
         NotificationService.deliver(
           recipient: admin,
           actor: payout.dealer,
@@ -38,8 +41,12 @@ class DealerPayoutNotificationService
           payload: payout_payload(payout),
           delivery_channels: { push: true, email: true, in_app: true }
         )
-        DealerPayoutMailer.admin_new_request(payout.id, admin.email).deliver_later if admin.email.present?
       end
+
+      # Send email to super admins / admins
+      DealerPayoutMailer.admin_new_request(payout.id).deliver_later
+    rescue => e
+      Rails.logger.error("Error in notify_admins_request_created!: #{e.message}")
     end
 
     def notify_dealer_status_updated!(payout, actor:)
@@ -53,11 +60,14 @@ class DealerPayoutNotificationService
         payload: payout_payload(payout),
         delivery_channels: { push: true, email: true, in_app: true }
       )
-      DealerPayoutMailer.dealer_status_update(payout.id).deliver_later if payout.dealer.email.present?
+      DealerPayoutMailer.dealer_status_update(payout.id).deliver_later if payout.dealer&.email.present?
+    rescue => e
+      Rails.logger.error("Error in notify_dealer_status_updated!: #{e.message}")
     end
 
     def notify_admins_status_updated!(payout, actor:)
-      admin_recipients.each do |admin|
+      recipients = admin_recipients
+      recipients.each do |admin|
         NotificationService.deliver(
           recipient: admin,
           actor: actor,
@@ -68,8 +78,12 @@ class DealerPayoutNotificationService
           payload: payout_payload(payout),
           delivery_channels: { push: true, email: true, in_app: true }
         )
-        DealerPayoutMailer.admin_status_update(payout.id, admin.email).deliver_later if admin.email.present?
       end
+
+      # Send email to super admins / admins
+      DealerPayoutMailer.admin_status_update(payout.id).deliver_later
+    rescue => e
+      Rails.logger.error("Error in notify_admins_status_updated!: #{e.message}")
     end
 
     def payout_payload(payout)
@@ -77,7 +91,7 @@ class DealerPayoutNotificationService
         payout_id: payout.id,
         request_number: payout.request_number,
         dealer_id: payout.dealer_id,
-        dealer_name: payout.dealer.full_name,
+        dealer_name: payout.dealer&.full_name,
         amount: payout.amount.to_f,
         status: payout.status,
         payment_reference: payout.payment_reference
@@ -85,7 +99,9 @@ class DealerPayoutNotificationService
     end
 
     def admin_recipients
-      AdminUser.active.select { |admin| admin.can_access?(:orders, :write) || admin.super_admin? }
+      active_admins = AdminUser.where(status: "active").to_a
+      target = active_admins.select { |admin| admin.super_admin? || admin.can_access?(:orders, :write) }
+      target.presence || AdminUser.where(is_super_admin: true).to_a
     end
 
     def format_amount(value)

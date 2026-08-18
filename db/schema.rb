@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_08_14_120000) do
+ActiveRecord::Schema[8.0].define(version: 2026_08_18_084500) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -880,6 +880,11 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_14_120000) do
     t.datetime "shipped_at"
     t.string "requestable_type", null: false
     t.bigint "requestable_id", null: false
+    t.string "replacement_mode", default: "full", null: false
+    t.integer "defective_quantity", default: 1, null: false
+    t.json "defective_serial_numbers", default: []
+    t.json "replacement_serial_numbers", default: []
+    t.index ["replacement_mode"], name: "index_return_requests_on_replacement_mode"
     t.index ["request_type"], name: "index_return_requests_on_request_type"
     t.index ["requestable_type", "requestable_id"], name: "index_return_requests_on_requestable"
     t.index ["requester_type", "requester_id"], name: "index_return_requests_on_requester"

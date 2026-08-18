@@ -50,7 +50,7 @@ module Api
 
       if reason.length < 2
         return render json: {
-          error: "Please provide a detailed replacement reason (minimum 20 characters)"
+          error: "Please provide a detailed replacement reason"
         }, status: :unprocessable_entity
       end
 
@@ -60,13 +60,35 @@ module Api
         }, status: :unprocessable_entity
       end
 
+      mode = replacement_request_params[:replacement_mode].to_s == "partial" ? "partial" : "full"
+      
+      total_items_qty = case requestable
+                        when Order then requestable.order_items.sum(:quantity)
+                        when B2bOrder then requestable.b2b_order_items.sum(:quantity)
+                        else 1
+                        end
+
+      qty = mode == "partial" ? replacement_request_params[:defective_quantity].to_i : total_items_qty
+      qty = 1 if qty <= 0
+      qty = [qty, total_items_qty].min if total_items_qty > 0
+
+      serials = Array(replacement_request_params[:defective_serial_numbers]).map(&:to_s).map(&:strip).reject(&:blank?)
+      if mode == "partial" && serials.length != qty
+        return render json: { error: "Please enter serial numbers for all #{qty} defective items to replace" }, status: :unprocessable_entity
+      end
+
+      initial_status = mode == "partial" ? "partially_replacement_requested" : "requested"
+
       request = nil
 
       ActiveRecord::Base.transaction do
         request = requestable.return_requests.create!(
           requester: current_user,
           request_type: "replacement",
-          status: "requested",
+          replacement_mode: mode,
+          defective_quantity: qty,
+          defective_serial_numbers: serials,
+          status: initial_status,
           reason: replacement_request_params[:reason],
           details: replacement_request_params[:details],
           refund_amount: 0,
@@ -153,7 +175,7 @@ module Api
     private
 
     def replacement_request_params
-      params.permit(:request_type, :reason, :details, media: [])
+      params.permit(:request_type, :replacement_mode, :defective_quantity, :reason, :details, defective_serial_numbers: [], media: [])
     end
 
     def find_requestable

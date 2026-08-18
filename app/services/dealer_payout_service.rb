@@ -3,11 +3,9 @@ class DealerPayoutService
   PAYOUT_READY_ORDER_STATUSES = %w[delivered replacement_delivered].freeze
   PAYOUT_READY_PAYMENT_STATUSES = %w[paid].freeze
 
-  GST_RATE_ON_COMMISSION = BigDecimal("0.18")
-
   COMMISSION_RATES = {
-    b2b: BigDecimal("0.015"),
     b2c: BigDecimal("0.025"),
+    b2b: BigDecimal("0.015"),
     wholesaler: BigDecimal("0.030")
   }.freeze
 
@@ -94,7 +92,6 @@ class DealerPayoutService
       if target_orders.any?
         total_gross = 0.to_d
         total_commission = 0.to_d
-        total_commission_gst = 0.to_d
         total_net_payout = 0.to_d
         order_summaries = []
 
@@ -104,7 +101,6 @@ class DealerPayoutService
 
           total_gross += breakdown[:gross_amount]
           total_commission += breakdown[:commission_fee]
-          total_commission_gst += breakdown[:commission_gst]
           total_net_payout += breakdown[:net_payout_amount]
 
           order_summaries << {
@@ -118,7 +114,6 @@ class DealerPayoutService
             gross_amount: breakdown[:gross_amount].to_f,
             commission_rate: (breakdown[:commission_rate] * 100).to_f,
             commission_fee: breakdown[:commission_fee].to_f,
-            commission_gst: breakdown[:commission_gst].to_f,
             net_payout_amount: breakdown[:net_payout_amount].to_f,
             created_at: order.created_at&.iso8601,
             delivered_at: order.delivered_at&.iso8601
@@ -142,7 +137,6 @@ class DealerPayoutService
             "order_count" => target_orders.length,
             "total_gross" => total_gross.to_f,
             "total_commission" => total_commission.to_f,
-            "total_commission_gst" => total_commission_gst.to_f,
             "penalty" => 0.0,
             "net_payout" => total_net_payout.to_f
           )
@@ -171,7 +165,7 @@ class DealerPayoutService
       payout.gst_invoice.attach(gst_invoice) if gst_invoice.present?
     end
 
-    DealerPayoutMailer.request_created(payout.reload).deliver_later rescue nil
+    DealerPayoutNotificationService.request_created!(payout.reload) rescue nil
     payout
   end
 
@@ -184,7 +178,7 @@ class DealerPayoutService
       approved_by_admin: admin,
       admin_note: [payout.admin_note, note].compact.join("\n").presence
     )
-    DealerPayoutMailer.status_updated(payout.reload, actor: admin).deliver_later rescue nil
+    DealerPayoutNotificationService.status_updated!(payout.reload, actor: admin) rescue nil
   end
 
   def reject!(payout:, admin:, note:)
@@ -196,7 +190,7 @@ class DealerPayoutService
       approved_by_admin: admin,
       admin_note: [payout.admin_note, note].compact.join("\n").presence
     )
-    DealerPayoutMailer.status_updated(payout.reload, actor: admin).deliver_later rescue nil
+    DealerPayoutNotificationService.status_updated!(payout.reload, actor: admin) rescue nil
   end
 
   def mark_processing!(payout:, admin:, note: nil)
@@ -208,7 +202,7 @@ class DealerPayoutService
       processed_by_admin: admin,
       admin_note: [payout.admin_note, note].compact.join("\n").presence
     )
-    DealerPayoutMailer.status_updated(payout.reload, actor: admin).deliver_later rescue nil
+    DealerPayoutNotificationService.status_updated!(payout.reload, actor: admin) rescue nil
   end
 
   def mark_paid!(payout:, admin:, payment_reference:, payment_mode:, note: nil, penalty: 0)
@@ -249,7 +243,7 @@ class DealerPayoutService
         metadata: locked_payout.metadata.merge("penalty" => penalty_val.to_f)
       )
 
-      DealerPayoutMailer.payout_disbursed(locked_payout.reload).deliver_later rescue nil
+      DealerPayoutNotificationService.status_updated!(locked_payout.reload, actor: admin) rescue nil
     end
   end
 
@@ -259,7 +253,7 @@ class DealerPayoutService
       processed_by_admin: admin,
       admin_note: [payout.admin_note, note].compact.join("\n").presence
     )
-    DealerPayoutMailer.payout_failed(payout.reload, error_message: note).deliver_later rescue nil
+    DealerPayoutNotificationService.status_updated!(payout.reload, actor: admin) rescue nil
   end
 
   def cancel!(payout:)
@@ -269,7 +263,7 @@ class DealerPayoutService
       status: "cancelled",
       cancelled_at: Time.current
     )
-    DealerPayoutMailer.status_updated(payout.reload, actor: @dealer).deliver_later rescue nil
+    DealerPayoutNotificationService.status_updated!(payout.reload, actor: @dealer) rescue nil
   end
 
   def calculate_order_financials(order)
@@ -277,14 +271,12 @@ class DealerPayoutService
     rate = commission_rate_for(order)
 
     commission_fee = (gross * rate).round(2)
-    commission_gst = (commission_fee * GST_RATE_ON_COMMISSION).round(2)
-    net_payout = [gross - commission_fee - commission_gst, 0.to_d].max.round(2)
+    net_payout = [gross - commission_fee, 0.to_d].max.round(2)
 
     {
       gross_amount: gross,
       commission_rate: rate,
       commission_fee: commission_fee,
-      commission_gst: commission_gst,
       net_payout_amount: net_payout
     }
   end
@@ -317,7 +309,7 @@ class DealerPayoutService
       next if already_deducted
 
       breakdown = calculate_order_financials(order)
-      deduction_total = breakdown[:commission_fee] + breakdown[:commission_gst]
+      deduction_total = breakdown[:commission_fee]
 
       next if deduction_total <= 0
 
@@ -325,13 +317,12 @@ class DealerPayoutService
         dealer: @dealer,
         amount: deduction_total,
         entry_type: "cod_commission_deduction",
-        description: "COD Commission & GST deduction for order #{order.order_number}",
+        description: "COD Platform Commission deduction for order #{order.order_number}",
         order: order,
         metadata: {
           order_id: order.id,
           gross_amount: breakdown[:gross_amount].to_f,
-          commission_fee: breakdown[:commission_fee].to_f,
-          commission_gst: breakdown[:commission_gst].to_f
+          commission_fee: breakdown[:commission_fee].to_f
         }
       )
     end
@@ -381,7 +372,6 @@ class DealerPayoutService
       gross_amount: breakdown[:gross_amount].to_f,
       commission_rate: (breakdown[:commission_rate] * 100).to_f,
       commission_fee: breakdown[:commission_fee].to_f,
-      commission_gst: breakdown[:commission_gst].to_f,
       net_payout_amount: breakdown[:net_payout_amount].to_f,
       status: requestable.status,
       payment_status: requestable.payment_status,
@@ -448,63 +438,80 @@ class DealerPayoutService
     end
   end
 
-  def validate_requestable_eligibility!(requestable)
-    eligibility = payout_eligibility_for(requestable)
-    raise StandardError, eligibility[:reason] unless eligibility[:eligible]
-  end
-
-  def payout_metadata(profile, requestable, invoice_number, note)
-    {
-      dealer_profile_id: profile.id,
-      business_name: profile.business_name,
-      gst_number: profile.gst_number,
-      note: note,
-      invoice_number: invoice_number,
-      bank_verified_at: profile.bank_verified_at&.iso8601,
-      bank_verification_status: profile.bank_verification_status,
-      requestable_type: requestable&.class&.name,
-      requestable_id: requestable&.id,
-      request_flow: requestable.present? ? requestable_flow(requestable) : "dealer_balance",
-      order_reference: requestable.present? ? request_reference(requestable) : nil
-    }.compact
-  end
-
-  def payout_ledger_metadata(payout)
-    {
-      payout_id: payout.id,
-      request_number: payout.request_number,
-      requestable_type: payout.requestable_type,
-      requestable_id: payout.requestable_id,
-      request_flow: payout.request_flow,
-      order_reference: payout.order_reference
-    }.compact
+  def requestable_type_param(requestable)
+    requestable.is_a?(Order) ? "order" : "b2b_order"
   end
 
   def request_reference(requestable)
-    requestable.try(:order_number).presence || requestable.try(:reference_number).presence || "##{requestable.id}"
-  end
-
-  def requestable_type_param(requestable)
-    requestable.is_a?(Order) ? "b2c" : "b2b"
+    case requestable
+    when Order then requestable.order_number
+    when B2bOrder then requestable.reference_number
+    else "N/A"
+    end
   end
 
   def requestable_flow(requestable)
-    return "b2c" if requestable.is_a?(Order)
-    return "wholesaler" if requestable.is_a?(B2bOrder) && requestable.source_type == "WholesalerPost"
-
-    "b2b"
+    case requestable
+    when Order
+      "b2c"
+    when B2bOrder
+      requestable.wholesaler_post_id.present? ? "wholesaler" : "b2b"
+    else
+      "general"
+    end
   end
 
   def buyer_name_for(requestable)
     case requestable
     when Order
-      buyer = requestable.buyer
-      buyer.try(:full_name).presence || buyer.try(:first_name).presence || buyer.try(:dealer_code).presence || "Buyer"
+      requestable.buyer&.full_name || "Customer"
     when B2bOrder
-      buyer = requestable.buyer_dealer
-      buyer.try(:full_name).presence || buyer.try(:dealer_code).presence || "Buyer"
+      requestable.buyer_dealer&.dealer_profile&.business_name || requestable.buyer_dealer&.full_name || "Dealer"
     else
-      "Buyer"
+      "Customer"
     end
+  end
+
+  def payout_metadata(profile, requestable, invoice_number, note)
+    {
+      "dealer_id" => @dealer.id,
+      "dealer_code" => @dealer.dealer_code,
+      "dealer_name" => @dealer.full_name,
+      "dealer_email" => @dealer.email,
+      "dealer_phone" => @dealer.phone,
+      "business_name" => profile&.business_name,
+      "business_email" => profile&.business_email,
+      "business_contact_number" => profile&.business_contact_number,
+      "city" => profile&.city,
+      "pincode" => profile&.pincode,
+      "bank_name" => profile&.bank_name,
+      "bank_account_number" => profile&.bank_account_number,
+      "ifsc_code" => profile&.ifsc_code,
+      "account_holder_name" => profile&.account_holder_name.presence || @dealer.full_name.presence || profile&.business_name,
+      "invoice_number" => invoice_number,
+      "request_note" => note,
+      "requestable_reference" => requestable ? request_reference(requestable) : nil,
+      "request_flow" => requestable ? requestable_flow(requestable) : "general"
+    }.compact
+  end
+
+  def payout_ledger_metadata(payout)
+    profile = @dealer.dealer_profile
+    {
+      payout_id: payout.id,
+      request_number: payout.request_number,
+      dealer_id: @dealer.id,
+      dealer_code: @dealer.dealer_code,
+      dealer_name: @dealer.full_name,
+      dealer_email: @dealer.email,
+      dealer_phone: @dealer.phone,
+      business_name: profile&.business_name,
+      business_contact_number: profile&.business_contact_number,
+      amount: payout.amount.to_f,
+      bank_name: payout.bank_name,
+      bank_account_number: payout.bank_account_number,
+      ifsc_code: payout.ifsc_code,
+      account_holder_name: payout.account_holder_name
+    }.compact
   end
 end
