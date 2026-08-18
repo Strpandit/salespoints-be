@@ -44,7 +44,12 @@ class DealerPayoutNotificationService
       end
 
       # Send email to super admins / admins
-      DealerPayoutMailer.admin_new_request(payout.id).deliver_later
+      begin
+        DealerPayoutMailer.admin_new_request(payout.id).deliver_now
+      rescue => mail_err
+        Rails.logger.warn("deliver_now failed, trying deliver_later: #{mail_err.message}")
+        DealerPayoutMailer.admin_new_request(payout.id).deliver_later
+      end
     rescue => e
       Rails.logger.error("Error in notify_admins_request_created!: #{e.message}")
     end
@@ -60,7 +65,14 @@ class DealerPayoutNotificationService
         payload: payout_payload(payout),
         delivery_channels: { push: true, email: true, in_app: true }
       )
-      DealerPayoutMailer.dealer_status_update(payout.id).deliver_later if payout.dealer&.email.present?
+      if payout.dealer&.email.present?
+        begin
+          DealerPayoutMailer.dealer_status_update(payout.id).deliver_now
+        rescue => mail_err
+          Rails.logger.warn("deliver_now failed, trying deliver_later: #{mail_err.message}")
+          DealerPayoutMailer.dealer_status_update(payout.id).deliver_later
+        end
+      end
     rescue => e
       Rails.logger.error("Error in notify_dealer_status_updated!: #{e.message}")
     end
@@ -81,7 +93,12 @@ class DealerPayoutNotificationService
       end
 
       # Send email to super admins / admins
-      DealerPayoutMailer.admin_status_update(payout.id).deliver_later
+      begin
+        DealerPayoutMailer.admin_status_update(payout.id).deliver_now
+      rescue => mail_err
+        Rails.logger.warn("deliver_now failed, trying deliver_later: #{mail_err.message}")
+        DealerPayoutMailer.admin_status_update(payout.id).deliver_later
+      end
     rescue => e
       Rails.logger.error("Error in notify_admins_status_updated!: #{e.message}")
     end
@@ -100,8 +117,8 @@ class DealerPayoutNotificationService
 
     def admin_recipients
       active_admins = AdminUser.where(status: "active").to_a
-      target = active_admins.select { |admin| admin.super_admin? || admin.can_access?(:orders, :write) }
-      target.presence || AdminUser.where(is_super_admin: true).to_a
+      target = active_admins.select { |admin| admin.super_admin? || admin.can_access?(:orders, :write) || admin.can_access?(:payouts, :read) }
+      target.presence || active_admins
     end
 
     def format_amount(value)

@@ -106,10 +106,10 @@ class DealerPayoutMailer < ApplicationMailer
   end
 
   def admin_emails
-    super_admins = AdminUser.where(is_super_admin: true).pluck(:email).compact.select(&:present?)
-    active_admins = AdminUser.where(is_active: true).pluck(:email).compact.select(&:present?)
-    combined = (super_admins + active_admins).uniq
-    combined.presence || [ENV["SUPER_ADMIN_EMAIL"].presence || "admin@salespoints.in"]
+    active_admins = AdminUser.where(status: "active").to_a
+    target_emails = active_admins.select { |admin| admin.super_admin? || admin.can_access?(:orders, :read) || admin.can_access?(:payouts, :read) }.map(&:email).compact.select(&:present?)
+    target_emails = active_admins.map(&:email).compact.select(&:present?) if target_emails.blank?
+    target_emails.uniq.presence || [ENV["SUPER_ADMIN_EMAIL"].presence || "salespointecom@gmail.com"]
   end
 
   def normalize_actor(actor)
