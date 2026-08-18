@@ -32,6 +32,16 @@ class B2bOrder < ApplicationRecord
   before_validation :assign_payment_token, on: :create
   before_validation :set_reference_number, on: :create
 
+  def wholesaler_post_id
+    return source_id if source_type == "WholesalerPost"
+
+    if b2b_order_items.loaded?
+      b2b_order_items.find { |item| item.wholesaler_post_id.present? }&.wholesaler_post_id
+    else
+      b2b_order_items.where.not(wholesaler_post_id: nil).pick(:wholesaler_post_id)
+    end
+  end
+
   def accepted?
     request_status == "accepted_request" && status == "pending_payment"
   end

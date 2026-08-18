@@ -148,6 +148,7 @@ Rails.application.routes.draw do
       patch :reject, on: :member
     end
     get "dealer/check_signup_token", to: "dealers#check_signup_token"
+    get "dealer/profile", to: "dealers#profile"
     post "dealer/verify_otp", to: "dealers#verify_otp"
     post "dealer/resend_signup_otp", to: "dealers#resend_signup_otp"
     # Dealer and dealer products
@@ -189,6 +190,9 @@ Rails.application.routes.draw do
       end
     end
     resources :dealer_notifications, only: [:index] do
+      collection do
+        patch :mark_all_read
+      end
       member do
         patch :mark_read
       end

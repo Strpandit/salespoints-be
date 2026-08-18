@@ -140,6 +140,17 @@ module Api
       ), status: :ok
     end
 
+    def profile
+      dealer = current_dealer
+      unless dealer
+        return render json: { error: "Dealer not found" }, status: :not_found
+      end
+
+      render json: serialize_resource(dealer, DealerSerializer, base_url: request.base_url).merge(
+        message: "Dealer profile fetched successfully"
+      ), status: :ok
+    end
+
     def admin_overview
       unless current_admin.can_access?(:dealers, :read)
         return render json: { error: "Access denied" }, status: :forbidden

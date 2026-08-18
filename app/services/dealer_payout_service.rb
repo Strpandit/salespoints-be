@@ -455,7 +455,7 @@ class DealerPayoutService
     when Order
       "b2c"
     when B2bOrder
-      requestable.wholesaler_post_id.present? ? "wholesaler" : "b2b"
+      (requestable.respond_to?(:wholesaler_post_id) && requestable.wholesaler_post_id.present?) || requestable.try(:source_type) == "WholesalerPost" ? "wholesaler" : "b2b"
     else
       "general"
     end

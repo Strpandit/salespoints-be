@@ -25,6 +25,11 @@ module Api
       render json: { message: "Notification updated" }, status: :ok
     end
 
+    def mark_all_read
+      current_dealer.notifications.where(read_at: nil).find_each(&:mark_read!)
+      render json: { message: "All notifications marked as read" }, status: :ok
+    end
+
     private
 
     def serialize_notification(item)
