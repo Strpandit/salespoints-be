@@ -240,7 +240,7 @@ module Api
           payout: payout,
           admin: current_admin,
           payment_reference: params[:payment_reference].to_s,
-          payment_mode: params[:payment_mode].to_s.presence || "bank_transfer",
+          payment_mode: params[:payment_mode].to_s.presence || "neft",
           note: params[:admin_note],
           penalty: params[:penalty]
         )
