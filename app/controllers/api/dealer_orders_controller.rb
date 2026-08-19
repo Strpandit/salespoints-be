@@ -32,9 +32,9 @@ module Api
 
       if params[:payment_method].present? && params[:payment_method] != "all"
         if params[:payment_method] == "online"
-          orders = orders.select { |o| %w[online razorpay upi card netbanking].include?(o[:payment_method].to_s.downcase) }
+          orders = orders.select { |o| %w[online upi card netbanking].include?(o[:payment_method].to_s.downcase) || (o[:payment_method].to_s.downcase != "cod" && o[:payment_method].to_s.downcase != "cash" && o[:payment_method].to_s.downcase != "pay_on_delivery") }
         elsif params[:payment_method] == "cod"
-          orders = orders.select { |o| %w[cod cash pay_on_delivery].include?(o[:payment_method].to_s.downcase) }
+          orders = orders.select { |o| %w[cod cash pay_on_delivery].include?(o[:payment_method].to_s.downcase) || o[:payment_method].blank? }
         else
           orders = orders.select { |o| o[:payment_method].to_s.downcase == params[:payment_method].to_s.downcase }
         end
