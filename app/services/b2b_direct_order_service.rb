@@ -54,7 +54,8 @@ class B2bDirectOrderService
         buyer_payment_attempt: @buyer_payment_attempt,
         is_direct_buy: false,
         source_type: "b2b",
-        source_id: @product_id
+        source_id: @product_id,
+        shipping_address: @delivery_address.present? ? @delivery_address.attributes.slice("name", "address_line1", "address_line2", "city", "state", "country", "postal_code", "phone") : {}
       )
 
       item = B2bOrderItem.create!(
