@@ -127,9 +127,53 @@ module Api
     end
 
     def pending
-      scope = WholesalerPost.includes(:media_attachments, dealer: :dealer_profile).order(created_at: :desc)
-      scope = scope.where(approve_status: params[:status]) if params[:status].present? && params[:status] != "all"
+      scope = WholesalerPost.includes(:media_attachments, dealer: :dealer_profile)
+      if params[:status].present? && params[:status] != "all"
+        scope = scope.where(approve_status: params[:status])
+      end
+      if params[:approve_status].present? && params[:approve_status] != "all"
+        scope = scope.where(approve_status: params[:approve_status])
+      end
+
       scope = current_admin.accessible_wholesale_posts(scope)
+
+      if params[:min_rating].present? && params[:min_rating] != "all"
+        scope = scope.where("wholesaler_posts.rating >= ?", params[:min_rating].to_f)
+      end
+
+      if params[:min_price].present?
+        scope = scope.where("wholesaler_posts.price >= ?", params[:min_price].to_f)
+      end
+
+      if params[:max_price].present?
+        scope = scope.where("wholesaler_posts.price <= ?", params[:max_price].to_f)
+      end
+
+      if params[:search].present?
+        q = "%#{params[:search].strip}%"
+        scope = scope.joins(:dealer).where(
+          "wholesaler_posts.title ILIKE :q OR wholesaler_posts.desc ILIKE :q OR dealers.dealer_code ILIKE :q OR dealers.full_name ILIKE :q",
+          q: q
+        )
+      end
+
+      if params[:pincode].present?
+        scope = scope.where("? = ANY(pincodes)", params[:pincode])
+      end
+
+      case params[:sort_by]
+      when "oldest"
+        scope = scope.order("wholesaler_posts.created_at ASC")
+      when "price_asc"
+        scope = scope.order("wholesaler_posts.price ASC")
+      when "price_desc"
+        scope = scope.order("wholesaler_posts.price DESC")
+      when "rating_desc"
+        scope = scope.order("wholesaler_posts.rating DESC")
+      else
+        scope = scope.order("wholesaler_posts.created_at DESC")
+      end
+
       paginated = scope.page(params[:page]).per(params[:per_page] || 15)
 
       render json: {

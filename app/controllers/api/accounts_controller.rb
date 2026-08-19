@@ -52,21 +52,17 @@ module Api
       end
 
       @accounts = @accounts.page(params[:page]).per(params[:per_page] || 20)
-      if @accounts.exists?
-        render json: serialize_resource(@accounts, AccountSerializer).merge(
-          meta: {
-            current_page: @accounts.current_page,
-            next_page: @accounts.next_page,
-            prev_page: @accounts.prev_page,
-            total_pages: @accounts.total_pages,
-            total_count: @accounts.total_count,
-            statuses: ["all"] + Account.statuses.keys
-          },
-          message: 'Account list fetched successfully'
-        ), status: :ok
-      else
-        render json: { message: "No Data Found." }, status: :not_found
-      end
+      render json: serialize_resource(@accounts, AccountSerializer).merge(
+        meta: {
+          current_page: @accounts.current_page,
+          next_page: @accounts.next_page,
+          prev_page: @accounts.prev_page,
+          total_pages: @accounts.total_pages,
+          total_count: @accounts.total_count,
+          statuses: ["all"] + Account.statuses.keys
+        },
+        message: 'Account list fetched successfully'
+      ), status: :ok
     end
 
     def show

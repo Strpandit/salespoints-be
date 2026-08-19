@@ -109,17 +109,59 @@ module Api
         dealers = pincodes.present? ? dealers.where(pincode: pincodes) : dealers.none
       end
       
-      selected_status = params[:status].presence || "active"
+      selected_status = params[:status].presence
 
-      if selected_status != "all"
-        unless Dealer.statuses.key?(selected_status)
-          return render json: { error: "Invalid dealer status" }, status: :unprocessable_entity
-        end
-
-        dealers = dealers.where(status: selected_status)
+      if selected_status.present? && selected_status != "all"
+        dealers = dealers.where(status: selected_status) if Dealer.statuses.key?(selected_status)
       end
 
-      dealers = dealers.order(created_at: :desc).page(params[:page]).per(params[:per_page] || 20)
+      if params[:is_active].present? && params[:is_active] != "all"
+        is_act = ActiveModel::Type::Boolean.new.cast(params[:is_active])
+        dealers = dealers.where(is_active: is_act)
+      end
+
+      if params[:pincode].present?
+        dealers = dealers.where(pincode: params[:pincode])
+      end
+
+      if params[:state].present? && params[:state] != "all"
+        dealers = dealers.where("state ILIKE ?", "%#{params[:state]}%")
+      end
+
+      if params[:city].present? && params[:city] != "all"
+        dealers = dealers.where("city ILIKE ?", "%#{params[:city]}%")
+      end
+
+      if params[:date_from].present?
+        from = Date.parse(params[:date_from]).beginning_of_day rescue nil
+        dealers = dealers.where("created_at >= ?", from) if from
+      end
+
+      if params[:date_to].present?
+        to = Date.parse(params[:date_to]).end_of_day rescue nil
+        dealers = dealers.where("created_at <= ?", to) if to
+      end
+
+      if params[:search].present?
+        q = "%#{params[:search].strip}%"
+        dealers = dealers.joins("LEFT JOIN dealer_profiles ON dealer_profiles.dealer_id = dealers.id").where(
+          "dealers.first_name ILIKE :q OR dealers.last_name ILIKE :q OR dealers.full_name ILIKE :q OR dealers.email ILIKE :q OR dealers.phone ILIKE :q OR dealers.dealer_code ILIKE :q OR dealer_profiles.company_name ILIKE :q OR dealer_profiles.gst_number ILIKE :q",
+          q: q
+        ).distinct
+      end
+
+      case params[:sort_by]
+      when "oldest"
+        dealers = dealers.order(created_at: :asc)
+      when "name_asc"
+        dealers = dealers.order(full_name: :asc)
+      when "name_desc"
+        dealers = dealers.order(full_name: :desc)
+      else
+        dealers = dealers.order(created_at: :desc)
+      end
+
+      dealers = dealers.page(params[:page]).per(params[:per_page] || 20)
       render json: serialize_resource(dealers, DealerSerializer, base_url: request.base_url).merge(
         meta: {
           current_page: dealers.current_page,
