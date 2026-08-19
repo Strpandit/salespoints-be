@@ -253,7 +253,7 @@ class B2bOrderPaymentService
 
     buyer = order.buyer_dealer
     
-    latitude, longitude, location_name, address = get_buyer_location(buyer)
+    latitude, longitude, location_name, address = resolve_b2b_delivery_details(order, buyer)
 
     offer = order.b2b_order_offers.find_by(dealer: order.seller_dealer, status: "accepted")
     shipped_token = offer&.shipped_token
@@ -269,8 +269,8 @@ class B2bOrderPaymentService
       order_id: order.reference_number,
       payment_mode: order.payment_method.to_s.upcase,
       total_amount: total_amount,
-      latitude: latitude,
-      longitude: longitude,
+      latitude: latitude.to_s,
+      longitude: longitude.to_s,
       location_name: location_name,
       shipped_token: shipped_token
     )
@@ -299,16 +299,18 @@ class B2bOrderPaymentService
     buyer_location = buyer&.dealer_location
     seller_location = seller&.dealer_location
 
-    delivery_location = get_location(seller)
+    full_buyer_address = buyer&.dealer_profile&.business_address.presence || "Dealer Business Location"
+    delivery_location = mask_approx_address(full_buyer_address)
+
     approx_distance = if buyer_location.present? && seller_location.present? &&
                       buyer_location.latitude.present? && buyer_location.longitude.present? &&
                       seller_location.latitude.present? && seller_location.longitude.present?
-    DealerLocation.distance_km(
-      buyer_location.latitude.to_f,
-      buyer_location.longitude.to_f,
-      seller_location.latitude.to_f,
-      seller_location.longitude.to_f
-    ).round(2).to_s
+      DealerLocation.distance_km(
+        buyer_location.latitude.to_f,
+        buyer_location.longitude.to_f,
+        seller_location.latitude.to_f,
+        seller_location.longitude.to_f
+      ).round(2).to_s
     else
       "0"
     end
@@ -379,20 +381,103 @@ class B2bOrderPaymentService
     )
   end
 
+  def resolve_b2b_delivery_details(order, buyer)
+    location_name = "Salespoints Dealer Point #{buyer&.dealer_code.presence || 'N/A'}"
+    
+    if order.shipping_address.present?
+      full_addr = format_address(order.shipping_address)
+      if full_addr.present? && full_addr != "Address not available"
+        coords = if order.latitude.present? && order.longitude.present?
+                   { latitude: order.latitude.to_f, longitude: order.longitude.to_f }
+                 else
+                   resolve_coordinates_for(order.shipping_address, full_addr)
+                 end
+        lat = coords&.dig(:latitude) || 28.6139
+        lng = coords&.dig(:longitude) || 77.2090
+        return [lat.to_f, lng.to_f, location_name, full_addr]
+      end
+    end
+
+    business_addr = buyer&.dealer_profile&.business_address.presence || "Address not available"
+    loc = buyer&.dealer_location
+    if loc&.latitude.present? && loc&.longitude.present?
+      [loc.latitude.to_f, loc.longitude.to_f, location_name, business_addr]
+    else
+      coords = (business_addr != "Address not available") ? (GoogleMapsService.instance.geocode(business_addr) rescue nil) : nil
+      lat = coords&.dig(:latitude) || 28.6139
+      lng = coords&.dig(:longitude) || 77.2090
+      [lat.to_f, lng.to_f, location_name, business_addr]
+    end
+  end
+
+  def resolve_coordinates_for(address_obj, full_text)
+    lat = address_obj["latitude"].presence || address_obj[:latitude] rescue nil
+    lng = address_obj["longitude"].presence || address_obj[:longitude] rescue nil
+    return { latitude: lat.to_f, longitude: lng.to_f } if lat.present? && lng.present?
+
+    pincode = address_obj["postal_code"].presence || address_obj[:postal_code] rescue nil
+    if pincode.present?
+      coords = B2bPincodeAvailabilityService.geocode_pincode(pincode)
+      return { latitude: coords[:latitude].to_f, longitude: coords[:longitude].to_f } if coords.present?
+    end
+
+    if full_text.present?
+      results = Geocoder.search(full_text) rescue []
+      if results.any? && results.first.latitude.present?
+        return { latitude: results.first.latitude.to_f, longitude: results.first.longitude.to_f }
+      end
+    end
+
+    nil
+  end
+
+  def format_address(address)
+    return "Address not available" if address.blank?
+    
+    if address.is_a?(Hash) || address.is_a?(ActionController::Parameters)
+      parts = []
+      parts << address["address_line1"].presence || address[:address_line1]
+      parts << address["address_line2"].presence || address[:address_line2]
+      parts << address["city"].presence || address[:city]
+      parts << address["state"].presence || address[:state]
+      parts << address["postal_code"].presence || address[:postal_code]
+      parts << address["country"].presence || address[:country]
+      return parts.compact.reject(&:blank?).join(", ") if parts.any?
+    end
+    
+    address.to_s
+  end
+
+  def mask_approx_address(full_address)
+    return "Location not available" if full_address.blank? || full_address == "Location not available"
+
+    cleaned = full_address.to_s
+                          .gsub(/\b\d{6}\b/, "")
+                          .gsub(/\b(India|Bharat)\b/i, "")
+                          .gsub(/,\s*,+/, ",")
+                          .strip
+                          .delete_prefix(",")
+                          .delete_suffix(",")
+                          .strip
+
+    if cleaned.include?(",")
+      parts = cleaned.split(",").map(&:strip).reject(&:blank?)
+      return parts.last(3).join(", ") if parts.size >= 3
+      return parts.join(", ") if parts.any?
+    end
+
+    words = cleaned.split(/\s+/).reject(&:blank?)
+    return words.last(3).join(" ") if words.size >= 3
+    return words.join(" ") if words.any?
+
+    "Location not available"
+  end
+
   def get_location(dealer)
     return "Location not available" if dealer.blank?
     address = dealer.dealer_profile&.business_address
     return "Location not available" if address.blank?
-    cleaned = address.to_s.strip
-    if cleaned.include?(',')
-      parts = cleaned.split(',').map(&:strip).reject(&:blank?)
-      return parts.last(3).join(', ') if parts.size >= 3
-      return parts.first if parts.size == 1
-    end
-    words = cleaned.split(/\s+/)
-    return words.last(3).join(' ') if words.size >= 3
-    return words.first if words.size == 1
-    "Location not available"
+    mask_approx_address(address)
   end
 
   def get_product_image(product, variant, wholesaler_post = nil)
@@ -427,7 +512,7 @@ class B2bOrderPaymentService
       [location.latitude.to_f, location.longitude.to_f, name, address]
     else
       if address.present? && address != "Address not available"
-        results = Geocoder.search(address)
+        results = Geocoder.search(address) rescue []
         if results.any?
           name = "Salespoints Dealer Point #{dealer&.dealer_code.presence || 'N/A'}"
           return [results.first.latitude, results.first.longitude, name, address]

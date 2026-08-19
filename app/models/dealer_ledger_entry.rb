@@ -1,5 +1,5 @@
 class DealerLedgerEntry < ApplicationRecord
-  ENTRY_TYPES = %w[order_settlement refund_adjustment manual_adjustment payout_disbursement].freeze
+  ENTRY_TYPES = %w[order_settlement refund_adjustment manual_adjustment payout_disbursement cod_commission_deduction].freeze
   DIRECTIONS = %w[credit debit].freeze
 
   belongs_to :dealer

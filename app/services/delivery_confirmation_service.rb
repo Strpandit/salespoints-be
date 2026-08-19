@@ -69,6 +69,13 @@ class DeliveryConfirmationService
     )
 
     send_otp_message(phone: confirmation.buyer_phone, otp: confirmation.buyer_otp)
+    send_otp_email(confirmation)
+  end
+
+  def send_otp_email(confirmation)
+    DeliveryConfirmationMailer.send_delivery_otp(confirmation.id, confirmation.buyer_otp).deliver_later
+  rescue StandardError => e
+    Rails.logger.error("[DeliveryConfirmationMailer] Failed to send OTP email: #{e.message}")
   end
 
   def verify_otps!(confirmation:, buyer_otp:)
@@ -259,10 +266,23 @@ class DeliveryConfirmationService
 
   def phone_for(target)
     return nil if target.blank?
-    return target.phone if target.respond_to?(:phone) && target.phone.present?
 
-    profile = target.try(:dealer_profile)
-    profile.try(:business_contact_number)
+    raw_phone = target.try(:phone)
+    if raw_phone.blank? && target.respond_to?(:dealer_profile)
+      raw_phone = target.dealer_profile&.business_contact_number
+    end
+
+    if raw_phone.blank? && @deliverable.respond_to?(:shipping_address) && target == buyer
+      addr = @deliverable.shipping_address
+      raw_phone = addr&.dig("phone") || addr&.dig(:phone) if addr.is_a?(Hash)
+    end
+
+    return nil if raw_phone.blank?
+
+    cc = target.try(:country_code).presence || "+91"
+    cc = "+#{cc.delete_prefix('+')}" unless cc.start_with?("+")
+    raw_digits = raw_phone.to_s.gsub(/\D/, "").last(10)
+    "#{cc}#{raw_digits}".delete_prefix("+")
   end
 
   def seller
@@ -283,14 +303,54 @@ class DeliveryConfirmationService
   end
 
   def send_form_link(confirmation)
-    token = confirmation.public_token
+    token = confirmation.token
     link = "#{frontend_base_url}/delivery-confirmation/#{token}"
+    order_ref = @deliverable.try(:reference_number) || @deliverable.try(:order_number)
+    buyer_title = confirmation.buyer_name || "Customer"
 
-    message = "SalesPoints: Complete delivery proof for #{@deliverable.try(:reference_number) || @deliverable.try(:order_number)} at #{link}"
+    # Send WhatsApp delivery form link
+    whatsapp = MetaWhatsappCloudService.new
+    if whatsapp.configured? && confirmation.seller_phone.present?
+      begin
+        whatsapp.send_delivery_form_link(
+          to: confirmation.seller_phone,
+          order_reference: order_ref.to_s,
+          buyer_name: buyer_title.to_s,
+          form_url: link.to_s
+        )
+      rescue StandardError => e
+        Rails.logger.warn("[MetaWhatsapp] Failed to send delivery_form_link template: #{e.message}. Falling back to text message.")
+        begin
+          message = "SalesPoints: Complete delivery proof for #{order_ref} at #{link}"
+          whatsapp.send_text_message(to: confirmation.seller_phone, body: message)
+        rescue StandardError => err
+          Rails.logger.error("[MetaWhatsapp] Failed to send delivery form text message: #{err.message}")
+        end
+      end
+    end
+
+    message = "SalesPoints: Complete delivery proof for #{order_ref} at #{link}"
     send_sms_notification(confirmation.seller_phone, message)
   end
 
   def send_otp_message(phone:, otp:)
+    return if phone.blank?
+
+    whatsapp = MetaWhatsappCloudService.new
+    if whatsapp.configured?
+      begin
+        whatsapp.send_delivery_otp(to: phone, otp: otp)
+      rescue StandardError => e
+        Rails.logger.warn("[MetaWhatsapp] Failed to send delivery_code template: #{e.message}. Falling back to text message.")
+        begin
+          message = "SalesPoints: Your delivery verification OTP is #{otp}. Share this with the delivery agent to confirm delivery."
+          whatsapp.send_text_message(to: phone, body: message)
+        rescue StandardError => err
+          Rails.logger.error("[MetaWhatsapp] Failed to send delivery OTP text message: #{err.message}")
+        end
+      end
+    end
+
     message = "SalesPoints: Your delivery verification OTP is #{otp}. Share this with the delivery agent to confirm delivery."
     send_sms_notification(phone, message)
   end
@@ -310,7 +370,7 @@ class DeliveryConfirmationService
       notification_type: "delivery_confirmation",
       metadata: {
         confirmation_id: confirmation.id,
-        token: confirmation.public_token,
+        token: confirmation.token,
         deliverable_type: @deliverable.class.name,
         deliverable_id: @deliverable.id
       }

@@ -11,6 +11,8 @@ class DeliveryConfirmation < ApplicationRecord
   STATUSES = %w[pending_form pending_otp completed expired].freeze
   CONTEXTS = %w[original replacement].freeze
 
+  alias_attribute :public_token, :token
+
   validates :token, presence: true, uniqueness: true
   validates :status, inclusion: { in: STATUSES }
   validates :context, inclusion: { in: CONTEXTS }
@@ -74,7 +76,7 @@ class DeliveryConfirmation < ApplicationRecord
     self.seller_dealer ||= extract_seller
     self.buyer ||= extract_buyer
     self.seller_phone ||= phone_for(seller_dealer)
-    self.buyer_phone ||= phone_for(buyer)
+    self.buyer_phone ||= phone_for(buyer) || buyer_phone_from_shipping_address
   end
 
   def extract_seller
@@ -95,10 +97,31 @@ class DeliveryConfirmation < ApplicationRecord
     end
   end
 
+  def buyer_phone_from_shipping_address
+    return nil unless deliverable.respond_to?(:shipping_address)
+    addr = deliverable.shipping_address
+    raw = addr.is_a?(Hash) ? (addr["phone"] || addr[:phone]) : nil
+    return nil if raw.blank?
+    format_phone_digits(raw)
+  end
+
   def phone_for(record)
-    return nil if record.blank? || record.phone.blank?
+    return nil if record.blank?
+
+    raw_phone = record.try(:phone)
+    if raw_phone.blank? && record.respond_to?(:dealer_profile)
+      raw_phone = record.dealer_profile&.business_contact_number
+    end
+    return nil if raw_phone.blank?
 
     cc = record.try(:country_code).presence || "+91"
-    "#{cc}#{record.phone}".gsub(/\s+/, "")
+    format_phone_digits(raw_phone, cc)
+  end
+
+  def format_phone_digits(phone, country_code = "+91")
+    cc = country_code.to_s.strip.presence || "+91"
+    cc = "+#{cc.delete_prefix('+')}" unless cc.start_with?("+")
+    raw = phone.to_s.gsub(/\D/, "").last(10)
+    "#{cc}#{raw}".delete_prefix("+")
   end
 end

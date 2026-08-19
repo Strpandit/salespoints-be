@@ -18,6 +18,8 @@ class WholesalerPost < ApplicationRecord
   validate :media_files_valid
   validate :validate_pincodes_format
 
+  before_validation :set_default_mf_year, on: :create
+
   scope :visible_to_marketplace, -> {
     where(approve_status: "approved")
       .where("(wholesaler_posts.reuploaded_at >= ?) OR (wholesaler_posts.reuploaded_at IS NULL AND wholesaler_posts.created_at >= ?)", 7.days.ago, 7.days.ago)
@@ -62,6 +64,10 @@ class WholesalerPost < ApplicationRecord
   end
 
   private
+
+  def set_default_mf_year
+    self.mf_year = Time.current.strftime("%m/%Y") if mf_year.blank?
+  end
 
   def media_files_valid
     validate_attachment_set(:media)

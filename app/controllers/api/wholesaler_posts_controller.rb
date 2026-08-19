@@ -336,11 +336,11 @@ module Api
     end
 
     def admin_wholesaler_post_params
-      params.require(:wholesaler_post).permit(:title, :body, :price, :stock_quantity, :modal_no, :hsn_code, :ad_hoc_color, pincodes: [])
+      params.require(:wholesaler_post).permit(:title, :body, :price, :stock_quantity, :modal_no, :hsn_code, :ad_hoc_color, :mf_year, pincodes: [])
     end
 
     def wholesaler_post_params
-      params.require(:wholesaler_post).permit(:title, :body, :price, :stock_quantity, :modal_no, :hsn_code, :dealer_product_id, :ad_hoc_color, media: [], pincodes: [])
+      params.require(:wholesaler_post).permit(:title, :body, :price, :stock_quantity, :modal_no, :hsn_code, :dealer_product_id, :ad_hoc_color, :mf_year, media: [], pincodes: [])
     end
 
     def invalid_dealer_product?(dealer_product_id)
@@ -355,38 +355,6 @@ module Api
       current_dealer.wholesaler_post_ratings.find_by(wholesaler_post_id: post.id)&.rating
     end
 
-    # def apply_distance_filter(posts)
-    #   buyer_latitude = params[:latitude].presence&.to_f
-    #   buyer_longitude = params[:longitude].presence&.to_f
-
-    #   if (buyer_latitude.blank? || buyer_longitude.blank?) && current_dealer&.dealer_location&.latitude.present? && current_dealer.dealer_location.longitude.present?
-    #     buyer_latitude = current_dealer.dealer_location.latitude.to_f
-    #     buyer_longitude = current_dealer.dealer_location.longitude.to_f
-    #   end
-
-    #   default_radius = current_dealer&.dealer_location&.service_radius_km.present? ? current_dealer.dealer_location.service_radius_km.to_f : 5.0
-    #   requested_radius = params[:radius_km].presence&.to_f
-    #   effective_radius = requested_radius&.positive? ? requested_radius : default_radius
-
-    #   posts.select do |post|
-    #     next true if current_dealer.present? && post.dealer_id == current_dealer.id
-    #     next true unless buyer_latitude.present? && buyer_longitude.present?
-
-    #     seller_location = post.dealer&.dealer_location
-    #     next false unless seller_location&.latitude.present? && seller_location.longitude.present? && seller_location.is_active
-
-    #     distance = DealerLocation.distance_km(
-    #       buyer_latitude,
-    #       buyer_longitude,
-    #       seller_location.latitude,
-    #       seller_location.longitude
-    #     )
-
-    #     post.define_singleton_method(:distance_km) { distance.round(2) }
-    #     distance <= effective_radius && distance <= seller_location.service_radius_km.to_f
-    #   end
-    # end
-
     def post_payload(post, current_user_rating = nil)
       dealer = post.dealer
       {
@@ -398,6 +366,7 @@ module Api
         modal_no: post.modal_no,
         hsn_code: post.effective_hsn_code,
         ad_hoc_color: post.ad_hoc_color,
+        mf_year: post.mf_year,
         rating: post.rating.to_f,
         rating_count: post.rating_count.to_i,
         current_user_rating: current_user_rating&.to_f,

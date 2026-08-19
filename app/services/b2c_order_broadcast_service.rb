@@ -61,7 +61,7 @@ class B2cOrderBroadcastService
   private
 
   def find_eligible_dealers(items)
-    buyer_location = get_shipping_location
+    _full_address, buyer_location = resolve_b2c_address_and_location
     return {} if buyer_location.blank?
 
     variant_ids = items.map(&:product_variant_id)
@@ -125,20 +125,8 @@ class B2cOrderBroadcastService
     quantity = matched_items.sum(&:quantity)
     total_amount = matched_items.sum(&:total_price)
 
-    buyer = @order.buyer
-    address = @order.shipping_address
-    shipping_location = get_shipping_location
-
-    delivery_location = if address.present?
-      [
-        address["address_line1"],
-        address["city"],
-        address["state"],
-        address["postal_code"]
-      ].compact.join(", ")
-    else
-      "Customer Location"
-    end
+    full_address, shipping_location = resolve_b2c_address_and_location
+    delivery_location = mask_approx_address(full_address)
 
     seller_location = dealer&.dealer_location
     approx_distance = if shipping_location.present? && seller_location.present? &&
@@ -219,25 +207,14 @@ class B2cOrderBroadcastService
     "#{ENV['FRONTEND_URL']}/images/ac.png"
   end
 
-  def get_shipping_location
+  def resolve_b2c_address_and_location
     address = @order.shipping_address
     
     if address.present?
-      full_address = [
-        address["address_line1"],
-        address["city"],
-        address["state"],
-        address["postal_code"]
-      ].compact.join(", ")
-
-      if full_address.present?
-        results = Geocoder.search(full_address)
-        if results.any?
-          return {
-            latitude: results.first.latitude,
-            longitude: results.first.longitude
-          }
-        end
+      full_addr = format_address_hash(address)
+      if full_addr.present?
+        coords = resolve_coordinates_for(address, full_addr)
+        return [full_addr, coords.presence || { latitude: 28.6139, longitude: 77.2090 }]
       end
     end
 
@@ -245,24 +222,80 @@ class B2cOrderBroadcastService
     if buyer.respond_to?(:addresses)
       default_address = buyer.addresses.find_by(is_default: true)
       if default_address.present?
-        full_address = [
+        full_addr = [
           default_address.address_line1,
           default_address.city,
           default_address.state,
-          default_address.postal_code
-        ].compact.join(", ")
+          default_address.postal_code,
+          default_address.country
+        ].compact.reject(&:blank?).join(", ")
+        
+        coords = resolve_coordinates_for(default_address, full_addr)
+        return [full_addr, coords.presence || { latitude: 28.6139, longitude: 77.2090 }]
+      end
+    end
 
-        results = Geocoder.search(full_address)
-        if results.any?
-          return {
-            latitude: results.first.latitude,
-            longitude: results.first.longitude
-          }
-        end
+    ["Customer Location", { latitude: 28.6139, longitude: 77.2090 }]
+  end
+
+  def resolve_coordinates_for(address_obj, full_text)
+    lat = address_obj["latitude"].presence || address_obj[:latitude] rescue nil
+    lng = address_obj["longitude"].presence || address_obj[:longitude] rescue nil
+    return { latitude: lat.to_f, longitude: lng.to_f } if lat.present? && lng.present?
+
+    pincode = address_obj["postal_code"].presence || address_obj[:postal_code] rescue nil
+    if pincode.present?
+      coords = B2bPincodeAvailabilityService.geocode_pincode(pincode)
+      return { latitude: coords[:latitude].to_f, longitude: coords[:longitude].to_f } if coords.present?
+    end
+
+    if full_text.present?
+      results = Geocoder.search(full_text) rescue []
+      if results.any? && results.first.latitude.present?
+        return { latitude: results.first.latitude.to_f, longitude: results.first.longitude.to_f }
       end
     end
 
     nil
+  end
+
+  def format_address_hash(address)
+    return address.to_s if address.is_a?(String)
+    return "" unless address.is_a?(Hash) || address.is_a?(ActionController::Parameters)
+
+    parts = []
+    parts << address["address_line1"].presence || address[:address_line1]
+    parts << address["address_line2"].presence || address[:address_line2]
+    parts << address["city"].presence || address[:city]
+    parts << address["state"].presence || address[:state]
+    parts << address["postal_code"].presence || address[:postal_code]
+    parts << address["country"].presence || address[:country]
+    parts.compact.reject(&:blank?).join(", ")
+  end
+
+  def mask_approx_address(full_address)
+    return "Customer Location" if full_address.blank? || full_address == "Customer Location"
+
+    cleaned = full_address.to_s
+                          .gsub(/\b\d{6}\b/, "")
+                          .gsub(/\b(India|Bharat)\b/i, "")
+                          .gsub(/,\s*,+/, ",")
+                          .strip
+                          .delete_prefix(",")
+                          .delete_suffix(",")
+                          .strip
+
+    if cleaned.include?(",")
+      parts = cleaned.split(",").map(&:strip).reject(&:blank?)
+      return parts.last(3).join(", ") if parts.size >= 3
+      return parts.join(", ") if parts.any?
+    end
+
+    words = cleaned.split(/\s+/).reject(&:blank?)
+    return words.last(3).join(" ") if words.size >= 3
+    return words.join(" ") if words.any?
+
+    "Customer Location"
   end
 
   def formatted_phone_for(dealer)

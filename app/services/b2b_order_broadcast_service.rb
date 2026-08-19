@@ -177,15 +177,8 @@ class B2bOrderBroadcastService
     quantity = matched_items.sum(&:quantity)
     total_amount = matched_items.sum(&:total_price)
 
-    broadcast_location = if @broadcast_center == :buyer
-      @order.buyer_dealer&.dealer_location
-    else
-      { 
-        latitude: @order.latitude, 
-        longitude: @order.longitude 
-      }
-    end
-
+    full_address, broadcast_location = resolve_b2b_address_and_location
+    delivery_location = mask_approx_address(full_address)
     seller_location = dealer&.dealer_location
     
     approx_distance = if broadcast_location.present? && seller_location.present? &&
@@ -199,12 +192,6 @@ class B2bOrderBroadcastService
       ).round(2).to_s
     else
       "0"
-    end
-
-    delivery_location = if @broadcast_center == :buyer
-      get_location(@order.buyer_dealer)
-    else
-      get_order_delivery_address
     end
 
     image_url = get_product_image(product, variant)
@@ -313,50 +300,89 @@ class B2bOrderBroadcastService
     return "#{ENV['FRONTEND_URL']}/images/ac.png"
   end
 
-  def get_location(dealer)
-    return "Location not available" if dealer.blank?
-    
-    address = dealer.dealer_profile&.business_address
-    return "Location not available" if address.blank?
-    
-    cleaned = address.to_s.strip
-    
-    if cleaned.include?(',')
-      parts = cleaned.split(',').map(&:strip).reject(&:blank?)
-      return parts.last(3).join(', ') if parts.size >= 3
-      return parts.first if parts.size == 1
+  def resolve_b2b_address_and_location
+    if @broadcast_center == :delivery && @order.shipping_address.present?
+      full_addr = format_address_hash(@order.shipping_address)
+      if full_addr.present?
+        coords = if @order.latitude.present? && @order.longitude.present?
+                   { latitude: @order.latitude.to_f, longitude: @order.longitude.to_f }
+                 else
+                   resolve_coordinates_for(@order.shipping_address, full_addr)
+                 end
+        return [full_addr, coords.presence || { latitude: 28.6139, longitude: 77.2090 }]
+      end
     end
-    
-    words = cleaned.split(/\s+/)
-    return words.last(3).join(' ') if words.size >= 3
-    return words.first if words.size == 1
-    
-    "Location not available"
+
+    buyer = @order.buyer_dealer
+    business_addr = buyer&.dealer_profile&.business_address.to_s.strip
+    loc = buyer&.dealer_location
+    coords = if loc&.latitude.present? && loc&.longitude.present?
+               { latitude: loc.latitude.to_f, longitude: loc.longitude.to_f }
+             elsif business_addr.present?
+               GoogleMapsService.instance.geocode(business_addr) rescue nil
+             end
+
+    [business_addr.presence || "Dealer Business Location", coords.presence || { latitude: 28.6139, longitude: 77.2090 }]
   end
 
-  def get_order_delivery_address
-    shipping_address = @order.shipping_address
-    if shipping_address.present?
-      parts = []
-      parts << shipping_address["address_line1"] if shipping_address["address_line1"].present?
-      parts << shipping_address["address_line2"] if shipping_address["address_line2"].present?
-      parts << shipping_address["city"] if shipping_address["city"].present?
-      parts << shipping_address["state"] if shipping_address["state"].present?
-      parts << shipping_address["postal_code"] if shipping_address["postal_code"].present?
-      parts << shipping_address["country"] if shipping_address["country"].present?
-      
-      formatted = parts.compact.join(", ")
-      return formatted if formatted.present?
+  def resolve_coordinates_for(address_obj, full_text)
+    lat = address_obj["latitude"].presence || address_obj[:latitude] rescue nil
+    lng = address_obj["longitude"].presence || address_obj[:longitude] rescue nil
+    return { latitude: lat.to_f, longitude: lng.to_f } if lat.present? && lng.present?
+
+    pincode = address_obj["postal_code"].presence || address_obj[:postal_code] rescue nil
+    if pincode.present?
+      coords = B2bPincodeAvailabilityService.geocode_pincode(pincode)
+      return { latitude: coords[:latitude].to_f, longitude: coords[:longitude].to_f } if coords.present?
     end
-    
-    return "Delivery location not available" if @order.latitude.blank?
-    
-    coords = GoogleMapsService.instance.reverse_geocode(
-      @order.latitude,
-      @order.longitude
-    )
-    
-    coords[:formatted_address] if coords.present?
+
+    if full_text.present?
+      results = Geocoder.search(full_text) rescue []
+      if results.any? && results.first.latitude.present?
+        return { latitude: results.first.latitude.to_f, longitude: results.first.longitude.to_f }
+      end
+    end
+
+    nil
+  end
+
+  def format_address_hash(address)
+    return address.to_s if address.is_a?(String)
+    return "" unless address.is_a?(Hash) || address.is_a?(ActionController::Parameters)
+
+    parts = []
+    parts << address["address_line1"].presence || address[:address_line1]
+    parts << address["address_line2"].presence || address[:address_line2]
+    parts << address["city"].presence || address[:city]
+    parts << address["state"].presence || address[:state]
+    parts << address["postal_code"].presence || address[:postal_code]
+    parts << address["country"].presence || address[:country]
+    parts.compact.reject(&:blank?).join(", ")
+  end
+
+  def mask_approx_address(full_address)
+    return "Location not available" if full_address.blank? || full_address == "Location not available"
+
+    cleaned = full_address.to_s
+                          .gsub(/\b\d{6}\b/, "")
+                          .gsub(/\b(India|Bharat)\b/i, "")
+                          .gsub(/,\s*,+/, ",")
+                          .strip
+                          .delete_prefix(",")
+                          .delete_suffix(",")
+                          .strip
+
+    if cleaned.include?(",")
+      parts = cleaned.split(",").map(&:strip).reject(&:blank?)
+      return parts.last(3).join(", ") if parts.size >= 3
+      return parts.join(", ") if parts.any?
+    end
+
+    words = cleaned.split(/\s+/).reject(&:blank?)
+    return words.last(3).join(" ") if words.size >= 3
+    return words.join(" ") if words.any?
+
+    "Location not available"
   end
 
   def formatted_phone_for(dealer)

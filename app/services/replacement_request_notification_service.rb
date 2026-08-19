@@ -258,15 +258,21 @@ class ReplacementRequestNotificationService
   end
 
   def get_buyer_location_details
+    loc_name = if requestable.is_a?(B2bOrder)
+                 "Salespoints Dealer Point #{buyer_display_name}"
+               else
+                 buyer_display_name
+               end
+
     addr_text = shipping_address_text
     if addr_text.present? && addr_text != "Address not available"
       results = Geocoder.search(addr_text) rescue []
       if results.any? && results.first.latitude.present? && results.first.longitude.present?
-        return [results.first.latitude.to_f, results.first.longitude.to_f, buyer_display_name]
+        return [results.first.latitude.to_f, results.first.longitude.to_f, loc_name]
       end
     end
 
-    [28.6139, 77.2090, buyer_display_name]
+    [28.6139, 77.2090, loc_name]
   end
 
   def buyer_recipient

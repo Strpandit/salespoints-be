@@ -311,37 +311,85 @@ module Api
 
     # ─── TOP SELLERS ───────────────────────────────────────────────────────────
     def build_top_sellers(date_range)
-      b2c_data = Order.where(created_at: date_range, seller_dealer_id: Dealer.select(:id))
-                      .where.not(status: "cancelled")
-                      .group(:seller_dealer_id)
-                      .select("seller_dealer_id, COUNT(*) as order_count, SUM(total_amount) as revenue")
+      b2c_orders = Order.where(created_at: date_range, seller_dealer_id: Dealer.select(:id))
+                        .where.not(status: "cancelled")
 
-      b2b_data = B2bOrder.where(created_at: date_range)
-                         .where.not(status: %w[cancelled rejected_request])
-                         .group(:seller_dealer_id)
-                         .select("seller_dealer_id, COUNT(*) as order_count, SUM(total_amount) as revenue")
+      b2b_orders = B2bOrder.where(created_at: date_range)
+                           .where.not(status: %w[cancelled rejected_request])
 
       combined = {}
-      b2c_data.each do |r|
-        combined[r.seller_dealer_id] ||= { orders: 0, revenue: 0.0 }
-        combined[r.seller_dealer_id][:orders]  += r.order_count.to_i
-        combined[r.seller_dealer_id][:revenue] += r.revenue.to_f
-      end
-      b2b_data.each do |r|
-        combined[r.seller_dealer_id] ||= { orders: 0, revenue: 0.0 }
-        combined[r.seller_dealer_id][:orders]  += r.order_count.to_i
-        combined[r.seller_dealer_id][:revenue] += r.revenue.to_f
+
+      b2c_orders.each do |o|
+        sid = o.seller_dealer_id
+        next if sid.blank?
+        combined[sid] ||= {
+          orders: 0, revenue: 0.0,
+          b2c_orders: 0, b2c_revenue: 0.0,
+          b2b_orders: 0, b2b_revenue: 0.0,
+          wholesaler_orders: 0, wholesaler_revenue: 0.0,
+          online_revenue: 0.0, cod_revenue: 0.0
+        }
+        amt = o.total_amount.to_f
+        combined[sid][:orders] += 1
+        combined[sid][:revenue] += amt
+        combined[sid][:b2c_orders] += 1
+        combined[sid][:b2c_revenue] += amt
+        if o.payment_method.to_s.downcase == "cod"
+          combined[sid][:cod_revenue] += amt
+        else
+          combined[sid][:online_revenue] += amt
+        end
       end
 
-      combined.sort_by { |_, v| -v[:revenue] }.first(10).map do |dealer_id, stats|
-        d = Dealer.find_by(id: dealer_id)
+      b2b_orders.each do |o|
+        sid = o.seller_dealer_id
+        next if sid.blank?
+        combined[sid] ||= {
+          orders: 0, revenue: 0.0,
+          b2c_orders: 0, b2c_revenue: 0.0,
+          b2b_orders: 0, b2b_revenue: 0.0,
+          wholesaler_orders: 0, wholesaler_revenue: 0.0,
+          online_revenue: 0.0, cod_revenue: 0.0
+        }
+        amt = o.total_amount.to_f
+        combined[sid][:orders] += 1
+        combined[sid][:revenue] += amt
+
+        is_wholesaler = (o.is_direct_buy? && o.source_type == "WholesalerPost")
+        if is_wholesaler
+          combined[sid][:wholesaler_orders] += 1
+          combined[sid][:wholesaler_revenue] += amt
+        else
+          combined[sid][:b2b_orders] += 1
+          combined[sid][:b2b_revenue] += amt
+        end
+
+        if o.payment_method.to_s.downcase == "cod"
+          combined[sid][:cod_revenue] += amt
+        else
+          combined[sid][:online_revenue] += amt
+        end
+      end
+
+      dealers = Dealer.where(id: combined.keys).index_by(&:id)
+
+      combined.sort_by { |_, v| -v[:revenue] }.map do |dealer_id, stats|
+        d = dealers[dealer_id]
         next unless d
         {
-          id:          d.id,
-          name:        d.dealer_profile&.business_name.presence || [d.first_name, d.last_name].compact.join(" ").presence || d.dealer_code,
-          dealer_code: d.dealer_code,
-          orders:      stats[:orders],
-          revenue:     stats[:revenue].round(2)
+          id:                 d.id,
+          name:               d.dealer_profile&.business_name.presence || [d.first_name, d.last_name].compact.join(" ").presence || d.dealer_code,
+          dealer_code:        d.dealer_code,
+          orders:             stats[:orders],
+          revenue:            stats[:revenue].round(2),
+          b2c_orders:         stats[:b2c_orders],
+          b2c_revenue:        stats[:b2c_revenue].round(2),
+          b2b_orders:         stats[:b2b_orders],
+          b2b_revenue:        stats[:b2b_revenue].round(2),
+          wholesaler_orders:  stats[:wholesaler_orders],
+          wholesaler_revenue: stats[:wholesaler_revenue].round(2),
+          online_revenue:     stats[:online_revenue].round(2),
+          cod_revenue:        stats[:cod_revenue].round(2)
         }
       end.compact
     end
@@ -486,11 +534,18 @@ module Api
 
     # ─── DATE HELPERS ──────────────────────────────────────────────────────────
     def date_range_for(period)
+      if params[:start_date].present? || params[:end_date].present?
+        start_t = params[:start_date].present? ? Time.zone.parse(params[:start_date].to_s).beginning_of_day : 10.years.ago
+        end_t = params[:end_date].present? ? Time.zone.parse(params[:end_date].to_s).end_of_day : Time.current.end_of_day
+        return start_t..end_t
+      end
+
       case period.to_s
       when "today"     then Time.current.beginning_of_day..Time.current.end_of_day
       when "weekly"    then 1.week.ago.beginning_of_day..Time.current.end_of_day
       when "quarterly" then 3.months.ago.beginning_of_day..Time.current.end_of_day
       when "yearly"    then 1.year.ago.beginning_of_day..Time.current.end_of_day
+      when "all"       then 10.years.ago..Time.current.end_of_day
       else                  1.month.ago.beginning_of_day..Time.current.end_of_day
       end
     end

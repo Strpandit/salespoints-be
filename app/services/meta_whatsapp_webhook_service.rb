@@ -181,7 +181,7 @@ class MetaWhatsappWebhookService
         
         EmailDispatcherService.retail_order_shipped(order)
 
-        elivery_confirmation = DeliveryConfirmationService.new(
+        delivery_confirmation = DeliveryConfirmationService.new(
           deliverable: order,
           actor: dealer
         ).create_or_refresh!

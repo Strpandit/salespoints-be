@@ -261,6 +261,10 @@ module Api
           payment_method: order.payment_method,
           payment_status: order.payment_status,
           payment_token: order.payment_token,
+
+          # Addresses
+          billing_address: order.billing_address,
+          shipping_address: order.shipping_address,
           
           # Timestamps
           requested_at: order.requested_at&.iso8601,

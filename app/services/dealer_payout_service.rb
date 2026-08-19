@@ -27,7 +27,7 @@ class DealerPayoutService
     eligible_rows = eligible_orders
     eligible_online_net = eligible_rows.sum { |row| BigDecimal(row[:net_payout_amount].to_s) }
 
-    available_balance = [eligible_online_net - pending_payout, 0.to_d].max.round(2)
+    available_balance = [eligible_online_net, 0.to_d].max.round(2)
 
     {
       total_earnings: total_earnings.to_f,
@@ -41,6 +41,8 @@ class DealerPayoutService
   end
 
   def eligible_orders
+    claimed_keys = claimed_order_keys
+
     retail_orders = Order
       .includes(:buyer, :seller_dealer, :return_requests)
       .where(seller_dealer_id: @dealer.id)
@@ -58,8 +60,8 @@ class DealerPayoutService
       .order(delivered_at: :desc)
 
     payload = []
-    retail_orders.each { |order| append_eligible_order(payload, order) }
-    b2b_orders.each { |order| append_eligible_order(payload, order) }
+    retail_orders.each { |order| append_eligible_order(payload, order, claimed_keys: claimed_keys) }
+    b2b_orders.each { |order| append_eligible_order(payload, order, claimed_keys: claimed_keys) }
     payload.sort_by { |row| row[:delivered_at].to_s }.reverse
   end
 
@@ -74,16 +76,40 @@ class DealerPayoutService
 
     if orders.present?
       parsed = orders.is_a?(String) ? (JSON.parse(orders) rescue []) : Array(orders)
+      raise StandardError, "No orders specified in payout request" if parsed.empty?
+
+      seen_keys = Set.new
       parsed.each do |item|
         item_hash = item.is_a?(Hash) ? item.with_indifferent_access : {}
         oid = item_hash[:order_id] || item_hash[:id]
         otype = item_hash[:order_type] || item_hash[:type]
+
         ord = find_requestable(order_id: oid, order_type: otype)
-        target_orders << ord if ord.present?
+        raise StandardError, "Order ##{oid} (#{otype}) not found or does not belong to your account" unless ord.present?
+
+        key = "#{ord.class.name}:#{ord.id}"
+        if seen_keys.include?(key)
+          raise StandardError, "Duplicate order detected: Order #{request_reference(ord)} is included multiple times in this request"
+        end
+        seen_keys.add(key)
+        target_orders << ord
       end
     elsif order_id.present?
       ord = find_requestable(order_id: order_id, order_type: order_type)
-      target_orders << ord if ord.present?
+      raise StandardError, "Order ##{order_id} not found or does not belong to your account" unless ord.present?
+      target_orders << ord
+    end
+
+    # Enforce invoice number validation & uniqueness per dealer
+    if invoice_number.present?
+      cleaned_inv = invoice_number.to_s.strip
+      existing_invoice = @dealer.dealer_payouts
+                                .where("LOWER(TRIM(invoice_number)) = ?", cleaned_inv.downcase)
+                                .where(status: ACTIVE_PAYOUT_STATUSES)
+                                .exists?
+      if existing_invoice
+        raise StandardError, "Invoice number '#{cleaned_inv}' has already been submitted for an active or completed payout request."
+      end
     end
 
     payout = nil
@@ -290,6 +316,78 @@ class DealerPayoutService
     true
   end
 
+  def claimed_order_keys
+    keys = Set.new
+
+    active_payouts = @dealer.dealer_payouts.where(status: ACTIVE_PAYOUT_STATUSES)
+    active_payouts.each do |p|
+      if p.requestable_id.present?
+        type_key = p.requestable_type == "Order" ? "order" : "b2b_order"
+        keys.add("#{type_key}:#{p.requestable_id}")
+      end
+
+      selected = (p.metadata || {})["selected_orders"]
+      if selected.is_a?(Array)
+        selected.each do |item|
+          oid = item["order_id"] || item[:order_id] || item["id"]
+          otype = (item["order_type"] || item[:order_type] || "order").to_s.downcase
+          otype_key = otype.in?(%w[b2b b2b_order wholesale]) ? "b2b_order" : "order"
+          keys.add("#{otype_key}:#{oid}") if oid.present?
+        end
+      end
+    end
+
+    keys
+  end
+
+  def find_active_payout_for_order(requestable)
+    return nil if requestable.blank?
+
+    oid = requestable.id
+    otype = requestable.is_a?(Order) ? "order" : "b2b_order"
+    full_type = requestable.class.name
+
+    # 1. Direct polymorphic match
+    direct = @dealer.dealer_payouts.where(
+      requestable_type: full_type,
+      requestable_id: oid,
+      status: ACTIVE_PAYOUT_STATUSES
+    ).first
+    return direct if direct.present?
+
+    # 2. Check JSONB metadata array of selected_orders
+    json_candidates = @dealer.dealer_payouts.where(status: ACTIVE_PAYOUT_STATUSES)
+                             .where("metadata -> 'selected_orders' IS NOT NULL")
+    json_candidates.find do |p|
+      orders = (p.metadata || {})["selected_orders"] || []
+      orders.any? do |item|
+        item_id = item["order_id"] || item[:order_id] || item["id"]
+        item_type = (item["order_type"] || item[:order_type] || "order").to_s.downcase
+        item_type_normalized = item_type.in?(%w[b2b b2b_order wholesale]) ? "b2b_order" : "order"
+
+        item_id.to_i == oid.to_i && item_type_normalized == otype
+      end
+    end
+  end
+
+  def active_payout_exists_for?(requestable)
+    find_active_payout_for_order(requestable).present?
+  end
+
+  def validate_requestable_eligibility!(requestable)
+    eligibility = payout_eligibility_for(requestable)
+    unless eligibility[:eligible]
+      ref = request_reference(requestable)
+      existing = find_active_payout_for_order(requestable)
+      if existing.present?
+        status_text = existing.status == "paid" ? "has already been paid" : "has already been requested in payout #{existing.request_number} (#{existing.status.upcase})"
+        raise StandardError, "Order #{ref} #{status_text} and cannot be requested again."
+      else
+        raise StandardError, "Order #{ref} is not eligible for payout: #{eligibility[:reason]}"
+      end
+    end
+  end
+
   private
 
   def process_cod_commission_deductions!
@@ -354,10 +452,10 @@ class DealerPayoutService
       .sum(:amount).to_d.round(2)
   end
 
-  def append_eligible_order(collection, requestable)
+  def append_eligible_order(collection, requestable, claimed_keys: nil)
     return if requestable.try(:payment_method).to_s.downcase == "cod"
 
-    eligibility = payout_eligibility_for(requestable)
+    eligibility = payout_eligibility_for(requestable, claimed_keys: claimed_keys)
     return unless eligibility[:eligible]
 
     breakdown = calculate_order_financials(requestable)
@@ -379,7 +477,7 @@ class DealerPayoutService
     }
   end
 
-  def payout_eligibility_for(requestable)
+  def payout_eligibility_for(requestable, claimed_keys: nil)
     return { eligible: false, reason: "Order not found" } if requestable.blank?
     return { eligible: false, reason: "Unauthorized seller" } unless requestable.try(:seller_dealer_id) == @dealer.id
     return { eligible: false, reason: "Order must be delivered or replacement delivered" } unless requestable.status.to_s.in?(PAYOUT_READY_ORDER_STATUSES)
@@ -387,7 +485,10 @@ class DealerPayoutService
     return { eligible: false, reason: "Order is in the 48-hour hold window" } if requestable.delivered_at.blank? || requestable.delivered_at > 48.hours.ago
     return { eligible: false, reason: "COD orders cannot be directly requested for payout" } if requestable.try(:payment_method).to_s.downcase == "cod"
     return { eligible: false, reason: "Replacement request open" } if replacement_request_open?(requestable)
-    return { eligible: false, reason: "Payout request already exists" } if active_payout_exists_for?(requestable)
+
+    order_key = "#{requestable.is_a?(Order) ? 'order' : 'b2b_order'}:#{requestable.id}"
+    is_claimed = claimed_keys ? claimed_keys.include?(order_key) : active_payout_exists_for?(requestable)
+    return { eligible: false, reason: "Payout request already exists or order already paid" } if is_claimed
 
     { eligible: true }
   end
@@ -419,12 +520,6 @@ class DealerPayoutService
     requestable.return_requests.where(request_type: "replacement", status: ReturnRequest::ACTIVE_STATUSES).exists?
   end
 
-  def active_payout_exists_for?(requestable)
-    DealerPayout
-      .where(dealer_id: @dealer.id, requestable: requestable, status: ACTIVE_PAYOUT_STATUSES)
-      .exists?
-  end
-
   def find_requestable(order_id:, order_type:)
     return nil if order_id.blank? || order_type.blank?
 
@@ -434,7 +529,7 @@ class DealerPayoutService
     when "b2b", "wholesale", "b2b_order"
       B2bOrder.find_by(id: order_id, seller_dealer_id: @dealer.id)
     else
-      raise StandardError, "Unsupported order type"
+      raise StandardError, "Unsupported order type: #{order_type}"
     end
   end
 
@@ -515,3 +610,4 @@ class DealerPayoutService
     }.compact
   end
 end
+

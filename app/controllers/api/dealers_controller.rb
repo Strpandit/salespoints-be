@@ -541,6 +541,7 @@ module Api
         id: post.id,
         title: post.title,
         approve_status: post.approve_status,
+        mf_year: post.mf_year,
         is_expired: !post.visible_to_others?,
         price: post.price,
         stock_quantity: post.stock_quantity,
