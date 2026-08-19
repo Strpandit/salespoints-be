@@ -10,8 +10,7 @@ module Api
       orders = apply_time_filter(orders, time_filter)
       
       if params[:status].present? && params[:status] != "all"
-        # pending_request / rejected_request are request_status values, not status
-        b2b_request_statuses = %w[pending_request rejected_request]
+        b2b_request_statuses = %w[pending_request rejected_request accepted_request]
         if b2b_request_statuses.include?(params[:status])
           orders = orders.select { |o| o[:request_status] == params[:status] }
         else
@@ -20,7 +19,46 @@ module Api
       end
       
       if params[:source_type].present? && params[:source_type] != "all"
-        orders = orders.select { |o| o[:source_type] == params[:source_type] }
+        if params[:source_type] == "b2c"
+          orders = orders.select { |o| o[:type] == "retail" || o[:source_type] == "retail" }
+        elsif params[:source_type] == "b2b"
+          orders = orders.select { |o| o[:source_type] == "b2b" || o[:source_type] == "direct_buy" }
+        elsif params[:source_type] == "wholesale"
+          orders = orders.select { |o| o[:source_type] == "wholesale" }
+        else
+          orders = orders.select { |o| o[:source_type] == params[:source_type] }
+        end
+      end
+
+      if params[:payment_method].present? && params[:payment_method] != "all"
+        if params[:payment_method] == "online"
+          orders = orders.select { |o| %w[online razorpay upi card netbanking].include?(o[:payment_method].to_s.downcase) }
+        elsif params[:payment_method] == "cod"
+          orders = orders.select { |o| %w[cod cash pay_on_delivery].include?(o[:payment_method].to_s.downcase) }
+        else
+          orders = orders.select { |o| o[:payment_method].to_s.downcase == params[:payment_method].to_s.downcase }
+        end
+      end
+
+      if params[:issues_filter].present? && params[:issues_filter] != "all"
+        case params[:issues_filter]
+        when "replacement_request"
+          orders = orders.select { |o| o[:replacement_request].present? }
+        when "return_request"
+          orders = orders.select { |o| o[:return_requests].present? && o[:return_requests].any? }
+        when "delivery_pending"
+          orders = orders.select { |o| o[:delivery_confirmation].present? }
+        end
+      end
+
+      if params[:min_amount].present?
+        min_val = params[:min_amount].to_f
+        orders = orders.select { |o| o[:total_amount].to_f >= min_val }
+      end
+
+      if params[:max_amount].present?
+        max_val = params[:max_amount].to_f
+        orders = orders.select { |o| o[:total_amount].to_f <= max_val }
       end
       
       if params[:search].present?
@@ -28,8 +66,20 @@ module Api
         orders = orders.select do |o|
           o[:reference_number].to_s.downcase.include?(query) ||
           o[:buyer_name].to_s.downcase.include?(query) ||
-          o[:seller_name].to_s.downcase.include?(query)
+          o[:seller_name].to_s.downcase.include?(query) ||
+          (o[:items] || []).any? { |item| (item[:title] || item[:product_name] || "").to_s.downcase.include?(query) || (item[:sku] || "").to_s.downcase.include?(query) }
         end
+      end
+
+      case params[:sort_by]
+      when "oldest"
+        orders = orders.sort_by { |o| o[:created_at] }
+      when "amount_desc"
+        orders = orders.sort_by { |o| o[:total_amount] }.reverse
+      when "amount_asc"
+        orders = orders.sort_by { |o| o[:total_amount] }
+      else
+        orders = orders.sort_by { |o| o[:created_at] }.reverse
       end
       
       page = (params[:page] || 1).to_i
@@ -457,15 +507,25 @@ module Api
       case filter
       when "today"
         orders.select { |o| Time.parse(o[:created_at]).to_date == Date.current }
+      when "yesterday"
+        orders.select { |o| Time.parse(o[:created_at]).to_date == Date.yesterday }
+      when "7_days"
+        orders.select { |o| Time.parse(o[:created_at]) >= 7.days.ago }
+      when "30_days"
+        orders.select { |o| Time.parse(o[:created_at]) >= 30.days.ago }
       when "this_week"
         orders.select { |o| Time.parse(o[:created_at]) >= Date.current.beginning_of_week }
       when "this_month"
         orders.select { |o| Time.parse(o[:created_at]) >= Date.current.beginning_of_month }
       when "custom"
         if params[:date_from].present? && params[:date_to].present?
-          from = Date.parse(params[:date_from]).beginning_of_day
-          to = Date.parse(params[:date_to]).end_of_day
-          orders.select { |o| Time.parse(o[:created_at]).between?(from, to) }
+          from = Date.parse(params[:date_from]).beginning_of_day rescue nil
+          to = Date.parse(params[:date_to]).end_of_day rescue nil
+          if from && to
+            orders.select { |o| Time.parse(o[:created_at]).between?(from, to) }
+          else
+            orders
+          end
         else
           orders
         end
