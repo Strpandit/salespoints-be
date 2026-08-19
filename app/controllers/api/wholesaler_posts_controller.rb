@@ -26,16 +26,53 @@ module Api
 
           posts = posts.where(dealer_id: target_dealer.id)
           posts = posts.where(approve_status: params[:status]) if params[:status].present? && params[:status] != "all"
+          posts = posts.where(approve_status: params[:approve_status]) if params[:approve_status].present? && params[:approve_status] != "all"
         else
           posts = current_admin.accessible_wholesale_posts(posts)
+          posts = posts.where(approve_status: params[:status]) if params[:status].present? && params[:status] != "all"
+          posts = posts.where(approve_status: params[:approve_status]) if params[:approve_status].present? && params[:approve_status] != "all"
         end
       else
         posts = posts.where(approve_status: "approved").visible_to_marketplace
       end
 
-      # posts = apply_distance_filter(posts)
-      posts = posts.where("title ILIKE ?", "%#{params[:search]}%") if params[:search].present?
-      posts = posts.where("? = ANY(pincodes)", params[:pincode]) if params[:pincode].present?
+      if params[:min_rating].present? && params[:min_rating] != "all"
+        posts = posts.where("wholesaler_posts.rating >= ?", params[:min_rating].to_f)
+      end
+
+      if params[:min_price].present?
+        posts = posts.where("wholesaler_posts.price >= ?", params[:min_price].to_f)
+      end
+
+      if params[:max_price].present?
+        posts = posts.where("wholesaler_posts.price <= ?", params[:max_price].to_f)
+      end
+
+      if params[:search].present?
+        q = "%#{params[:search].strip}%"
+        posts = posts.joins(:dealer).where(
+          "wholesaler_posts.title ILIKE :q OR wholesaler_posts.desc ILIKE :q OR dealers.dealer_code ILIKE :q OR dealers.full_name ILIKE :q",
+          q: q
+        )
+      end
+
+      if params[:pincode].present?
+        posts = posts.where("? = ANY(pincodes)", params[:pincode])
+      end
+
+      case params[:sort_by]
+      when "oldest"
+        posts = posts.order("wholesaler_posts.created_at ASC")
+      when "price_asc"
+        posts = posts.order("wholesaler_posts.price ASC")
+      when "price_desc"
+        posts = posts.order("wholesaler_posts.price DESC")
+      when "rating_desc"
+        posts = posts.order("wholesaler_posts.rating DESC")
+      else
+        posts = posts.order("wholesaler_posts.created_at DESC")
+      end
+
       paginated = Kaminari.paginate_array(posts.to_a).page(params[:page]).per(params[:per_page] || 20)
 
       current_ratings = {}

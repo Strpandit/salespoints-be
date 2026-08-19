@@ -13,6 +13,21 @@ module Api
         @accounts = @accounts.where(status: params[:status])
       end
 
+      if params[:email_verified].present? && params[:email_verified] != "all"
+        is_ver = ActiveModel::Type::Boolean.new.cast(params[:email_verified])
+        @accounts = @accounts.where(email_verified: is_ver)
+      end
+
+      if params[:date_from].present?
+        from = Date.parse(params[:date_from]).beginning_of_day rescue nil
+        @accounts = @accounts.where("created_at >= ?", from) if from
+      end
+
+      if params[:date_to].present?
+        to = Date.parse(params[:date_to]).end_of_day rescue nil
+        @accounts = @accounts.where("created_at <= ?", to) if to
+      end
+
       if params[:search].present?
         search = "%#{params[:search].strip.downcase}%"
 
@@ -23,6 +38,17 @@ module Api
           OR phone LIKE :search",
           search: search
         )
+      end
+
+      case params[:sort_by]
+      when "oldest"
+        @accounts = @accounts.order(created_at: :asc)
+      when "name_asc"
+        @accounts = @accounts.order(first_name: :asc)
+      when "name_desc"
+        @accounts = @accounts.order(first_name: :desc)
+      else
+        @accounts = @accounts.order(created_at: :desc)
       end
 
       @accounts = @accounts.page(params[:page]).per(params[:per_page] || 20)

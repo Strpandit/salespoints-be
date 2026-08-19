@@ -71,9 +71,50 @@ module Api
 
       admins =
       if current_admin.super_admin?
-        AdminUser.order(created_at: :desc)
+        AdminUser.all
       else
         AdminUser.where(is_super_admin: false)
+      end
+
+      if params[:approval_status].present? && params[:approval_status] != "all"
+        admins = admins.where(approval_status: params[:approval_status])
+      end
+
+      if params[:status].present? && params[:status] != "all"
+        admins = admins.where(status: params[:status])
+      end
+
+      if params[:role_id].present? && params[:role_id] != "all"
+        admins = admins.joins(:roles).where(roles: { id: params[:role_id] }).distinct
+      end
+
+      if params[:date_from].present?
+        from = Date.parse(params[:date_from]).beginning_of_day rescue nil
+        admins = admins.where("admin_users.created_at >= ?", from) if from
+      end
+
+      if params[:date_to].present?
+        to = Date.parse(params[:date_to]).end_of_day rescue nil
+        admins = admins.where("admin_users.created_at <= ?", to) if to
+      end
+
+      if params[:search].present?
+        q = "%#{params[:search].strip}%"
+        admins = admins.where(
+          "admin_users.first_name ILIKE :q OR admin_users.last_name ILIKE :q OR admin_users.full_name ILIKE :q OR admin_users.email ILIKE :q OR admin_users.phone ILIKE :q OR admin_users.aadhar_number ILIKE :q OR admin_users.pan_number ILIKE :q",
+          q: q
+        )
+      end
+
+      case params[:sort_by]
+      when "oldest"
+        admins = admins.order("admin_users.created_at ASC")
+      when "name_asc"
+        admins = admins.order("admin_users.first_name ASC")
+      when "name_desc"
+        admins = admins.order("admin_users.first_name DESC")
+      else
+        admins = admins.order("admin_users.created_at DESC")
       end
 
       admins = admins.page(params[:page]).per(params[:per_page] || 20)
