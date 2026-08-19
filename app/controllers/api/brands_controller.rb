@@ -23,20 +23,45 @@ module Api
     end
 
     def all_brands
-      all_brands = Brand.all.order(created_at: :desc).page(params[:page]).per(params[:per_page] || 20)
-      if all_brands.exists?
-        render json: serialize_resource(all_brands, BrandSerializer).merge(
-          meta: {
-            current_page: all_brands.current_page,
-            next_page: all_brands.next_page,
-            prev_page: all_brands.prev_page,
-            total_pages: all_brands.total_pages,
-            total_count: all_brands.total_count
-          },
-          message: "All Brands fetched successfully" ), status: :ok
-      else
-        render json: { error: "Brands not found" }, status: :not_found
+      all_brands = Brand.includes(:categories)
+
+      if params[:is_active].present? && params[:is_active] != "all"
+        is_act = ActiveModel::Type::Boolean.new.cast(params[:is_active])
+        all_brands = all_brands.where(is_active: is_act)
       end
+
+      if params[:category_id].present? && params[:category_id] != "all"
+        all_brands = all_brands.joins(:categories).where(categories: { id: params[:category_id] })
+      end
+
+      if params[:search].present?
+        q = "%#{params[:search].strip}%"
+        all_brands = all_brands.where("name ILIKE ?", q)
+      end
+
+      case params[:sort_by]
+      when "oldest"
+        all_brands = all_brands.order(created_at: :asc)
+      when "name_asc"
+        all_brands = all_brands.order(name: :asc)
+      when "name_desc"
+        all_brands = all_brands.order(name: :desc)
+      else
+        all_brands = all_brands.order(created_at: :desc)
+      end
+
+      all_brands = all_brands.page(params[:page]).per(params[:per_page] || 20)
+
+      render json: serialize_resource(all_brands, BrandSerializer).merge(
+        meta: {
+          current_page: all_brands.current_page,
+          next_page: all_brands.next_page,
+          prev_page: all_brands.prev_page,
+          total_pages: all_brands.total_pages,
+          total_count: all_brands.total_count
+        },
+        message: "All Brands fetched successfully"
+      ), status: :ok
     end
 
     def show

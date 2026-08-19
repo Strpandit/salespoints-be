@@ -86,8 +86,34 @@ module Api
           all_orders << transform_b2b_order(order)
         end
 
-        # Sort by created_at (newest first)
-        all_orders = all_orders.sort_by { |o| o[:created_at] }.reverse
+        # ===== PAYMENT METHOD FILTER =====
+        if params[:payment_method].present? && params[:payment_method] != "all"
+          if params[:payment_method] == "online"
+            all_orders = all_orders.select { |o| %w[online razorpay upi card netbanking].include?(o[:payment_method].to_s.downcase) || (o[:payment_method].to_s.downcase != "cod" && o[:payment_method].to_s.downcase != "cash") }
+          elsif params[:payment_method] == "cod"
+            all_orders = all_orders.select { |o| %w[cod cash pay_on_delivery].include?(o[:payment_method].to_s.downcase) || o[:payment_method].blank? }
+          end
+        end
+
+        # ===== AMOUNT RANGE FILTER =====
+        if params[:min_amount].present?
+          all_orders = all_orders.select { |o| o[:total_amount].to_f >= params[:min_amount].to_f }
+        end
+        if params[:max_amount].present?
+          all_orders = all_orders.select { |o| o[:total_amount].to_f <= params[:max_amount].to_f }
+        end
+
+        # ===== SORTING =====
+        case params[:sort_by]
+        when "oldest"
+          all_orders = all_orders.sort_by { |o| o[:created_at] }
+        when "amount_desc"
+          all_orders = all_orders.sort_by { |o| o[:total_amount].to_f }.reverse
+        when "amount_asc"
+          all_orders = all_orders.sort_by { |o| o[:total_amount].to_f }
+        else
+          all_orders = all_orders.sort_by { |o| o[:created_at] }.reverse
+        end
 
         # ===== PAGINATION =====
         page = (params[:page] || 1).to_i

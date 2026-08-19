@@ -85,12 +85,88 @@ module Api
 
         items = items.page(params[:page]).per(params[:per_page] || 20)
       elsif current_admin
-        items = DealerProduct.includes(:dealer, :product, :product_variant).order(created_at: :desc)
-        if params[:approve_status].blank? || params[:approve_status] == "all"
-          items = items
-        else
+        items = DealerProduct.includes(:dealer, :product, :product_variant)
+
+        if params[:approve_status].present? && params[:approve_status] != "all"
           items = items.joins(:dealer).where(dealers: { deleted_at: nil }).where(approve_status: params[:approve_status])
         end
+
+        if params[:is_active].present? && params[:is_active] != "all"
+          is_act = ActiveModel::Type::Boolean.new.cast(params[:is_active])
+          items = items.where(is_active: is_act)
+        end
+
+        if params[:stock_status].present? && params[:stock_status] != "all"
+          case params[:stock_status]
+          when "in_stock"
+            items = items.where("dealer_products.stock_quantity > ?", 10)
+          when "low_stock"
+            items = items.where("dealer_products.stock_quantity BETWEEN ? AND ?", 1, 10)
+          when "out_of_stock"
+            items = items.where("dealer_products.stock_quantity = ?", 0)
+          end
+        end
+
+        if params[:channel].present? && params[:channel] != "all"
+          case params[:channel]
+          when "b2c"
+            items = items.where(sell_in_b2c: true, sell_in_b2b: false)
+          when "b2b"
+            items = items.where(sell_in_b2b: true, sell_in_b2c: false)
+          when "both"
+            items = items.where(sell_in_b2b: true, sell_in_b2c: true)
+          when "unlisted"
+            items = items.where(sell_in_b2b: false, sell_in_b2c: false)
+          end
+        end
+
+        if params[:category_id].present? && params[:category_id] != "all"
+          items = items.joins(:product).where(products: { category_id: params[:category_id] })
+        end
+
+        if params[:brand_id].present? && params[:brand_id] != "all"
+          items = items.joins(:product).where(products: { brand_id: params[:brand_id] })
+        end
+
+        if params[:dealer_id].present? && params[:dealer_id] != "all"
+          items = items.where(dealer_id: params[:dealer_id])
+        end
+
+        if params[:min_price].present?
+          items = items.joins(:product_variant).where("product_variants.dealer_selling_price >= ?", params[:min_price].to_f)
+        end
+
+        if params[:max_price].present?
+          items = items.joins(:product_variant).where("product_variants.dealer_selling_price <= ?", params[:max_price].to_f)
+        end
+
+        if params[:search].present?
+          q = "%#{params[:search].strip}%"
+          items = items.joins(:dealer, :product, :product_variant).where(
+            "dealers.dealer_code ILIKE :q OR dealers.full_name ILIKE :q OR products.name ILIKE :q OR products.sku ILIKE :q OR product_variants.variant_name ILIKE :q OR product_variants.sku ILIKE :q OR products.hsn_code ILIKE :q",
+            q: q
+          )
+        end
+
+        case params[:sort_by]
+        when "stock_asc"
+          items = items.order("dealer_products.stock_quantity ASC")
+        when "stock_desc"
+          items = items.order("dealer_products.stock_quantity DESC")
+        when "price_asc"
+          items = items.joins(:product_variant).order("product_variants.dealer_selling_price ASC")
+        when "price_desc"
+          items = items.joins(:product_variant).order("product_variants.dealer_selling_price DESC")
+        when "name_asc"
+          items = items.joins(:product).order("products.name ASC")
+        when "name_desc"
+          items = items.joins(:product).order("products.name DESC")
+        when "oldest"
+          items = items.order("dealer_products.created_at ASC")
+        else
+          items = items.order("dealer_products.created_at DESC")
+        end
+
         items = items.page(params[:page]).per(params[:per_page] || 20)
       else
         return unauthorized("Unauthorized")

@@ -6,7 +6,31 @@ module Api
     before_action :find_role, only: [:show, :update, :deactivate, :reactivate, :destroy]
 
     def index
-      roles = Role.all.order(created_at: :desc).page(params[:page]).per(params[:per_page] || 20)
+      roles = Role.all
+
+      if params[:is_active].present? && params[:is_active] != "all"
+        is_act = ActiveModel::Type::Boolean.new.cast(params[:is_active])
+        roles = roles.where(is_active: is_act)
+      end
+
+      if params[:search].present?
+        q = "%#{params[:search].strip}%"
+        roles = roles.where("name ILIKE :q OR description ILIKE :q", q: q)
+      end
+
+      case params[:sort_by]
+      when "oldest"
+        roles = roles.order(created_at: :asc)
+      when "name_asc"
+        roles = roles.order(name: :asc)
+      when "name_desc"
+        roles = roles.order(name: :desc)
+      else
+        roles = roles.order(created_at: :desc)
+      end
+
+      roles = roles.page(params[:page]).per(params[:per_page] || 20)
+
       render json: serialize_resource(roles, RoleSerializer).merge(
         meta: {
           current_page: roles.current_page,

@@ -6,7 +6,40 @@ module Api
     before_action :find_product, only: [:show, :update, :destroy]
 
     def index
-      products = Product.all.order(created_at: :desc).page(params[:page]).per(params[:per_page] || 20)
+      products = Product.includes(:category, :brand, :product_variants)
+
+      if params[:category_id].present? && params[:category_id] != "all"
+        products = products.where(category_id: params[:category_id])
+      end
+
+      if params[:brand_id].present? && params[:brand_id] != "all"
+        products = products.where(brand_id: params[:brand_id])
+      end
+
+      if params[:is_active].present? && params[:is_active] != "all"
+        is_act = ActiveModel::Type::Boolean.new.cast(params[:is_active])
+        products = products.where(is_active: is_act)
+      end
+
+      if params[:search].present?
+        q = "%#{params[:search].strip}%"
+        products = products.joins("LEFT JOIN product_variants ON product_variants.product_id = products.id")
+                           .where("products.name ILIKE :q OR products.sku ILIKE :q OR products.hsn_code ILIKE :q OR product_variants.variant_name ILIKE :q OR product_variants.sku ILIKE :q", q: q)
+                           .distinct
+      end
+
+      case params[:sort_by]
+      when "oldest"
+        products = products.order("products.created_at ASC")
+      when "name_asc"
+        products = products.order("products.name ASC")
+      when "name_desc"
+        products = products.order("products.name DESC")
+      else
+        products = products.order("products.created_at DESC")
+      end
+
+      products = products.page(params[:page]).per(params[:per_page] || 20)
       render json: serialize_resource(products, ProductSerializer, base_url: request.base_url).merge(
         meta: {
           current_page: products.current_page,

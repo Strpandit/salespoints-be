@@ -32,20 +32,41 @@ module Api
     end
 
     def all_categories
-      categories = Category.all.order(created_at: :desc).page(params[:page]).per(params[:per_page] || 20)
-      if categories.exists?
-        render json: serialize_resource(categories, CategorySerializer, base_url: request.base_url).merge(
-          meta: {
-            current_page: categories.current_page,
-            next_page: categories.next_page,
-            prev_page: categories.prev_page,
-            total_pages: categories.total_pages,
-            total_count: categories.total_count
-          },
-          message: "Categories fetched successfully" ), status: :ok
-      else
-        render json: { error: "No categories found" }, status: :not_found
+      categories = Category.includes(:brands)
+
+      if params[:is_active].present? && params[:is_active] != "all"
+        is_act = ActiveModel::Type::Boolean.new.cast(params[:is_active])
+        categories = categories.where(is_active: is_act)
       end
+
+      if params[:search].present?
+        q = "%#{params[:search].strip}%"
+        categories = categories.where("name ILIKE :q OR slug ILIKE :q", q: q)
+      end
+
+      case params[:sort_by]
+      when "oldest"
+        categories = categories.order(created_at: :asc)
+      when "name_asc"
+        categories = categories.order(name: :asc)
+      when "name_desc"
+        categories = categories.order(name: :desc)
+      else
+        categories = categories.order(created_at: :desc)
+      end
+
+      categories = categories.page(params[:page]).per(params[:per_page] || 20)
+
+      render json: serialize_resource(categories, CategorySerializer, base_url: request.base_url).merge(
+        meta: {
+          current_page: categories.current_page,
+          next_page: categories.next_page,
+          prev_page: categories.prev_page,
+          total_pages: categories.total_pages,
+          total_count: categories.total_count
+        },
+        message: "Categories fetched successfully"
+      ), status: :ok
     end
 
     def show
