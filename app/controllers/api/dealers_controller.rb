@@ -43,7 +43,11 @@ module Api
 
       if params[:is_active].present? && params[:is_active] != "all"
         is_act = ActiveModel::Type::Boolean.new.cast(params[:is_active])
-        dealers = dealers.where(is_active: is_act)
+        dealers = dealers.left_outer_joins(:dealer_location).where(
+          "dealers.status = :act_status OR dealer_locations.is_active = :is_act",
+          act_status: is_act ? "active" : "inactive",
+          is_act: is_act
+        )
       end
 
       if params[:pincode].present?
@@ -70,21 +74,21 @@ module Api
 
       if params[:search].present?
         q = "%#{params[:search].strip}%"
-        dealers = dealers.joins("LEFT JOIN dealer_profiles ON dealer_profiles.dealer_id = dealers.id").where(
-          "dealers.first_name ILIKE :q OR dealers.last_name ILIKE :q OR dealers.full_name ILIKE :q OR dealers.email ILIKE :q OR dealers.phone ILIKE :q OR dealers.dealer_code ILIKE :q OR dealer_profiles.company_name ILIKE :q OR dealer_profiles.gst_number ILIKE :q",
+        dealers = dealers.left_outer_joins(:dealer_profile).where(
+          "dealers.first_name ILIKE :q OR dealers.last_name ILIKE :q OR dealers.email ILIKE :q OR dealers.phone ILIKE :q OR dealers.dealer_code ILIKE :q OR dealer_profiles.company_name ILIKE :q OR dealer_profiles.gst_number ILIKE :q",
           q: q
         ).distinct
       end
 
       case params[:sort_by]
       when "oldest"
-        dealers = dealers.order(created_at: :asc)
+        dealers = dealers.reorder("dealers.created_at ASC")
       when "name_asc"
-        dealers = dealers.order(full_name: :asc)
+        dealers = dealers.reorder("dealers.first_name ASC, dealers.last_name ASC")
       when "name_desc"
-        dealers = dealers.order(full_name: :desc)
+        dealers = dealers.reorder("dealers.first_name DESC, dealers.last_name DESC")
       else
-        dealers = dealers.order(created_at: :desc)
+        dealers = dealers.reorder("dealers.created_at DESC")
       end
 
       dealers = dealers.page(params[:page]).per(params[:per_page] || 20)
@@ -117,7 +121,11 @@ module Api
 
       if params[:is_active].present? && params[:is_active] != "all"
         is_act = ActiveModel::Type::Boolean.new.cast(params[:is_active])
-        dealers = dealers.where(is_active: is_act)
+        dealers = dealers.left_outer_joins(:dealer_location).where(
+          "dealers.status = :act_status OR dealer_locations.is_active = :is_act",
+          act_status: is_act ? "active" : "inactive",
+          is_act: is_act
+        )
       end
 
       if params[:pincode].present?
@@ -144,21 +152,21 @@ module Api
 
       if params[:search].present?
         q = "%#{params[:search].strip}%"
-        dealers = dealers.joins("LEFT JOIN dealer_profiles ON dealer_profiles.dealer_id = dealers.id").where(
-          "dealers.first_name ILIKE :q OR dealers.last_name ILIKE :q OR dealers.full_name ILIKE :q OR dealers.email ILIKE :q OR dealers.phone ILIKE :q OR dealers.dealer_code ILIKE :q OR dealer_profiles.company_name ILIKE :q OR dealer_profiles.gst_number ILIKE :q",
+        dealers = dealers.left_outer_joins(:dealer_profile).where(
+          "dealers.first_name ILIKE :q OR dealers.last_name ILIKE :q OR dealers.email ILIKE :q OR dealers.phone ILIKE :q OR dealers.dealer_code ILIKE :q OR dealer_profiles.company_name ILIKE :q OR dealer_profiles.gst_number ILIKE :q",
           q: q
         ).distinct
       end
 
       case params[:sort_by]
       when "oldest"
-        dealers = dealers.order(created_at: :asc)
+        dealers = dealers.reorder("dealers.created_at ASC")
       when "name_asc"
-        dealers = dealers.order(full_name: :asc)
+        dealers = dealers.reorder("dealers.first_name ASC, dealers.last_name ASC")
       when "name_desc"
-        dealers = dealers.order(full_name: :desc)
+        dealers = dealers.reorder("dealers.first_name DESC, dealers.last_name DESC")
       else
-        dealers = dealers.order(created_at: :desc)
+        dealers = dealers.reorder("dealers.created_at DESC")
       end
 
       dealers = dealers.page(params[:page]).per(params[:per_page] || 20)

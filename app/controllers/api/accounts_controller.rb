@@ -7,7 +7,7 @@ module Api
     before_action :authorize_account!, only: [:show, :update, :request_deletion, :cancel_deletion_request]
 
     def index
-      @accounts = Account.all.order(created_at: :desc)
+      @accounts = Account.all
 
       if params[:status].present? && params[:status] != "all"
         @accounts = @accounts.where(status: params[:status])
@@ -15,7 +15,11 @@ module Api
 
       if params[:email_verified].present? && params[:email_verified] != "all"
         is_ver = ActiveModel::Type::Boolean.new.cast(params[:email_verified])
-        @accounts = @accounts.where(email_verified: is_ver)
+        if is_ver
+          @accounts = @accounts.where("status = 'active' OR google_signup = true")
+        else
+          @accounts = @accounts.where("status = 'pending' AND google_signup = false")
+        end
       end
 
       if params[:date_from].present?
@@ -42,13 +46,13 @@ module Api
 
       case params[:sort_by]
       when "oldest"
-        @accounts = @accounts.order(created_at: :asc)
+        @accounts = @accounts.reorder(created_at: :asc)
       when "name_asc"
-        @accounts = @accounts.order(first_name: :asc)
+        @accounts = @accounts.reorder(first_name: :asc)
       when "name_desc"
-        @accounts = @accounts.order(first_name: :desc)
+        @accounts = @accounts.reorder(first_name: :desc)
       else
-        @accounts = @accounts.order(created_at: :desc)
+        @accounts = @accounts.reorder(created_at: :desc)
       end
 
       @accounts = @accounts.page(params[:page]).per(params[:per_page] || 20)
