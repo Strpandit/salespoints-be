@@ -1,3 +1,108 @@
+require "ostruct"
+
+class WholesalerPostCatalogWrapper
+  attr_reader :wholesaler_post, :dealer, :product, :product_variant
+
+  def initialize(wholesaler_post)
+    @wholesaler_post = wholesaler_post
+    @dealer = wholesaler_post.dealer
+
+    if wholesaler_post.dealer_product.present?
+      @product = wholesaler_post.dealer_product.product
+      @product_variant = wholesaler_post.dealer_product.product_variant
+    else
+      @product = OpenStruct.new(
+        id: "wp_#{wholesaler_post.id}",
+        name: wholesaler_post.title,
+        slug: "wholesaler-#{wholesaler_post.id}",
+        desc: wholesaler_post.body,
+        hsn_code: wholesaler_post.hsn_code,
+        average_rating: wholesaler_post.rating.to_f,
+        review_count: wholesaler_post.rating_count.to_i,
+        discount_percentage: 0,
+        brand: nil,
+        category: nil
+      )
+      @product_variant = OpenStruct.new(
+        id: "wpv_#{wholesaler_post.id}",
+        variant_name: wholesaler_post.title,
+        variant_sku: wholesaler_post.modal_no || "MOD-#{wholesaler_post.id}",
+        selling_price: wholesaler_post.price.to_f,
+        dealer_price: wholesaler_post.price.to_f,
+        dealer_selling_price: wholesaler_post.price.to_f,
+        price: wholesaler_post.price.to_f,
+        discount_percentage: 0,
+        hsn_code: wholesaler_post.hsn_code,
+        variant_attributes: []
+      )
+    end
+  end
+
+  def id
+    "wp_#{wholesaler_post.id}"
+  end
+
+  def stock_quantity
+    wholesaler_post.stock_quantity.to_i
+  end
+
+  def color_stocks
+    {}
+  end
+
+  def is_active
+    true
+  end
+
+  def approve_status
+    wholesaler_post.approve_status
+  end
+
+  def sell_in_b2b
+    true
+  end
+
+  def sell_in_b2c
+    false
+  end
+
+  def created_at
+    wholesaler_post.created_at
+  end
+
+  def updated_at
+    wholesaler_post.updated_at
+  end
+
+  def distance_km
+    wholesaler_post.respond_to?(:distance_km) ? wholesaler_post.distance_km : nil
+  end
+
+  def listing_priority
+    0
+  end
+
+  def from_wholesaler
+    true
+  end
+
+  def wholesaler_post_id
+    wholesaler_post.id
+  end
+
+  def effective_hsn_code
+    wholesaler_post.effective_hsn_code
+  end
+
+  def display_media_attachments
+    wholesaler_post.media
+  end
+
+  def display_primary_blob_id
+    wholesaler_post.media.first&.blob_id
+  end
+end
+
 class B2bShopCatalogService
   PRIORITY_WHOLESALER = 0
   PRIORITY_B2B = 1
@@ -200,27 +305,34 @@ class B2bShopCatalogService
   end
 
   def prioritize_wholesaler_matches(rows)
-    return rows if @params[:search].blank? || @search_mapping.nil?
-
-    wholesaler_mapping = @search_mapping[:wholesaler_post_ids]
-    return rows if wholesaler_mapping.empty?
-
     rows.each do |row|
-      post_id = wholesaler_mapping[row.product_id]
-      if post_id
-        row.define_singleton_method(:listing_priority) { PRIORITY_WHOLESALER }
-        row.define_singleton_method(:from_wholesaler) { true }
-        row.define_singleton_method(:wholesaler_post_id) { post_id }
-      else
-        row.define_singleton_method(:listing_priority) { PRIORITY_B2B }
-        row.define_singleton_method(:from_wholesaler) { false }
-        row.define_singleton_method(:wholesaler_post_id) { nil }
-      end
+      row.define_singleton_method(:listing_priority) { PRIORITY_B2B } unless row.respond_to?(:listing_priority)
+      row.define_singleton_method(:from_wholesaler) { false } unless row.respond_to?(:from_wholesaler)
+      row.define_singleton_method(:wholesaler_post_id) { nil } unless row.respond_to?(:wholesaler_post_id)
     end
 
-    rows.sort_by do |row|
+    return rows if @params[:search].blank? || @search_mapping.nil?
+
+    wholesaler_ids = (@search_mapping[:wholesaler_post_ids].values + (@search_mapping[:standalone_wholesaler_post_ids] || [])).uniq
+    return rows if wholesaler_ids.empty?
+
+    wholesaler_posts = WholesalerPost.visible_to_marketplace
+                                     .includes(:dealer, dealer_product: [:product, :product_variant])
+                                     .where(id: wholesaler_ids)
+
+    pincode = @params[:pincode].presence || @params[:postal_code].presence
+    wholesaler_posts = wholesaler_posts.by_pincode(pincode.to_s) if pincode.present?
+
+    wholesaler_wrappers = wholesaler_posts.map do |post|
+      WholesalerPostCatalogWrapper.new(post)
+    end
+
+    combined = wholesaler_wrappers + rows
+
+    combined.sort_by do |row|
       priority = row.respond_to?(:listing_priority) ? row.listing_priority : PRIORITY_B2B
-      [priority, row.distance_km]
+      dist = row.respond_to?(:distance_km) ? (row.distance_km || Float::INFINITY) : Float::INFINITY
+      [priority, dist]
     end
   end
 
@@ -233,3 +345,4 @@ class B2bShopCatalogService
     Kaminari.paginate_array(prioritized).page(page).per(per_page)
   end
 end
+
