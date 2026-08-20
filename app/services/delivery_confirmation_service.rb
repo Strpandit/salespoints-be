@@ -363,12 +363,14 @@ class DeliveryConfirmationService
   def create_pending_notification(confirmation)
     return unless seller.is_a?(Dealer)
 
-    DealerNotification.create!(
-      dealer: seller,
+    NotificationService.deliver(
+      recipient: seller,
+      kind: "delivery_confirmation",
       title: "Delivery Proof Required",
       message: "Please complete delivery proof form for #{@deliverable.try(:reference_number) || @deliverable.try(:order_number)}",
-      notification_type: "delivery_confirmation",
-      metadata: {
+      notifiable: @deliverable,
+      actor: @actor,
+      payload: {
         confirmation_id: confirmation.id,
         token: confirmation.token,
         deliverable_type: @deliverable.class.name,
@@ -379,12 +381,14 @@ class DeliveryConfirmationService
 
   def create_completed_notifications(confirmation)
     if seller.is_a?(Dealer)
-      DealerNotification.create!(
-        dealer: seller,
+      NotificationService.deliver(
+        recipient: seller,
+        kind: "delivery_completed",
         title: "Delivery Verified",
         message: "Order #{@deliverable.try(:reference_number) || @deliverable.try(:order_number)} delivery has been confirmed by buyer OTP.",
-        notification_type: "delivery_completed",
-        metadata: { confirmation_id: confirmation.id }
+        notifiable: @deliverable,
+        actor: @actor,
+        payload: { confirmation_id: confirmation.id }
       )
     end
   end
