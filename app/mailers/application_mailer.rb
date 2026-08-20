@@ -2,12 +2,29 @@ class ApplicationMailer < ActionMailer::Base
   default from: "SalesPoints <salespointecom@gmail.com>"
   layout "mailer"
 
-  helper_method :format_currency, :format_date, :payment_method_label, :format_address
+  helper_method :format_currency, :format_date, :payment_method_label, :format_address, :format_amount
   
   private
   
   def format_currency(amount)
     "₹#{amount.to_f.round(2)}"
+  end
+
+  def format_amount(value)
+    return "0.00" if value.blank?
+
+    parts = sprintf("%.2f", value.to_f).split(".")
+    integer_part = parts[0]
+    decimal_part = parts[1]
+
+    if integer_part.length > 3
+      last_three = integer_part[-3..]
+      other_digits = integer_part[0...-3]
+      formatted_other = other_digits.reverse.gsub(/(\d{2})(?=\d)/, '\1,').reverse
+      integer_part = "#{formatted_other},#{last_three}"
+    end
+
+    "#{integer_part}.#{decimal_part}"
   end
   
   def format_date(date)

@@ -97,7 +97,7 @@ class B2bSearchSuggestionService
   def self.find_wholesaler_posts(query, buyer_dealer, pincode)
     tokens = extract_tokens(query)
     base = WholesalerPost.visible_to_marketplace
-                         .left_outer_joins(:dealer, dealer_product: [:product, :product_variant])
+                         .left_outer_joins(dealer: :dealer_profile, dealer_product: [:product, :product_variant])
                          .where.not(dealer_id: buyer_dealer.id)
     base = base.by_pincode(pincode.to_s) if pincode.present?
 
@@ -112,7 +112,9 @@ class B2bSearchSuggestionService
         "wholesaler_posts.modal_no ILIKE :p OR " \
         "wholesaler_posts.hsn_code ILIKE :p OR " \
         "wholesaler_posts.ad_hoc_color ILIKE :p OR " \
-        "dealers.business_name ILIKE :p OR " \
+        "dealer_profiles.business_name ILIKE :p OR " \
+        "dealers.first_name ILIKE :p OR " \
+        "dealers.last_name ILIKE :p OR " \
         "dealers.dealer_code ILIKE :p OR " \
         "products.name ILIKE :p OR " \
         "products.desc ILIKE :p OR " \
@@ -132,7 +134,9 @@ class B2bSearchSuggestionService
       "wholesaler_posts.modal_no ILIKE :p OR " \
       "wholesaler_posts.hsn_code ILIKE :p OR " \
       "wholesaler_posts.ad_hoc_color ILIKE :p OR " \
-      "dealers.business_name ILIKE :p OR " \
+      "dealer_profiles.business_name ILIKE :p OR " \
+      "dealers.first_name ILIKE :p OR " \
+      "dealers.last_name ILIKE :p OR " \
       "dealers.dealer_code ILIKE :p OR " \
       "products.name ILIKE :p OR " \
       "products.desc ILIKE :p OR " \
@@ -149,7 +153,7 @@ class B2bSearchSuggestionService
                         .where("dealer_products.stock_quantity > 0")
                         .where.not(dealer_id: buyer_dealer.id)
                         .joins(:product)
-                        .left_outer_joins(:dealer)
+                        .left_outer_joins(dealer: :dealer_profile)
                         .left_outer_joins(product: [:brand, :category, :product_specifications])
                         .left_outer_joins(product_variant: :product_variant_colors)
 
@@ -171,7 +175,9 @@ class B2bSearchSuggestionService
         "product_variant_colors.color_name ILIKE :p OR " \
         "product_specifications.key ILIKE :p OR " \
         "product_specifications.value ILIKE :p OR " \
-        "dealers.business_name ILIKE :p OR " \
+        "dealer_profiles.business_name ILIKE :p OR " \
+        "dealers.first_name ILIKE :p OR " \
+        "dealers.last_name ILIKE :p OR " \
         "dealers.dealer_code ILIKE :p",
         p: pattern
       )
@@ -192,7 +198,9 @@ class B2bSearchSuggestionService
       "product_variant_colors.color_name ILIKE :p OR " \
       "product_specifications.key ILIKE :p OR " \
       "product_specifications.value ILIKE :p OR " \
-      "dealers.business_name ILIKE :p OR " \
+      "dealer_profiles.business_name ILIKE :p OR " \
+      "dealers.first_name ILIKE :p OR " \
+      "dealers.last_name ILIKE :p OR " \
       "dealers.dealer_code ILIKE :p",
       p: pattern
     ).distinct.pluck(:product_id)
