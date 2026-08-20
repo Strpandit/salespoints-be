@@ -42,6 +42,15 @@ class Order < ApplicationRecord
 
   before_validation :assign_order_number, on: :create
   before_validation :set_placed_at, on: :create
+  before_validation :sync_billing_address
+
+  private
+
+  def sync_billing_address
+    self.billing_address = shipping_address if shipping_address.present?
+  end
+
+  public
 
   scope :recent, -> { order(created_at: :desc) }
   scope :pending_b2c, -> { where(status: "pending", seller_dealer_id: nil) }

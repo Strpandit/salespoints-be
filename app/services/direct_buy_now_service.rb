@@ -8,8 +8,8 @@ class DirectBuyNowService
     @product_variant_color_id = product_variant_color_id
     @quantity = quantity.to_i.positive? ? quantity.to_i : 1
     @payment_method = payment_method.to_s.presence || "cod"
-    @billing_address = billing_address || {}
     @shipping_address = shipping_address || {}
+    @billing_address = (billing_address.presence || @shipping_address) || {}
     @pincode = pincode.to_s.strip
   end
 
@@ -162,9 +162,11 @@ class DirectBuyNowService
       }
     )
 
+    clean_session_id = payload["payment_session_id"]&.to_s&.sub(/(payment)+$/i, "")&.strip
+
     attempt.update!(
       gateway_order_reference: payload["cf_order_id"] || payload["order_id"] || payload["order_id"] || attempt.attempt_number,
-      payment_session_id: payload["payment_session_id"],
+      payment_session_id: clean_session_id,
       payment_gateway_payload: payload
     )
 

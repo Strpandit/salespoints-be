@@ -6,7 +6,7 @@ class DealerPayoutService
   COMMISSION_RATES = {
     b2c: BigDecimal("0.025"),
     b2b: BigDecimal("0.015"),
-    wholesaler: BigDecimal("0.030")
+    wholesaler: BigDecimal("0.015")
   }.freeze
 
   def initialize(dealer:)
@@ -568,6 +568,10 @@ class DealerPayoutService
   end
 
   def payout_metadata(profile, requestable, invoice_number, note)
+    default_address = @dealer.try(:addresses)&.find_by(is_default: true) || @dealer.try(:addresses)&.first
+    dealer_city = default_address&.city.presence
+    dealer_pincode = @dealer.try(:pincode).presence || default_address&.postal_code.presence
+
     {
       "dealer_id" => @dealer.id,
       "dealer_code" => @dealer.dealer_code,
@@ -577,8 +581,8 @@ class DealerPayoutService
       "business_name" => profile&.business_name,
       "business_email" => profile&.business_email,
       "business_contact_number" => profile&.business_contact_number,
-      "city" => profile&.city,
-      "pincode" => profile&.pincode,
+      "city" => dealer_city,
+      "pincode" => dealer_pincode,
       "bank_name" => profile&.bank_name,
       "bank_account_number" => profile&.bank_account_number,
       "ifsc_code" => profile&.ifsc_code,

@@ -3,8 +3,8 @@ module Api
     before_action :require_buyer!, only: [:buy_now, :download_invoice]
 
     def buy_now
-      billing_address = params[:billing_address].presence || checkout_address_payload
       shipping_address = params[:shipping_address].presence || checkout_address_payload
+      billing_address = params[:billing_address].presence || shipping_address
       payment_method = params[:payment_method].to_s.presence || "cod"
       pincode = params[:pincode].presence || shipping_address["postal_code"] || billing_address["postal_code"]
 

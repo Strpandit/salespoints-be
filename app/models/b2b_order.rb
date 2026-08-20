@@ -31,6 +31,15 @@ class B2bOrder < ApplicationRecord
 
   before_validation :assign_payment_token, on: :create
   before_validation :set_reference_number, on: :create
+  before_validation :sync_billing_address
+
+  private
+
+  def sync_billing_address
+    self.billing_address = shipping_address if shipping_address.present?
+  end
+
+  public
 
   def wholesaler_post_id
     return source_id if source_type == "WholesalerPost"
