@@ -44,6 +44,15 @@ class AdminNotificationMailer < ApplicationMailer
     )
   end
 
+  def dealer_reverification_requested(admin_email, dealer, changes = {})
+    @dealer  = dealer
+    @changes = changes
+    mail(
+      to:      admin_email,
+      subject: "⚠️ [SalesPoints] Dealer Profile Re-Verification Required – #{dealer.full_name}"
+    )
+  end
+
   def product_action(admin_email, product_name, action, dealer_name, actor, changes = {}, details = nil)
     @product_name = product_name
     @action       = action

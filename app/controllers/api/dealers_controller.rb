@@ -306,7 +306,52 @@ module Api
     def update
       normalize_verified_bank_payload!
 
+      profile_before = @dealer.dealer_profile&.attributes || {}
+      location_before = @dealer.dealer_location&.attributes || {}
+
       if @dealer.update(dealer_params)
+        is_dealer_user = current_user_type == "Dealer"
+
+        if is_dealer_user
+          dealer_changes = @dealer.saved_changes.except("updated_at", "created_at", "password_digest", "status")
+
+          profile_after = @dealer.dealer_profile&.attributes || {}
+          profile_diff = profile_before.keys.each_with_object({}) do |key, diff|
+            next if %w[updated_at created_at id dealer_id].include?(key)
+            if profile_before[key] != profile_after[key]
+              diff["profile_#{key}"] = { from: profile_before[key], to: profile_after[key] }
+            end
+          end
+
+          location_after = @dealer.dealer_location&.attributes || {}
+          location_diff = location_before.keys.each_with_object({}) do |key, diff|
+            next if %w[updated_at created_at id dealer_id].include?(key)
+            if location_before[key] != location_after[key]
+              diff["location_#{key}"] = { from: location_before[key], to: location_after[key] }
+            end
+          end
+
+          dealer_diff = dealer_changes.transform_values { |v| { from: v[0], to: v[1] } }
+          combined_diff = dealer_diff.merge(profile_diff).merge(location_diff)
+
+          bank_keys = %w[
+            profile_bank_name profile_bank_account_number profile_ifsc_code profile_account_holder_name
+            profile_bank_verification_status profile_bank_verification_reference profile_bank_verified_at
+            profile_verified_bank_name profile_verified_name_at_bank profile_last_bank_verification_error profile_bank_verification_payload
+          ]
+          non_bank_diff = combined_diff.reject { |k, _| bank_keys.include?(k.to_s) }
+
+          if non_bank_diff.present?
+            @dealer.update_columns(status: "pending")
+            notify_admins_about_dealer_reverification(@dealer, non_bank_diff)
+
+            render json: serialize_resource(@dealer, DealerSerializer, base_url: request.base_url).merge(
+              message: "Profile updated successfully. Your account is under re-verification by Admin (Status: Pending)."
+            ), status: :ok
+            return
+          end
+        end
+
         notify_admins_entity_updated(@dealer)
         render json: serialize_resource(@dealer, DealerSerializer, base_url: request.base_url).merge(message: "Dealer updated successfully"), status: :ok
       else
@@ -605,6 +650,23 @@ module Api
       changes = dealer.saved_changes.except("updated_at", "created_at", "password_digest").transform_values { |v| { from: v[0], to: v[1] } }
       get_admin_emails.each do |email|
         AdminNotificationMailer.entity_updated(email, "Dealer", dealer.full_name, current_admin, changes).deliver_later
+      end
+    end
+
+    def notify_admins_about_dealer_reverification(dealer, changes_diff)
+      AdminUser.where(status: "active").find_each do |admin|
+        NotificationService.deliver(
+          recipient: admin,
+          kind: "dealer_reverification_requested",
+          title: "Dealer Re-Verification Required",
+          message: "Dealer #{dealer.full_name} (#{dealer.dealer_profile&.business_name || 'N/A'}) updated profile details. Account status set to Pending.",
+          notifiable: dealer,
+          actor: dealer
+        )
+      end
+
+      get_admin_emails.each do |email|
+        AdminNotificationMailer.dealer_reverification_requested(email, dealer, changes_diff).deliver_later
       end
     end
 

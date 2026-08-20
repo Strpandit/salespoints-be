@@ -21,7 +21,9 @@ class WholesalerPost < ApplicationRecord
   before_validation :set_default_mf_year, on: :create
 
   scope :visible_to_marketplace, -> {
-    where(approve_status: "approved")
+    joins(:dealer)
+      .where(dealers: { deleted_at: nil, status: "active" })
+      .where(approve_status: "approved")
       .where("(wholesaler_posts.reuploaded_at >= ?) OR (wholesaler_posts.reuploaded_at IS NULL AND wholesaler_posts.created_at >= ?)", 7.days.ago, 7.days.ago)
   }
   scope :by_pincode, ->(pincode) { where("? = ANY(pincodes)", pincode) }

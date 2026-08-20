@@ -1,0 +1,72 @@
+<div style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); padding: 24px 32px; color: #ffffff;">
+  <div style="font-size: 11px; letter-spacing: 1.2px; text-transform: uppercase; color: #f59e0b; font-weight: 700;">⚠️ Admin Re-Verification Required</div>
+  <h1 style="margin: 8px 0 0; font-size: 22px; font-weight: 800; color: #ffffff;">Dealer Profile Updated — Status Pending</h1>
+</div>
+
+<div style="padding: 28px 32px; font-family: Arial, sans-serif; color: #1e293b;">
+  <div style="display: inline-block; padding: 4px 12px; background: #fef3c7; color: #b45309; border-radius: 9999px; font-size: 12px; font-weight: 700; margin-bottom: 16px;">
+    ⏳ Account Status: PENDING
+  </div>
+
+  <p style="font-size: 14px; line-height: 1.6; color: #334155; margin-bottom: 20px;">
+    Dealer <strong><%= @dealer.full_name %></strong> (Business: <strong><%= @dealer.dealer_profile&.business_name || "N/A" %></strong>) has updated their profile/location information. As per safety policies, the dealer status has been updated to <strong>PENDING</strong> and requires Admin review and re-approval.
+  </p>
+
+  <div style="padding: 16px 20px; border-radius: 12px; background: #f8fafc; border: 1px solid #e2e8f0; margin-bottom: 24px;">
+    <h3 style="font-size: 13px; font-weight: 700; color: #64748b; text-transform: uppercase; margin: 0 0 10px 0;">Dealer Overview</h3>
+    <table width="100%" cellpadding="4" cellspacing="0" style="font-size: 13px; color: #334155;">
+      <tr>
+        <td style="width: 130px; font-weight: 600; color: #64748b;">Dealer Code:</td>
+        <td style="font-weight: 700; color: #0f172a;"><%= @dealer.dealer_code %></td>
+      </tr>
+      <tr>
+        <td style="font-weight: 600; color: #64748b;">Full Name:</td>
+        <td style="font-weight: 700; color: #0f172a;"><%= @dealer.full_name %></td>
+      </tr>
+      <tr>
+        <td style="font-weight: 600; color: #64748b;">Business Name:</td>
+        <td style="font-weight: 700; color: #0f172a;"><%= @dealer.dealer_profile&.business_name || "N/A" %></td>
+      </tr>
+      <tr>
+        <td style="font-weight: 600; color: #64748b;">Email / Phone:</td>
+        <td><%= @dealer.email %> | <%= @dealer.phone %></td>
+      </tr>
+    </table>
+  </div>
+
+  <% if @changes.present? %>
+    <div style="margin-bottom: 24px;">
+      <h3 style="font-size: 14px; font-weight: 700; color: #0f172a; margin-bottom: 12px;">📝 Updated Fields (Diff)</h3>
+      <table width="100%" cellpadding="10" cellspacing="0" style="border-collapse: collapse; font-size: 13px; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
+        <thead>
+          <tr style="background: #f1f5f9; color: #475569; text-align: left;">
+            <th style="border-bottom: 1px solid #e2e8f0; padding: 10px;">Field</th>
+            <th style="border-bottom: 1px solid #e2e8f0; padding: 10px;">Previous Value</th>
+            <th style="border-bottom: 1px solid #e2e8f0; padding: 10px;">Updated Value</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% @changes.each do |field, diff| %>
+            <tr style="border-bottom: 1px solid #f1f5f9;">
+              <td style="padding: 10px; font-weight: 600; color: #334155;"><%= field.to_s.humanize %></td>
+              <td style="padding: 10px; color: #94a3b8;"><%= diff[:from].presence || diff["from"].presence || "—" %></td>
+              <td style="padding: 10px; font-weight: 700; color: #059669;"><%= diff[:to].presence || diff["to"].presence || "—" %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  <% end %>
+
+  <div style="padding: 14px 18px; border-radius: 8px; background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; font-size: 13px; line-height: 1.5; margin-bottom: 24px;">
+    💡 <strong>Note for Admin:</strong> All products and wholesaler posts from this dealer are currently hidden from buyers. Once you verify these profile changes and click <strong>Approve</strong> in the Admin Dashboard, the dealer's account status will revert to <strong>ACTIVE</strong> and all live products will reappear automatically.
+  </div>
+
+  <div style="padding: 12px 16px; border-radius: 8px; background: #f1f5f9; font-size: 12px; color: #64748b; border: 1px solid #e2e8f0;">
+    🕐 <strong>Requested At:</strong> <%= Time.current.strftime("%d %b %Y, %I:%M %p %Z") %>
+  </div>
+
+  <div style="margin-top: 24px; pt: 16px; border-top: 1px solid #f1f5f9; font-size: 12px; color: #94a3b8; text-align: center;">
+    This is an automated re-verification alert from <strong>SalesPoints India Pvt. Ltd.</strong>
+  </div>
+</div>
