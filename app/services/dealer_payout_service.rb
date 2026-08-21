@@ -17,6 +17,7 @@ class DealerPayoutService
     process_cod_commission_deductions!
 
     online_net_earned = calculate_total_net_online_sales
+    cod_gross = calculate_total_gross_cod_sales
     cod_deduction_total = calculate_total_cod_deductions
 
     total_earnings = [online_net_earned - cod_deduction_total, 0.to_d].max.round(2)
@@ -25,7 +26,11 @@ class DealerPayoutService
     paid_balance = @dealer.dealer_payouts.where(status: "paid").sum(:amount).to_d.round(2)
 
     eligible_rows = eligible_orders
-    eligible_online_net = eligible_rows.sum { |row| BigDecimal(row[:net_payout_amount].to_s) }
+    eligible_online_rows = eligible_rows.select { |r| r[:payment_method].to_s.downcase != "cod" }
+    eligible_cod_rows = eligible_rows.select { |r| r[:payment_method].to_s.downcase == "cod" }
+
+    eligible_online_net = eligible_online_rows.sum { |row| BigDecimal(row[:net_payout_amount].to_s) }
+    eligible_cod_commission = eligible_cod_rows.sum { |row| BigDecimal(row[:commission_fee].to_s) }
 
     available_balance = [eligible_online_net, 0.to_d].max.round(2)
 
@@ -34,6 +39,11 @@ class DealerPayoutService
       available_balance: available_balance.to_f,
       pending_payout: pending_payout.to_f,
       paid_balance: paid_balance.to_f,
+      prepaid_total_earnings: online_net_earned.to_f,
+      prepaid_available_balance: eligible_online_net.to_f,
+      postpaid_total_earnings: cod_gross.to_f,
+      postpaid_commission_owed: cod_deduction_total.to_f,
+      postpaid_available_balance: eligible_cod_commission.to_f,
       dealer_status: @dealer.status,
       bank_verified: @dealer.dealer_profile&.bank_verified? || false,
       eligible_orders_count: eligible_rows.length
@@ -47,7 +57,7 @@ class DealerPayoutService
       .includes(:buyer, :seller_dealer, :return_requests)
       .where(seller_dealer_id: @dealer.id)
       .where(status: PAYOUT_READY_ORDER_STATUSES)
-      .where(payment_status: PAYOUT_READY_PAYMENT_STATUSES)
+      .where("payment_status = 'paid' OR payment_method = 'cod'")
       .where("delivered_at IS NOT NULL AND delivered_at <= ?", 48.hours.ago)
       .order(delivered_at: :desc)
 
@@ -55,7 +65,7 @@ class DealerPayoutService
       .includes(:buyer_dealer, :seller_dealer, :return_requests)
       .where(seller_dealer_id: @dealer.id)
       .where(status: PAYOUT_READY_ORDER_STATUSES)
-      .where(payment_status: PAYOUT_READY_PAYMENT_STATUSES)
+      .where("payment_status = 'paid' OR payment_method = 'cod'")
       .where("delivered_at IS NOT NULL AND delivered_at <= ?", 48.hours.ago)
       .order(delivered_at: :desc)
 
@@ -93,6 +103,12 @@ class DealerPayoutService
         end
         seen_keys.add(key)
         target_orders << ord
+      end
+
+      # Validate that orders do not mix Prepaid (Online) and Postpaid (COD) payment modes
+      payment_modes = target_orders.map { |o| o.try(:payment_method).to_s.downcase == "cod" ? "cod" : "online" }.uniq
+      if payment_modes.length > 1
+        raise StandardError, "Cannot mix Prepaid (Online) and Postpaid (COD) orders in a single payout request. Please submit separate requests for Online and COD orders."
       end
     elsif order_id.present?
       ord = find_requestable(order_id: order_id, order_type: order_type)
@@ -453,12 +469,11 @@ class DealerPayoutService
   end
 
   def append_eligible_order(collection, requestable, claimed_keys: nil)
-    return if requestable.try(:payment_method).to_s.downcase == "cod"
-
     eligibility = payout_eligibility_for(requestable, claimed_keys: claimed_keys)
     return unless eligibility[:eligible]
 
     breakdown = calculate_order_financials(requestable)
+    pm = requestable.try(:payment_method).to_s.presence || "online"
 
     collection << {
       order_id: requestable.id,
@@ -467,6 +482,8 @@ class DealerPayoutService
       reference_number: request_reference(requestable),
       flow_type: requestable_flow(requestable),
       buyer_name: buyer_name_for(requestable),
+      payment_method: pm,
+      is_cod: pm.downcase == "cod",
       gross_amount: breakdown[:gross_amount].to_f,
       commission_rate: (breakdown[:commission_rate] * 100).to_f,
       commission_fee: breakdown[:commission_fee].to_f,
@@ -481,9 +498,13 @@ class DealerPayoutService
     return { eligible: false, reason: "Order not found" } if requestable.blank?
     return { eligible: false, reason: "Unauthorized seller" } unless requestable.try(:seller_dealer_id) == @dealer.id
     return { eligible: false, reason: "Order must be delivered or replacement delivered" } unless requestable.status.to_s.in?(PAYOUT_READY_ORDER_STATUSES)
-    return { eligible: false, reason: "Order payment must be verified as paid" } unless requestable.payment_status.to_s.in?(PAYOUT_READY_PAYMENT_STATUSES)
+    
+    is_cod = requestable.try(:payment_method).to_s.downcase == "cod"
+    unless is_cod || requestable.payment_status.to_s.in?(PAYOUT_READY_PAYMENT_STATUSES)
+      return { eligible: false, reason: "Order payment must be verified as paid" }
+    end
+
     return { eligible: false, reason: "Order is in the 48-hour hold window" } if requestable.delivered_at.blank? || requestable.delivered_at > 48.hours.ago
-    return { eligible: false, reason: "COD orders cannot be directly requested for payout" } if requestable.try(:payment_method).to_s.downcase == "cod"
     return { eligible: false, reason: "Replacement request open" } if replacement_request_open?(requestable)
 
     order_key = "#{requestable.is_a?(Order) ? 'order' : 'b2b_order'}:#{requestable.id}"
@@ -491,6 +512,18 @@ class DealerPayoutService
     return { eligible: false, reason: "Payout request already exists or order already paid" } if is_claimed
 
     { eligible: true }
+  end
+
+  def calculate_total_gross_cod_sales
+    cod_orders = Order
+      .where(seller_dealer_id: @dealer.id)
+      .where(status: PAYOUT_READY_ORDER_STATUSES)
+      .where(payment_method: "cod")
+      .where("delivered_at IS NOT NULL AND delivered_at <= ?", 48.hours.ago)
+
+    total = 0.to_d
+    cod_orders.each { |o| total += gross_amount_for(o) }
+    total.round(2)
   end
 
   def gross_amount_for(requestable)
