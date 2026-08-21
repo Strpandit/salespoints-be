@@ -508,16 +508,19 @@ class B2bOrderDealerResponseService
   end
 
   def create_buyer_notification(order, status)
-    buyer = order.buyer_dealer
-    
+    buyer = order.is_a?(B2bOrder) ? order.buyer_dealer : order.buyer
+    return unless buyer.present?
+
+    ref_num = order.respond_to?(:reference_number) && order.reference_number.present? ? order.reference_number : order.try(:order_number)
+
     if status == "accepted"
       title = "✅ Request Accepted!"
       message = "Your request has been accepted. Please complete payment."
-      kind = "b2b_order_accepted"
+      kind = order.is_a?(B2bOrder) ? "b2b_order_accepted" : "b2c_order_accepted"
     else
       title = "❌ Request Rejected"
       message = "Your request has been rejected."
-      kind = "b2b_order_rejected"
+      kind = order.is_a?(B2bOrder) ? "b2b_order_rejected" : "b2c_order_rejected"
     end
 
     NotificationService.deliver(
@@ -530,7 +533,7 @@ class B2bOrderDealerResponseService
       visible_in_app: true,
       delivery_channels: { push: true, whatsapp: false, sms: false, email: true, in_app: true },
       payload: {
-        order_id: order.reference_number,
+        order_id: ref_num,
         dealer_id: @dealer.id,
         status: status,
         total_amount: order.total_amount.to_f
@@ -557,8 +560,11 @@ class B2bOrderDealerResponseService
   end
 
   def notify_buyer_of_rejection(order)
-    buyer = order.buyer_dealer
-    phone = buyer.phone.presence || order.shipping_address&.dig("phone")
+    buyer = order.is_a?(B2bOrder) ? order.buyer_dealer : order.buyer
+    return unless buyer.present?
+
+    phone = buyer.try(:phone).presence || order.shipping_address&.dig("phone")
+    country_code = buyer.try(:country_code) || "+91"
 
     message = <<~TEXT
       ❌ *Request Rejected*
@@ -569,7 +575,7 @@ class B2bOrderDealerResponseService
     TEXT
 
     MetaWhatsappCloudService.new.send_text_message(
-      to: formatted_phone(phone, buyer.country_code),
+      to: formatted_phone(phone, country_code),
       body: message
     )
   end
