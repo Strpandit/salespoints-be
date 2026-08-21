@@ -148,6 +148,10 @@ class Order < ApplicationRecord
     payment_status == "paid"
   end
 
+  def delivered?
+    status == "delivered" || delivered_at.present?
+  end
+
   def replacement_requested?
     return_requests.where(request_type: "replacement").exists?
   end

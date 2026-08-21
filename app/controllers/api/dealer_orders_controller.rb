@@ -132,7 +132,8 @@ module Api
       end
 
       retail_order = current_dealer.sales_orders.find_by(id: order_id) ||
-                     current_dealer.orders.find_by(id: order_id)
+                     current_dealer.orders.find_by(id: order_id) ||
+                     Order.joins(:order_offers).where(order_offers: { dealer_id: current_dealer.id }).find_by(id: order_id)
 
       if retail_order.present?
         source_tab = retail_order.seller_dealer_id == current_dealer.id ? (retail_order.status == "pending" ? "incoming" : "accepted") : "outgoing"
@@ -178,9 +179,19 @@ module Api
         results << transform_b2b_order(o, "incoming")
       end
 
-      b2c_orders = current_dealer.sales_orders
-                                  .where(status: "pending")
-                                  .includes(:buyer, :order_items)
+      b2c_offers_orders = current_dealer.order_offers
+                                         .open_state
+                                         .includes(order: [:buyer, :order_items])
+                                         .map(&:order)
+                                         .compact
+                                         .uniq
+                                         .select { |o| o.status == "pending" }
+
+      direct_b2c_orders = current_dealer.sales_orders
+                                         .where(status: "pending")
+                                         .includes(:buyer, :order_items)
+
+      b2c_orders = (b2c_offers_orders + direct_b2c_orders).uniq
       
       b2c_orders.each do |o|
         results << transform_retail_order(o, "incoming")
@@ -320,49 +331,51 @@ module Api
         "Customer"
       end
 
-      {
-        id: order.id,
-        type: "retail",
-        tab: source_tab,
-        source_type: "retail",
-        reference_number: order.order_number,
-        status: order.status,
-        display_status: meta[:label],
-        status_color: meta[:color],
-        status_bg: meta[:bg],
-        total_amount: order.total_amount.to_f,
-        subtotal_amount: order.subtotal_amount.to_f,
-        tax_amount: order.tax_amount.to_f,
-        payment_method: order.payment_method || "cod",
-        payment_status: order.payment_status || "pending",
-        buyer_name: buyer_name,
-        buyer_id: order.buyer_id,
-        buyer_type: order.buyer_type,
-        seller_name: order.seller_dealer&.dealer_code || order.seller_dealer&.full_name || "Dealer",
-        seller_id: order.seller_dealer_id,
-        billing_address: order.billing_address,
-        shipping_address: order.shipping_address,
-        created_at: order.created_at.iso8601,
-        placed_at: order.placed_at&.iso8601,
-        processing_at: order.processing_at&.iso8601,
-        shipped_at: order.shipped_at&.iso8601,
-        delivered_at: order.delivered_at&.iso8601,
-        cancelled_at: order.cancelled_at&.iso8601,
-        settlement_status: order.settlement_status || "on_hold",
-        seller_settlement_amount: order.seller_settlement_amount.to_f,
-        refund_amount: order.refund_amount.to_f,
-        refund_status: order.refund_status || "none",
-        items: order.order_items.map { |item| transform_retail_item(item) },
-        delivery_confirmation: is_seller && order.delivery_confirmation ? delivery_confirmation_payload(order.delivery_confirmation) : nil,
-        replacement_delivery_confirmation: is_seller && order.replacement_delivery_confirmation ? delivery_confirmation_payload(order.replacement_delivery_confirmation) : nil,
-        replacement_request: replacement_request.present? ? ReturnRequestSerializer.new(replacement_request, base_url: request.base_url).serializable_hash : nil,
-        can_accept: is_seller && order.status == "pending",
-        can_reject: is_seller && order.status == "pending",
-        can_request_replacement: is_buyer && order.replacement_allowed?,
-        can_manage_replacement: is_seller && replacement_request.present? && replacement_request.open?,
-        can_update: (order.can_transition_to?("processing") || order.can_transition_to?("shipped")) && order.seller_dealer_id == current_dealer.id,
-        next_status: order.status == "pending" ? "processing" : (order.status == "processing" ? "shipped" : nil)
-      }
+        has_open_offer = current_dealer.order_offers.where(order_id: order.id, status: "open").exists?
+
+        {
+          id: order.id,
+          type: "retail",
+          tab: source_tab,
+          source_type: "retail",
+          reference_number: order.order_number,
+          status: order.status,
+          display_status: meta[:label],
+          status_color: meta[:color],
+          status_bg: meta[:bg],
+          total_amount: order.total_amount.to_f,
+          subtotal_amount: order.subtotal_amount.to_f,
+          tax_amount: order.tax_amount.to_f,
+          payment_method: order.payment_method || "cod",
+          payment_status: order.payment_status || "pending",
+          buyer_name: buyer_name,
+          buyer_id: order.buyer_id,
+          buyer_type: order.buyer_type,
+          seller_name: order.seller_dealer&.dealer_code || order.seller_dealer&.full_name || "Dealer",
+          seller_id: order.seller_dealer_id,
+          billing_address: order.billing_address,
+          shipping_address: order.shipping_address,
+          created_at: order.created_at.iso8601,
+          placed_at: order.placed_at&.iso8601,
+          processing_at: order.processing_at&.iso8601,
+          shipped_at: order.shipped_at&.iso8601,
+          delivered_at: order.delivered_at&.iso8601,
+          cancelled_at: order.cancelled_at&.iso8601,
+          settlement_status: order.settlement_status || "on_hold",
+          seller_settlement_amount: order.seller_settlement_amount.to_f,
+          refund_amount: order.refund_amount.to_f,
+          refund_status: order.refund_status || "none",
+          items: order.order_items.map { |item| transform_retail_item(item) },
+          delivery_confirmation: is_seller && order.delivery_confirmation ? delivery_confirmation_payload(order.delivery_confirmation) : nil,
+          replacement_delivery_confirmation: is_seller && order.replacement_delivery_confirmation ? delivery_confirmation_payload(order.replacement_delivery_confirmation) : nil,
+          replacement_request: replacement_request.present? ? ReturnRequestSerializer.new(replacement_request, base_url: request.base_url).serializable_hash : nil,
+          can_accept: !is_buyer && order.status == "pending" && (is_seller || order.seller_dealer_id.nil? || has_open_offer),
+          can_reject: !is_buyer && order.status == "pending" && (is_seller || order.seller_dealer_id.nil? || has_open_offer),
+          can_request_replacement: is_buyer && order.replacement_allowed?,
+          can_manage_replacement: is_seller && replacement_request.present? && replacement_request.open?,
+          can_update: (order.can_transition_to?("processing") || order.can_transition_to?("shipped")) && order.seller_dealer_id == current_dealer.id,
+          next_status: order.status == "pending" ? "processing" : (order.status == "processing" ? "shipped" : nil)
+        }
     end
 
     def transform_b2b_item(item)

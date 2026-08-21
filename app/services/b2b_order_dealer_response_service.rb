@@ -561,23 +561,20 @@ class B2bOrderDealerResponseService
 
   def notify_buyer_of_rejection(order)
     buyer = order.is_a?(B2bOrder) ? order.buyer_dealer : order.buyer
-    return unless buyer.present?
+    phone = buyer.try(:phone).presence || order.shipping_address&.dig("phone") || order.shipping_address&.dig("phone_number")
+    return if phone.blank?
 
-    phone = buyer.try(:phone).presence || order.shipping_address&.dig("phone")
     country_code = buyer.try(:country_code) || "+91"
+    order_num = order.respond_to?(:reference_number) && order.reference_number.present? ? order.reference_number : order.try(:order_number)
 
-    message = <<~TEXT
-      ❌ *Request Rejected*
-
-      Your request has been rejected.
-
-      You can try with other sellers.
-    TEXT
+    message = "❌ Your order ##{order_num} has been rejected by the seller. You can try placing a new request."
 
     MetaWhatsappCloudService.new.send_text_message(
       to: formatted_phone(phone, country_code),
       body: message
     )
+  rescue StandardError => e
+    Rails.logger.error "notify_buyer_of_rejection failed: #{e.message}"
   end
 
   def send_payment_success_to_buyer(order)

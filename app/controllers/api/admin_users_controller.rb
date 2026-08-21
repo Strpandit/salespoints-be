@@ -101,7 +101,7 @@ module Api
       if params[:search].present?
         q = "%#{params[:search].strip}%"
         admins = admins.where(
-          "admin_users.first_name ILIKE :q OR admin_users.last_name ILIKE :q OR admin_users.full_name ILIKE :q OR admin_users.email ILIKE :q OR admin_users.phone ILIKE :q OR admin_users.aadhar_number ILIKE :q OR admin_users.pan_number ILIKE :q",
+          "admin_users.first_name ILIKE :q OR admin_users.last_name ILIKE :q OR admin_users.email ILIKE :q OR admin_users.phone ILIKE :q OR admin_users.aadhar_number ILIKE :q OR admin_users.pan_number ILIKE :q",
           q: q
         )
       end

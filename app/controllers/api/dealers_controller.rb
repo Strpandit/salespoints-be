@@ -75,7 +75,7 @@ module Api
       if params[:search].present?
         q = "%#{params[:search].strip}%"
         dealers = dealers.left_outer_joins(:dealer_profile).where(
-          "dealers.first_name ILIKE :q OR dealers.last_name ILIKE :q OR dealers.email ILIKE :q OR dealers.phone ILIKE :q OR dealers.dealer_code ILIKE :q OR dealer_profiles.company_name ILIKE :q OR dealer_profiles.gst_number ILIKE :q",
+          "dealers.first_name ILIKE :q OR dealers.last_name ILIKE :q OR dealers.email ILIKE :q OR dealers.phone ILIKE :q OR dealers.dealer_code ILIKE :q OR dealer_profiles.business_name ILIKE :q OR dealer_profiles.gst_number ILIKE :q",
           q: q
         ).distinct
       end

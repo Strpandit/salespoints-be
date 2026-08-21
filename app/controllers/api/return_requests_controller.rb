@@ -192,13 +192,16 @@ module Api
 
       case requestable
       when Order
-        current_account.present? &&
-          requestable.buyer_type == "Account" &&
-          requestable.buyer_id == current_account.id
+        if requestable.buyer_type == "Account"
+          current_account.present? && requestable.buyer_id == current_account.id
+        elsif requestable.buyer_type == "Dealer"
+          current_dealer.present? && requestable.buyer_id == current_dealer.id
+        else
+          false
+        end
 
       when B2bOrder
-        current_dealer.present? &&
-          requestable.buyer_dealer_id == current_dealer.id
+        current_dealer.present? && requestable.buyer_dealer_id == current_dealer.id
 
       else
         false

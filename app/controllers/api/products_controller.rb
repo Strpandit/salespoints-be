@@ -24,7 +24,7 @@ module Api
       if params[:search].present?
         q = "%#{params[:search].strip}%"
         products = products.joins("LEFT JOIN product_variants ON product_variants.product_id = products.id")
-                           .where("products.name ILIKE :q OR products.sku ILIKE :q OR products.hsn_code ILIKE :q OR product_variants.variant_name ILIKE :q OR product_variants.sku ILIKE :q", q: q)
+                           .where("products.name ILIKE :q OR products.sku ILIKE :q OR products.hsn_code ILIKE :q OR product_variants.variant_sku ILIKE :q", q: q)
                            .distinct
       end
 

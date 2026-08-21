@@ -15,7 +15,7 @@ module Api
 
       if params[:search].present?
         q = "%#{params[:search].strip}%"
-        roles = roles.where("name ILIKE :q OR description ILIKE :q", q: q)
+        roles = roles.where("name ILIKE :q", q: q)
       end
 
       case params[:sort_by]

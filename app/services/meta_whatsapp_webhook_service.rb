@@ -378,7 +378,7 @@ class MetaWhatsappWebhookService
     begin
       case action
       when "accept"
-        unless return_request.status == "requested"
+        unless return_request.status.in?(%w[requested partially_replacement_requested])
           send_text_acknowledgement(to: from, message: "ℹ️ Replacement request is already #{return_request.status.humanize.downcase}.")
           return
         end
@@ -393,7 +393,7 @@ class MetaWhatsappWebhookService
         send_text_acknowledgement(to: from, message: "✅ Replacement request ##{return_request.id} approved! Click 'Mark Shipped' when dispatched.")
 
       when "reject"
-        unless return_request.status == "requested"
+        unless return_request.status.in?(%w[requested partially_replacement_requested])
           send_text_acknowledgement(to: from, message: "ℹ️ Replacement request is already #{return_request.status.humanize.downcase}.")
           return
         end

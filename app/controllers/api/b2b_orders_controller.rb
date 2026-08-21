@@ -159,15 +159,18 @@ module Api
     end
 
     def download_invoice
-      return render json: { error: "Unauthorized" }, status: :unauthorized unless current_dealer.present?
-      
-      order = Order.find_by(id: params[:id], buyer_id: current_dealer.id, buyer_type: 'Dealer')
-      order ||= B2bOrder.find_by(id: params[:id], buyer_dealer_id: current_dealer.id)
-      # order = Order.includes(:buyer, :seller_dealer, order_items: { product_variant: :product })
-      #           .find_by(id: params[:id], buyer: current_dealer)
+      return render json: { error: "Unauthorized" }, status: :unauthorized unless current_dealer.present? || current_admin.present?
 
-      # order ||= B2bOrder.includes(:buyer_dealer, :seller_dealer, b2b_order_items: { product_variant: :product }).find_by(id: params[:id], buyer_dealer_id: current_dealer.id)
-        
+      order =
+        if current_admin
+          B2bOrder.find_by(id: params[:id]) || Order.find_by(id: params[:id])
+        else
+          current_dealer.buyer_b2b_orders.find_by(id: params[:id]) ||
+          current_dealer.seller_b2b_orders.find_by(id: params[:id]) ||
+          current_dealer.sales_orders.find_by(id: params[:id]) ||
+          current_dealer.orders.find_by(id: params[:id])
+        end
+
       return render json: { error: "Order not found" }, status: :not_found unless order
       unless %w[delivered replacement_requested replacement_approved replacement_shipped replacement_delivered].include?(order.status)
         return render json: { error: "Invoice can only be generated for delivered orders" }, status: :unprocessable_entity

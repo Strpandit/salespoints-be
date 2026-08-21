@@ -143,7 +143,7 @@ module Api
         if params[:search].present?
           q = "%#{params[:search].strip}%"
           items = items.where(
-            "dealers.dealer_code ILIKE :q OR dealers.full_name ILIKE :q OR products.name ILIKE :q OR products.sku ILIKE :q OR product_variants.variant_name ILIKE :q OR product_variants.sku ILIKE :q OR products.hsn_code ILIKE :q",
+            "dealers.dealer_code ILIKE :q OR dealers.first_name ILIKE :q OR dealers.last_name ILIKE :q OR dealers.email ILIKE :q OR products.name ILIKE :q OR products.sku ILIKE :q OR product_variants.variant_sku ILIKE :q OR products.hsn_code ILIKE :q",
             q: q
           )
         end

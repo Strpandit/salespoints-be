@@ -51,6 +51,7 @@ class ReturnRequestTransitionService
   def allowed_statuses
     {
       "requested" => %w[approved rejected cancelled],
+      "partially_replacement_requested" => %w[approved rejected cancelled],
       "approved"  => %w[in_transit cancelled],
       "in_transit" => %w[received cancelled],
       "received"   => %w[completed],

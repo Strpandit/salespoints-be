@@ -51,7 +51,7 @@ module Api
       if params[:search].present?
         q = "%#{params[:search].strip}%"
         posts = posts.joins(:dealer).where(
-          "wholesaler_posts.title ILIKE :q OR wholesaler_posts.desc ILIKE :q OR dealers.dealer_code ILIKE :q OR dealers.full_name ILIKE :q",
+          "wholesaler_posts.title ILIKE :q OR wholesaler_posts.body ILIKE :q OR dealers.dealer_code ILIKE :q OR dealers.first_name ILIKE :q OR dealers.last_name ILIKE :q",
           q: q
         )
       end
@@ -152,7 +152,7 @@ module Api
       if params[:search].present?
         q = "%#{params[:search].strip}%"
         scope = scope.joins(:dealer).where(
-          "wholesaler_posts.title ILIKE :q OR wholesaler_posts.desc ILIKE :q OR dealers.dealer_code ILIKE :q OR dealers.full_name ILIKE :q",
+          "wholesaler_posts.title ILIKE :q OR wholesaler_posts.body ILIKE :q OR dealers.dealer_code ILIKE :q OR dealers.first_name ILIKE :q OR dealers.last_name ILIKE :q",
           q: q
         )
       end
