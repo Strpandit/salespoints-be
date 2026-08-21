@@ -119,10 +119,10 @@ module Api
       b2b_orders = B2bOrder.where(seller_dealer_id: dealer.id, created_at: date_range)
       prev_b2b = B2bOrder.where(seller_dealer_id: dealer.id, created_at: previous_range)
 
-      valid_b2b_orders = b2b_orders.where.not(status: %w[cancelled pending_request rejected_request expired_request])
-                                   .where.not(request_status: %w[rejected_request expired_request])
-      valid_prev_b2b   = prev_b2b.where.not(status: %w[cancelled pending_request rejected_request expired_request])
-                                 .where.not(request_status: %w[rejected_request expired_request])
+      valid_b2b_orders = b2b_orders.where.not(status: %w[cancelled pending_request pending_payment rejected_request expired_request])
+                                   .where.not(request_status: %w[rejected_request expired_request pending_request])
+      valid_prev_b2b   = prev_b2b.where.not(status: %w[cancelled pending_request pending_payment rejected_request expired_request])
+                                 .where.not(request_status: %w[rejected_request expired_request pending_request])
 
       b2c_revenue = valid_b2c_orders.sum(:total_amount).to_f
       b2b_revenue = valid_b2b_orders.sum(:total_amount).to_f
@@ -307,8 +307,8 @@ module Api
                  .group("DATE(created_at)")
                  .sum(:total_amount)
       b2b = B2bOrder.where(seller_dealer_id: dealer_id, created_at: date_range)
-                    .where.not(status: %w[cancelled pending_request rejected_request expired_request])
-                    .where.not(request_status: %w[rejected_request expired_request])
+                    .where.not(status: %w[cancelled pending_request pending_payment rejected_request expired_request])
+                    .where.not(request_status: %w[rejected_request expired_request pending_request])
                     .group("DATE(created_at)")
                     .sum(:total_amount)
 
@@ -477,8 +477,8 @@ module Api
                               .joins("INNER JOIN dealer_products ON dealer_products.id = b2b_order_items.dealer_product_id")
                               .joins("INNER JOIN products ON products.id = dealer_products.product_id")
                               .where(b2b_orders: { created_at: date_range, seller_dealer_id: dealer_id })
-                              .where.not(b2b_orders: { status: %w[cancelled pending_request rejected_request expired_request] })
-                              .where.not(b2b_orders: { request_status: %w[rejected_request expired_request] })
+                              .where.not(b2b_orders: { status: %w[cancelled pending_request pending_payment rejected_request expired_request] })
+                              .where.not(b2b_orders: { request_status: %w[rejected_request expired_request pending_request] })
                               .group("products.name")
                               .select("products.name as product_title, SUM(b2b_order_items.quantity) as units_total, SUM(b2b_order_items.total_price) as revenue_total")
       
