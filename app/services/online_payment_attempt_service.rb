@@ -15,7 +15,6 @@ class OnlinePaymentAttemptService
     payment_data = {}
 
     ActiveRecord::Base.transaction do
-      # validate_coupon!
 
       attempt = PaymentAttempt.create!(
         buyer: @buyer,
@@ -30,7 +29,6 @@ class OnlinePaymentAttemptService
       )
 
       payload = CashfreeService.new.create_payment_attempt(attempt: attempt, customer: @buyer)
-      # clean_session_id = payload["payment_session_id"]&.to_s&.sub(/(payment)+$/i, "")&.strip
       attempt.update!(
         gateway_order_reference: payload["cf_order_id"] || payload["order_id"] || attempt.attempt_number,
         payment_session_id: payload["payment_session_id"],

@@ -41,7 +41,6 @@ class ReplacementRequestNotificationService
     def decode_token(token)
       return nil if token.blank?
 
-      # Fallback for old MessageVerifier tokens
       if token.start_with?("ey") || token.include?("--")
         purpose = token_purpose(token)
         return nil if purpose.nil?

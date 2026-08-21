@@ -229,8 +229,6 @@ class B2bOrderPaymentService
         }
       )
 
-      # clean_session_id = payload["payment_session_id"]&.to_s&.sub(/(payment)+$/i, "")&.strip
-
       attempt.update!(
         gateway_order_reference: payload["cf_order_id"] || payload["order_id"],
         payment_session_id: payload["payment_session_id"],
