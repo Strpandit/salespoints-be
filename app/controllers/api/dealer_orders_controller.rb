@@ -9,6 +9,16 @@ module Api
       orders = fetch_orders(tab)
       orders = apply_time_filter(orders, time_filter)
       
+      # Compute stats on the full tab dataset before status filtering
+      stats = {
+        total: orders.length,
+        by_status: orders.group_by { |o| o[:status] }.transform_values(&:count),
+        by_type: orders.group_by { |o| o[:type] }.transform_values(&:count),
+        by_payment: orders.group_by { |o| o[:payment_method] }.transform_values(&:count),
+        by_source: orders.group_by { |o| o[:source_type] }.transform_values(&:count),
+        total_amount: orders.sum { |o| o[:total_amount].to_f }
+      }
+
       if params[:status].present? && params[:status] != "all"
         b2b_request_statuses = %w[pending_request rejected_request accepted_request]
         if b2b_request_statuses.include?(params[:status])
@@ -86,15 +96,6 @@ module Api
       per_page = (params[:per_page] || 20).to_i
       total_count = orders.length
       paginated = orders[(page - 1) * per_page, per_page] || []
-      
-      stats = {
-        total: orders.length,
-        by_status: orders.group_by { |o| o[:status] }.transform_values(&:count),
-        by_type: orders.group_by { |o| o[:type] }.transform_values(&:count),
-        by_payment: orders.group_by { |o| o[:payment_method] }.transform_values(&:count),
-        by_source: orders.group_by { |o| o[:source_type] }.transform_values(&:count),
-        total_amount: orders.sum { |o| o[:total_amount].to_f }
-      }
       
       render json: {
         data: paginated,
@@ -207,7 +208,7 @@ module Api
                                   .where(
                                     "request_status = ? OR (request_status IS NULL AND status IN (?))", 
                                     "accepted_request", 
-                                    %w[pending_payment paid confirmed shipped delivered cancelled]
+                                    %w[pending_payment paid confirmed processing shipped delivered return_requested return_approved return_in_transit returned replacement_requested replacement_approved replacement_shipped replacement_delivered cancelled]
                                   )
                                   .includes(:buyer_dealer, :seller_dealer, :b2b_order_items)
       
@@ -216,7 +217,7 @@ module Api
       end
 
       b2c_orders = current_dealer.sales_orders
-                                  .where(status: %w[processing shipped delivered])
+                                  .where(status: %w[confirmed processing shipped delivered return_requested return_approved return_in_transit returned replacement_requested replacement_approved replacement_shipped replacement_delivered cancelled])
                                   .includes(:buyer, :order_items)
       
       b2c_orders.each do |o|
