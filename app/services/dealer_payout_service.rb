@@ -22,8 +22,15 @@ class DealerPayoutService
 
     total_earnings = [online_net_earned - cod_deduction_total, 0.to_d].max.round(2)
 
-    pending_payout = @dealer.dealer_payouts.where(status: %w[pending approved processing]).sum(:amount).to_d.round(2)
-    paid_balance = @dealer.dealer_payouts.where(status: "paid").sum(:amount).to_d.round(2)
+    all_payouts = @dealer.dealer_payouts
+    prepaid_payouts = all_payouts.reject { |p| payout_is_cod?(p) }
+    postpaid_payouts = all_payouts.select { |p| payout_is_cod?(p) }
+
+    prepaid_pending = prepaid_payouts.select { |p| p.status.in?(%w[pending approved processing]) }.sum(&:amount).to_d.round(2)
+    prepaid_paid = prepaid_payouts.select { |p| p.status == "paid" }.sum(&:amount).to_d.round(2)
+
+    postpaid_pending = postpaid_payouts.select { |p| p.status.in?(%w[pending approved processing]) }.sum(&:amount).to_d.round(2)
+    postpaid_paid = postpaid_payouts.select { |p| p.status == "paid" }.sum(&:amount).to_d.round(2)
 
     eligible_rows = eligible_orders
     eligible_online_rows = eligible_rows.select { |r| r[:payment_method].to_s.downcase != "cod" }
@@ -37,17 +44,32 @@ class DealerPayoutService
     {
       total_earnings: total_earnings.to_f,
       available_balance: available_balance.to_f,
-      pending_payout: pending_payout.to_f,
-      paid_balance: paid_balance.to_f,
+      pending_payout: (prepaid_pending + postpaid_pending).to_f,
+      paid_balance: (prepaid_paid + postpaid_paid).to_f,
       prepaid_total_earnings: online_net_earned.to_f,
       prepaid_available_balance: eligible_online_net.to_f,
+      prepaid_pending_payout: prepaid_pending.to_f,
+      prepaid_paid_balance: prepaid_paid.to_f,
       postpaid_total_earnings: cod_gross.to_f,
       postpaid_commission_owed: cod_deduction_total.to_f,
       postpaid_available_balance: eligible_cod_commission.to_f,
+      postpaid_pending_payout: postpaid_pending.to_f,
+      postpaid_paid_balance: postpaid_paid.to_f,
       dealer_status: @dealer.status,
       bank_verified: @dealer.dealer_profile&.bank_verified? || false,
       eligible_orders_count: eligible_rows.length
     }
+  end
+
+  def payout_is_cod?(payout)
+    selected = (payout.metadata || {})["selected_orders"]
+    if selected.is_a?(Array) && selected.any?
+      selected.any? { |item| (item["payment_method"] || item[:payment_method]).to_s.downcase == "cod" }
+    elsif payout.requestable.present?
+      payout.requestable.try(:payment_method).to_s.downcase == "cod"
+    else
+      false
+    end
   end
 
   def eligible_orders
