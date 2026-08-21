@@ -143,8 +143,10 @@ module Api
 
       case report_type
       when "sales", "revenue"
-        b2c = Order.where(seller_dealer_id: dealer.id, created_at: date_range).where.not(status: "cancelled")
-        b2b = B2bOrder.where(seller_dealer_id: dealer.id, created_at: date_range).where.not(status: %w[cancelled rejected_request])
+        b2c = Order.where(seller_dealer_id: dealer.id, created_at: date_range).where.not(status: %w[cancelled pending])
+        b2b = B2bOrder.where(seller_dealer_id: dealer.id, created_at: date_range)
+                      .where.not(status: %w[cancelled pending_request pending_payment rejected_request expired_request])
+                      .where.not(request_status: %w[rejected_request expired_request])
         total_orders  = b2c.count + b2b.count
         total_revenue = b2c.sum(:total_amount).to_f + b2b.sum(:total_amount).to_f
         {
