@@ -30,10 +30,10 @@ class OnlinePaymentAttemptService
       )
 
       payload = CashfreeService.new.create_payment_attempt(attempt: attempt, customer: @buyer)
-      clean_session_id = payload["payment_session_id"]&.to_s&.sub(/(payment)+$/i, "")&.strip
+      # clean_session_id = payload["payment_session_id"]&.to_s&.sub(/(payment)+$/i, "")&.strip
       attempt.update!(
         gateway_order_reference: payload["cf_order_id"] || payload["order_id"] || attempt.attempt_number,
-        payment_session_id: clean_session_id,
+        payment_session_id: payload["payment_session_id"],
         payment_gateway_payload: payload
       )
 
