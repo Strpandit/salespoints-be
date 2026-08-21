@@ -697,11 +697,17 @@ module Api
       {
         id: post.id,
         title: post.title,
+        body: post.body,
         approve_status: post.approve_status,
-        mf_year: post.mf_year,
-        is_expired: !post.visible_to_others?,
-        price: post.price,
-        stock_quantity: post.stock_quantity,
+        mf_year: post.try(:mf_year),
+        is_expired: post.respond_to?(:visible_to_others?) ? !post.visible_to_others? : false,
+        price: post.price.to_f,
+        modal_no: post.modal_no,
+        hsn_code: post.hsn_code,
+        ad_hoc_color: post.ad_hoc_color,
+        stock_quantity: post.stock_quantity.to_i,
+        pincodes: Array(post.pincodes).reject(&:blank?),
+        rejection_reason: post.rejection_reason,
         created_at: post.created_at
       }
     end

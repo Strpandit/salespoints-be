@@ -96,24 +96,38 @@ class ReturnRequestTransitionService
 
   def reserve_replacement_inventory!(request)
     request_items(request.requestable).find_each do |item|
-      if item.dealer_product_id.present?
-        dealer_product = DealerProduct.lock.find(item.dealer_product_id)
-        if dealer_product.stock_quantity.to_i < item.quantity.to_i
-          raise StandardError, "Insufficient stock for replacement"
+      dealer_product_id = item.try(:dealer_product_id)
+      wholesaler_post_id = item.try(:wholesaler_post_id)
+      product_variant_id = item.try(:product_variant_id)
+
+      if dealer_product_id.present?
+        dealer_product = DealerProduct.lock.find_by(id: dealer_product_id)
+        if dealer_product.present?
+          if dealer_product.stock_quantity.to_i < item.quantity.to_i
+            raise StandardError, "Insufficient stock for replacement"
+          end
+          dealer_product.update!(
+            stock_quantity: [dealer_product.stock_quantity.to_i - item.quantity.to_i, 0].max
+          )
         end
-        dealer_product.update!(
-          stock_quantity: dealer_product.stock_quantity.to_i - item.quantity.to_i
-        )
-      elsif item.wholesaler_post_id.present?
-        post = WholesalerPost.lock.find(item.wholesaler_post_id)
-        if post.stock_quantity.to_i < item.quantity.to_i
-          raise StandardError, "Insufficient stock for replacement"
+      elsif wholesaler_post_id.present?
+        post = WholesalerPost.lock.find_by(id: wholesaler_post_id)
+        if post.present?
+          if post.stock_quantity.to_i < item.quantity.to_i
+            raise StandardError, "Insufficient stock for replacement"
+          end
+          post.update!(
+            stock_quantity: [post.stock_quantity.to_i - item.quantity.to_i, 0].max
+          )
         end
-        post.update!(
-          stock_quantity: post.stock_quantity.to_i - item.quantity.to_i
-        )
-      else
-        raise StandardError, "No inventory source found"
+      elsif product_variant_id.present?
+        seller = request.requestable.try(:seller_dealer)
+        if seller.present?
+          dp = seller.dealer_products.lock.find_by(product_variant_id: product_variant_id)
+          if dp.present?
+            dp.update!(stock_quantity: [dp.stock_quantity.to_i - item.quantity.to_i, 0].max)
+          end
+        end
       end
     end
   end
