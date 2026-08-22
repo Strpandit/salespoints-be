@@ -221,13 +221,12 @@ class DeliveryConfirmationService
           resolution_notes: "Replacement delivered after OTP verification."
         ) rescue nil
 
-        @deliverable.update!(status: "replacement_delivered", status_note: "Replacement delivered after OTP verification.")
         ReplacementRequestNotificationService.request_completed!(request, actor: effective_actor) rescue nil
-        return
-      else
-        @deliverable.update!(status: "replacement_delivered", status_note: "Replacement delivered after OTP verification.")
-        return
       end
+
+      @deliverable.update!(status: "replacement_delivered", status_note: "Replacement delivered after OTP verification.")
+      dispatch_delivery_email!
+      return
     end
 
     case @deliverable
@@ -395,6 +394,14 @@ class DeliveryConfirmationService
 
   def send_delivery_emails
     Rails.logger.info("[DELIVERY EMAIL] Delivery confirmation completed for #{@deliverable.class.name} ##{@deliverable.id}")
+  end
+
+  def dispatch_delivery_email!
+    if @deliverable.is_a?(Order)
+      EmailDispatcherService.retail_order_delivered(@deliverable)
+    elsif @deliverable.is_a?(B2bOrder)
+      EmailDispatcherService.b2b_order_delivered(@deliverable)
+    end
   end
 
   def frontend_base_url

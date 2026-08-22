@@ -140,6 +140,7 @@ class B2bOrder < ApplicationRecord
       status_note: note.presence || status_note,
       delivered_at: delivered_at || Time.current
     )
+    EmailDispatcherService.b2b_order_delivered(self)
   end
 
   def can_accept?

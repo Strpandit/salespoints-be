@@ -33,7 +33,7 @@ class OrderLifecycleService
 
     if @order.status == "shipped"
       EmailDispatcherService.retail_order_shipped(@order)
-    elsif @order.status == "delivered"
+    elsif %w[delivered replacement_delivered].include?(@order.status)
       EmailDispatcherService.retail_order_delivered(@order)
     end
 

@@ -467,12 +467,12 @@ class InvoicePdf
         serial_text = "Serial No(s):\n" + active_delivery_confirmation.serial_numbers.join(", ")
       end
 
-      sku = item.product_variant&.variant_sku || item&.wholesaler_post&.modal_no || 'Standard'
+      sku = item.product_variant&.variant_sku || item.try(:wholesaler_post)&.modal_no || 'Standard'
       color = item.respond_to?(:product_variant_color) && item.product_variant_color ? item.product_variant_color.color_name : (item.respond_to?(:ad_hoc_color) ? item.ad_hoc_color : nil)
       color_text = color.present? ? " - #{color}" : ""
 
       left = <<~TEXT
-      <b>#{product&.name || item&.wholesaler_post&.title || 'Product'}</b>
+      <b>#{product&.name || item.try(:wholesaler_post)&.title || 'Product'}</b>
 
       #{sku}#{color_text}
 
