@@ -444,12 +444,18 @@ class DealerPayoutService
       .where(payment_method: "cod")
       .where("delivered_at IS NOT NULL AND delivered_at <= ?", 48.hours.ago)
 
-    cod_orders.each do |order|
+    b2b_cod_orders = B2bOrder
+      .where(seller_dealer_id: @dealer.id)
+      .where(status: PAYOUT_READY_ORDER_STATUSES)
+      .where(payment_method: "cod")
+      .where("delivered_at IS NOT NULL AND delivered_at <= ?", 48.hours.ago)
+
+    (cod_orders.to_a + b2b_cod_orders.to_a).each do |order|
+      ref = request_reference(order)
       already_deducted = DealerLedgerEntry.where(
         dealer_id: @dealer.id,
-        order_id: order.id,
         entry_type: "cod_commission_deduction"
-      ).exists?
+      ).where("order_id = ? OR metadata ->> 'order_id' = ? OR metadata ->> 'reference_number' = ?", (order.is_a?(Order) ? order.id : nil), order.id.to_s, ref).exists?
 
       next if already_deducted
 
@@ -462,10 +468,13 @@ class DealerPayoutService
         dealer: @dealer,
         amount: deduction_total,
         entry_type: "cod_commission_deduction",
-        description: "COD Platform Commission deduction for order #{order.order_number}",
-        order: order,
+        description: "COD Platform Commission deduction for order #{ref}",
+        order: order.is_a?(Order) ? order : nil,
         metadata: {
           order_id: order.id,
+          reference_number: ref,
+          requestable_type: order.class.name,
+          payment_method: "cod",
           gross_amount: breakdown[:gross_amount].to_f,
           commission_fee: breakdown[:commission_fee].to_f
         }
@@ -485,6 +494,7 @@ class DealerPayoutService
       .where(seller_dealer_id: @dealer.id)
       .where(status: PAYOUT_READY_ORDER_STATUSES)
       .where(payment_status: PAYOUT_READY_PAYMENT_STATUSES)
+      .where.not(payment_method: "cod")
       .where("delivered_at IS NOT NULL AND delivered_at <= ?", 48.hours.ago)
 
     total = 0.to_d
@@ -494,9 +504,27 @@ class DealerPayoutService
   end
 
   def calculate_total_cod_deductions
-    DealerLedgerEntry
+    cod_orders = Order
+      .where(seller_dealer_id: @dealer.id)
+      .where(status: PAYOUT_READY_ORDER_STATUSES)
+      .where(payment_method: "cod")
+      .where("delivered_at IS NOT NULL AND delivered_at <= ?", 48.hours.ago)
+
+    b2b_cod_orders = B2bOrder
+      .where(seller_dealer_id: @dealer.id)
+      .where(status: PAYOUT_READY_ORDER_STATUSES)
+      .where(payment_method: "cod")
+      .where("delivered_at IS NOT NULL AND delivered_at <= ?", 48.hours.ago)
+
+    total_comm = 0.to_d
+    cod_orders.each { |o| total_comm += calculate_order_financials(o)[:commission_fee] }
+    b2b_cod_orders.each { |o| total_comm += calculate_order_financials(o)[:commission_fee] }
+
+    ledger_deductions = DealerLedgerEntry
       .where(dealer_id: @dealer.id, entry_type: "cod_commission_deduction")
-      .sum(:amount).to_d.round(2)
+      .sum(:amount).to_d
+
+    [total_comm, ledger_deductions].max.round(2)
   end
 
   def append_eligible_order(collection, requestable, claimed_keys: nil)
@@ -521,7 +549,7 @@ class DealerPayoutService
       net_payout_amount: breakdown[:net_payout_amount].to_f,
       status: requestable.status,
       payment_status: requestable.payment_status,
-      delivered_at: requestable.delivered_at&.iso8601
+      delivered_at: requestable.delivered_at&.iso8601 || requestable.created_at&.iso8601
     }
   end
 
@@ -529,7 +557,7 @@ class DealerPayoutService
     return { eligible: false, reason: "Order not found" } if requestable.blank?
     return { eligible: false, reason: "Unauthorized seller" } unless requestable.try(:seller_dealer_id) == @dealer.id
     return { eligible: false, reason: "Order must be delivered or replacement delivered" } unless requestable.status.to_s.in?(PAYOUT_READY_ORDER_STATUSES)
-    
+
     is_cod = requestable.try(:payment_method).to_s.downcase == "cod"
     unless is_cod || requestable.payment_status.to_s.in?(PAYOUT_READY_PAYMENT_STATUSES)
       return { eligible: false, reason: "Order payment must be verified as paid" }
@@ -552,8 +580,15 @@ class DealerPayoutService
       .where(payment_method: "cod")
       .where("delivered_at IS NOT NULL AND delivered_at <= ?", 48.hours.ago)
 
+    b2b_cod_orders = B2bOrder
+      .where(seller_dealer_id: @dealer.id)
+      .where(status: PAYOUT_READY_ORDER_STATUSES)
+      .where(payment_method: "cod")
+      .where("delivered_at IS NOT NULL AND delivered_at <= ?", 48.hours.ago)
+
     total = 0.to_d
     cod_orders.each { |o| total += gross_amount_for(o) }
+    b2b_cod_orders.each { |o| total += gross_amount_for(o) }
     total.round(2)
   end
 
