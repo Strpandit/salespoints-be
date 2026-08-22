@@ -320,11 +320,13 @@ module Api
 
     # ─── TOP SELLERS ───────────────────────────────────────────────────────────
     def build_top_sellers(date_range)
+      ready_statuses = %w[delivered replacement_delivered]
+
       b2c_orders = Order.where(created_at: date_range, seller_dealer_id: Dealer.select(:id))
-                        .where.not(status: "cancelled")
+                        .where(status: ready_statuses)
 
       b2b_orders = B2bOrder.where(created_at: date_range)
-                           .where.not(status: %w[cancelled rejected_request])
+                           .where(status: ready_statuses)
 
       combined = {}
 
@@ -332,21 +334,31 @@ module Api
         sid = o.seller_dealer_id
         next if sid.blank?
         combined[sid] ||= {
-          orders: 0, revenue: 0.0,
-          b2c_orders: 0, b2c_revenue: 0.0,
-          b2b_orders: 0, b2b_revenue: 0.0,
-          wholesaler_orders: 0, wholesaler_revenue: 0.0,
-          online_revenue: 0.0, cod_revenue: 0.0
+          orders: 0, revenue: 0.0, commission: 0.0,
+          b2c_orders: 0, b2c_revenue: 0.0, b2c_commission: 0.0,
+          b2b_orders: 0, b2b_revenue: 0.0, b2b_commission: 0.0,
+          wholesaler_orders: 0, wholesaler_revenue: 0.0, wholesaler_commission: 0.0,
+          online_orders: 0, online_revenue: 0.0, online_commission: 0.0,
+          cod_orders: 0, cod_revenue: 0.0, cod_commission: 0.0
         }
         amt = o.total_amount.to_f
+        comm = (amt * 0.025).round(2)
+
         combined[sid][:orders] += 1
         combined[sid][:revenue] += amt
+        combined[sid][:commission] += comm
         combined[sid][:b2c_orders] += 1
         combined[sid][:b2c_revenue] += amt
+        combined[sid][:b2c_commission] += comm
+
         if o.payment_method.to_s.downcase == "cod"
+          combined[sid][:cod_orders] += 1
           combined[sid][:cod_revenue] += amt
+          combined[sid][:cod_commission] += comm
         else
+          combined[sid][:online_orders] += 1
           combined[sid][:online_revenue] += amt
+          combined[sid][:online_commission] += comm
         end
       end
 
@@ -354,29 +366,40 @@ module Api
         sid = o.seller_dealer_id
         next if sid.blank?
         combined[sid] ||= {
-          orders: 0, revenue: 0.0,
-          b2c_orders: 0, b2c_revenue: 0.0,
-          b2b_orders: 0, b2b_revenue: 0.0,
-          wholesaler_orders: 0, wholesaler_revenue: 0.0,
-          online_revenue: 0.0, cod_revenue: 0.0
+          orders: 0, revenue: 0.0, commission: 0.0,
+          b2c_orders: 0, b2c_revenue: 0.0, b2c_commission: 0.0,
+          b2b_orders: 0, b2b_revenue: 0.0, b2b_commission: 0.0,
+          wholesaler_orders: 0, wholesaler_revenue: 0.0, wholesaler_commission: 0.0,
+          online_orders: 0, online_revenue: 0.0, online_commission: 0.0,
+          cod_orders: 0, cod_revenue: 0.0, cod_commission: 0.0
         }
         amt = o.total_amount.to_f
+        is_wholesaler = (o.respond_to?(:wholesaler_post_id) && o.wholesaler_post_id.present?) || (o.is_direct_buy? && o.source_type == "WholesalerPost")
+        rate = 0.015 # 1.5% for both B2B and Wholesaler
+        comm = (amt * rate).round(2)
+
         combined[sid][:orders] += 1
         combined[sid][:revenue] += amt
+        combined[sid][:commission] += comm
 
-        is_wholesaler = (o.is_direct_buy? && o.source_type == "WholesalerPost")
         if is_wholesaler
           combined[sid][:wholesaler_orders] += 1
           combined[sid][:wholesaler_revenue] += amt
+          combined[sid][:wholesaler_commission] += comm
         else
           combined[sid][:b2b_orders] += 1
           combined[sid][:b2b_revenue] += amt
+          combined[sid][:b2b_commission] += comm
         end
 
         if o.payment_method.to_s.downcase == "cod"
+          combined[sid][:cod_orders] += 1
           combined[sid][:cod_revenue] += amt
+          combined[sid][:cod_commission] += comm
         else
+          combined[sid][:online_orders] += 1
           combined[sid][:online_revenue] += amt
+          combined[sid][:online_commission] += comm
         end
       end
 
@@ -386,19 +409,27 @@ module Api
         d = dealers[dealer_id]
         next unless d
         {
-          id:                 d.id,
-          name:               d.dealer_profile&.business_name.presence || [d.first_name, d.last_name].compact.join(" ").presence || d.dealer_code,
-          dealer_code:        d.dealer_code,
-          orders:             stats[:orders],
-          revenue:            stats[:revenue].round(2),
-          b2c_orders:         stats[:b2c_orders],
-          b2c_revenue:        stats[:b2c_revenue].round(2),
-          b2b_orders:         stats[:b2b_orders],
-          b2b_revenue:        stats[:b2b_revenue].round(2),
-          wholesaler_orders:  stats[:wholesaler_orders],
-          wholesaler_revenue: stats[:wholesaler_revenue].round(2),
-          online_revenue:     stats[:online_revenue].round(2),
-          cod_revenue:        stats[:cod_revenue].round(2)
+          id:                    d.id,
+          name:                  d.dealer_profile&.business_name.presence || [d.first_name, d.last_name].compact.join(" ").presence || d.dealer_code,
+          dealer_code:           d.dealer_code,
+          orders:                stats[:orders],
+          revenue:               stats[:revenue].round(2),
+          commission:            stats[:commission].round(2),
+          b2c_orders:            stats[:b2c_orders],
+          b2c_revenue:           stats[:b2c_revenue].round(2),
+          b2c_commission:        stats[:b2c_commission].round(2),
+          b2b_orders:            stats[:b2b_orders],
+          b2b_revenue:           stats[:b2b_revenue].round(2),
+          b2b_commission:        stats[:b2b_commission].round(2),
+          wholesaler_orders:     stats[:wholesaler_orders],
+          wholesaler_revenue:    stats[:wholesaler_revenue].round(2),
+          wholesaler_commission: stats[:wholesaler_commission].round(2),
+          online_orders:         stats[:online_orders],
+          online_revenue:        stats[:online_revenue].round(2),
+          online_commission:     stats[:online_commission].round(2),
+          cod_orders:            stats[:cod_orders],
+          cod_revenue:           stats[:cod_revenue].round(2),
+          cod_commission:        stats[:cod_commission].round(2)
         }
       end.compact
     end

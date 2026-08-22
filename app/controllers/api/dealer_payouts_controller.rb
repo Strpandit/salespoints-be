@@ -53,9 +53,10 @@ module Api
       if current_admin.present?
         eligible = service.eligible_orders
         
-        # Build comprehensive order log for dealer
-        retail_orders = Order.where(seller_dealer_id: target_dealer.id).order(created_at: :desc).limit(50)
-        b2b_orders = B2bOrder.where(seller_dealer_id: target_dealer.id).order(created_at: :desc).limit(50)
+        # Build comprehensive order log for dealer (delivered/replacement_delivered only)
+        ready_statuses = DealerPayoutService::PAYOUT_READY_ORDER_STATUSES
+        retail_orders = Order.where(seller_dealer_id: target_dealer.id, status: ready_statuses).order(delivered_at: :desc).limit(50)
+        b2b_orders = B2bOrder.where(seller_dealer_id: target_dealer.id, status: ready_statuses).order(delivered_at: :desc).limit(50)
 
         orders_list = []
         retail_orders.each do |o|

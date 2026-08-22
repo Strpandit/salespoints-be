@@ -62,6 +62,10 @@ class DealerPayoutService
   end
 
   def payout_is_cod?(payout)
+    mode = (payout.metadata || {})["payout_mode"]
+    return true if mode == "postpaid"
+    return false if mode == "prepaid"
+
     selected = (payout.metadata || {})["selected_orders"]
     if selected.is_a?(Array) && selected.any?
       selected.any? { |item| (item["payment_method"] || item[:payment_method]).to_s.downcase == "cod" }
@@ -184,12 +188,15 @@ class DealerPayoutService
           }
         end
 
+        is_all_cod = target_orders.all? { |o| o.try(:payment_method).to_s.downcase == "cod" }
+        payout_amount = is_all_cod ? total_commission.round(2) : total_net_payout.round(2)
+
         primary_requestable = target_orders.first
 
         payout = DealerPayout.create!(
           dealer: @dealer,
           requestable: primary_requestable,
-          amount: total_net_payout.round(2),
+          amount: payout_amount,
           bank_name: profile.bank_name,
           bank_account_number: profile.bank_account_number,
           ifsc_code: profile.ifsc_code,
@@ -197,6 +204,8 @@ class DealerPayoutService
           invoice_number: invoice_number.presence,
           admin_note: note,
           metadata: payout_metadata(profile, primary_requestable, invoice_number, note).merge(
+            "payout_mode" => is_all_cod ? "postpaid" : "prepaid",
+            "is_cod" => is_all_cod,
             "selected_orders" => order_summaries,
             "order_count" => target_orders.length,
             "total_gross" => total_gross.to_f,

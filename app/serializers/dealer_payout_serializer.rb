@@ -5,7 +5,8 @@ class DealerPayoutSerializer < ApplicationSerializer
              :created_at, :updated_at, :dealer_id, :dealer_name, :dealer_code, :order_reference,
              :request_flow, :invoice_number, :gst_invoice, :requestable_type, :requestable_id,
              :bank_verification_status, :bank_verified, :settlement_ready_for_processing,
-             :selected_orders, :total_gross, :total_commission, :penalty, :net_payout
+             :selected_orders, :total_gross, :total_commission, :penalty, :net_payout,
+             :payout_mode, :is_cod
 
   def amount
     object.amount.to_f
@@ -120,5 +121,16 @@ class DealerPayoutSerializer < ApplicationSerializer
     status_ready = object.status.to_s == "approved"
 
     bank_ready && status_ready
+  end
+
+  def payout_mode
+    if (object.metadata || {})["payout_mode"].present?
+      return object.metadata["payout_mode"]
+    end
+    DealerPayoutService.new(dealer: object.dealer).payout_is_cod?(object) ? "postpaid" : "prepaid"
+  end
+
+  def is_cod
+    payout_mode == "postpaid"
   end
 end
