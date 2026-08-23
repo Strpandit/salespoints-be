@@ -84,7 +84,7 @@ class DealerPayoutService
       .where(seller_dealer_id: @dealer.id)
       .where(status: PAYOUT_READY_ORDER_STATUSES)
       .where("payment_status = 'paid' OR payment_method = 'cod'")
-      .where("delivered_at IS NOT NULL AND delivered_at <= ?", 48.hours.ago)
+      .where("delivered_at IS NOT NULL")
       .order(delivered_at: :desc)
 
     b2b_orders = B2bOrder
@@ -92,7 +92,7 @@ class DealerPayoutService
       .where(seller_dealer_id: @dealer.id)
       .where(status: PAYOUT_READY_ORDER_STATUSES)
       .where("payment_status = 'paid' OR payment_method = 'cod'")
-      .where("delivered_at IS NOT NULL AND delivered_at <= ?", 48.hours.ago)
+      .where("delivered_at IS NOT NULL")
       .order(delivered_at: :desc)
 
     payload = []
@@ -278,7 +278,7 @@ class DealerPayoutService
     DealerPayoutNotificationService.status_updated!(payout.reload, actor: admin) rescue nil
   end
 
-  def mark_paid!(payout:, admin:, payment_reference:, payment_mode:, note: nil, penalty: 0)
+  def mark_paid!(payout:, admin:, payment_reference:, payment_mode:, note: nil, penalty: 0, adjusted_cod_payout_ids: [])
     raise StandardError, "Only pending, approved or processing payouts can be paid" unless payout.status.in?(%w[pending approved processing])
 
     penalty_val = BigDecimal(penalty.to_s).round(2)
@@ -288,21 +288,46 @@ class DealerPayoutService
       locked_payout = DealerPayout.lock.find(payout.id)
       locked_dealer = Dealer.lock.find(locked_payout.dealer_id)
 
-      final_amount = [locked_payout.amount.to_d - penalty_val, 0.to_d].max.round(2)
+      adjusted_cod_total = 0.to_d
+      adjusted_cod_payouts = []
+
+      if adjusted_cod_payout_ids.present?
+        cod_ids = Array(adjusted_cod_payout_ids).map(&:to_i).reject(&:zero?).uniq
+        adjusted_cod_payouts = locked_dealer.dealer_payouts.where(id: cod_ids, status: %w[pending approved processing]).to_a
+        
+        adjusted_cod_payouts.each do |cod_p|
+          adjusted_cod_total += cod_p.amount.to_d
+        end
+      end
+
+      gross_payout_amount = locked_payout.amount.to_d
+      final_amount = [gross_payout_amount - penalty_val - adjusted_cod_total, 0.to_d].max.round(2)
+
+      disburse_desc = "Payout disbursed for request #{locked_payout.request_number}"
+      disburse_desc += " (Penalty deducted: ₹#{penalty_val})" if penalty_val.positive?
+      disburse_desc += " (COD Platform Fee Adjusted: ₹#{adjusted_cod_total})" if adjusted_cod_total.positive?
 
       DealerLedgerService.debit!(
         dealer: locked_dealer,
         amount: final_amount,
         entry_type: "payout_disbursement",
-        description: "Payout disbursed for request #{locked_payout.request_number}#{penalty_val.positive? ? " (Penalty deducted: ₹#{penalty_val})" : ''}",
+        description: disburse_desc,
         order: locked_payout.requestable.is_a?(Order) ? locked_payout.requestable : nil,
         metadata: payout_ledger_metadata(locked_payout).merge(
           payment_reference: payment_reference,
           payment_mode: payment_mode,
           admin_id: admin.id,
-          penalty: penalty_val.to_f
+          penalty: penalty_val.to_f,
+          cod_adjustment_total: adjusted_cod_total.to_f,
+          adjusted_cod_payout_ids: adjusted_cod_payouts.map(&:id)
         )
       )
+
+      combined_note = [
+        locked_payout.admin_note,
+        note,
+        (adjusted_cod_total.positive? ? "Adjusted ₹#{adjusted_cod_total.to_f} from #{adjusted_cod_payouts.length} COD Platform Fee request(s) against this payout." : nil)
+      ].compact.join("\n").presence
 
       locked_payout.update!(
         amount: final_amount,
@@ -312,9 +337,38 @@ class DealerPayoutService
         processed_by_admin: admin,
         payment_reference: payment_reference,
         payment_mode: payment_mode,
-        admin_note: [locked_payout.admin_note, note].compact.join("\n").presence,
-        metadata: locked_payout.metadata.merge("penalty" => penalty_val.to_f)
+        admin_note: combined_note,
+        metadata: locked_payout.metadata.merge(
+          "penalty" => penalty_val.to_f,
+          "original_amount" => gross_payout_amount.to_f,
+          "cod_adjusted_amount" => adjusted_cod_total.to_f,
+          "adjusted_cod_payout_ids" => adjusted_cod_payouts.map(&:id)
+        )
       )
+
+      adjusted_cod_payouts.each do |cod_p|
+        cod_p_note = [
+          cod_p.admin_note,
+          "Adjusted ₹#{cod_p.amount.to_f} against Online Payout #{locked_payout.request_number} (UTR: #{payment_reference})"
+        ].compact.join("\n").presence
+
+        cod_p.update!(
+          status: "paid",
+          paid_at: Time.current,
+          processing_at: cod_p.processing_at || Time.current,
+          processed_by_admin: admin,
+          payment_reference: "ADJ-#{locked_payout.request_number}",
+          payment_mode: "adjustment",
+          admin_note: cod_p_note,
+          metadata: (cod_p.metadata || {}).merge(
+            "adjusted_against_payout_id" => locked_payout.id,
+            "adjusted_against_request_number" => locked_payout.request_number,
+            "adjusted_utr" => payment_reference
+          )
+        )
+
+        DealerPayoutNotificationService.status_updated!(cod_p.reload, actor: admin) rescue nil
+      end
 
       DealerPayoutNotificationService.status_updated!(locked_payout.reload, actor: admin) rescue nil
     end
@@ -442,13 +496,13 @@ class DealerPayoutService
       .where(seller_dealer_id: @dealer.id)
       .where(status: PAYOUT_READY_ORDER_STATUSES)
       .where(payment_method: "cod")
-      .where("delivered_at IS NOT NULL AND delivered_at <= ?", 48.hours.ago)
+      .where("delivered_at IS NOT NULL")
 
     b2b_cod_orders = B2bOrder
       .where(seller_dealer_id: @dealer.id)
       .where(status: PAYOUT_READY_ORDER_STATUSES)
       .where(payment_method: "cod")
-      .where("delivered_at IS NOT NULL AND delivered_at <= ?", 48.hours.ago)
+      .where("delivered_at IS NOT NULL")
 
     (cod_orders.to_a + b2b_cod_orders.to_a).each do |order|
       ref = request_reference(order)
@@ -488,14 +542,14 @@ class DealerPayoutService
       .where(status: PAYOUT_READY_ORDER_STATUSES)
       .where(payment_status: PAYOUT_READY_PAYMENT_STATUSES)
       .where.not(payment_method: "cod")
-      .where("delivered_at IS NOT NULL AND delivered_at <= ?", 48.hours.ago)
+      .where("delivered_at IS NOT NULL")
 
     b2b_orders = B2bOrder
       .where(seller_dealer_id: @dealer.id)
       .where(status: PAYOUT_READY_ORDER_STATUSES)
       .where(payment_status: PAYOUT_READY_PAYMENT_STATUSES)
       .where.not(payment_method: "cod")
-      .where("delivered_at IS NOT NULL AND delivered_at <= ?", 48.hours.ago)
+      .where("delivered_at IS NOT NULL")
 
     total = 0.to_d
     online_orders.each { |o| total += calculate_order_financials(o)[:net_payout_amount] }
@@ -508,13 +562,13 @@ class DealerPayoutService
       .where(seller_dealer_id: @dealer.id)
       .where(status: PAYOUT_READY_ORDER_STATUSES)
       .where(payment_method: "cod")
-      .where("delivered_at IS NOT NULL AND delivered_at <= ?", 48.hours.ago)
+      .where("delivered_at IS NOT NULL")
 
     b2b_cod_orders = B2bOrder
       .where(seller_dealer_id: @dealer.id)
       .where(status: PAYOUT_READY_ORDER_STATUSES)
       .where(payment_method: "cod")
-      .where("delivered_at IS NOT NULL AND delivered_at <= ?", 48.hours.ago)
+      .where("delivered_at IS NOT NULL")
 
     total_comm = 0.to_d
     cod_orders.each { |o| total_comm += calculate_order_financials(o)[:commission_fee] }
@@ -563,7 +617,6 @@ class DealerPayoutService
       return { eligible: false, reason: "Order payment must be verified as paid" }
     end
 
-    return { eligible: false, reason: "Order is in the 48-hour hold window" } if requestable.delivered_at.blank? || requestable.delivered_at > 48.hours.ago
     return { eligible: false, reason: "Replacement request open" } if replacement_request_open?(requestable)
 
     order_key = "#{requestable.is_a?(Order) ? 'order' : 'b2b_order'}:#{requestable.id}"
@@ -578,13 +631,13 @@ class DealerPayoutService
       .where(seller_dealer_id: @dealer.id)
       .where(status: PAYOUT_READY_ORDER_STATUSES)
       .where(payment_method: "cod")
-      .where("delivered_at IS NOT NULL AND delivered_at <= ?", 48.hours.ago)
+      .where("delivered_at IS NOT NULL")
 
     b2b_cod_orders = B2bOrder
       .where(seller_dealer_id: @dealer.id)
       .where(status: PAYOUT_READY_ORDER_STATUSES)
       .where(payment_method: "cod")
-      .where("delivered_at IS NOT NULL AND delivered_at <= ?", 48.hours.ago)
+      .where("delivered_at IS NOT NULL")
 
     total = 0.to_d
     cod_orders.each { |o| total += gross_amount_for(o) }

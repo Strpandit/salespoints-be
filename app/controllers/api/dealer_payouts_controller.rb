@@ -53,16 +53,16 @@ module Api
       if current_admin.present?
         eligible = service.eligible_orders
         
-        # Build comprehensive order log for dealer (delivered/replacement_delivered, 48h hold enforced)
+        # Build comprehensive order log for dealer (delivered/replacement_delivered)
         ready_statuses = DealerPayoutService::PAYOUT_READY_ORDER_STATUSES
         retail_orders = Order
           .where(seller_dealer_id: target_dealer.id, status: ready_statuses)
-          .where("delivered_at IS NOT NULL AND delivered_at <= ?", 48.hours.ago)
+          .where("delivered_at IS NOT NULL")
           .order(delivered_at: :desc)
           .limit(50)
         b2b_orders = B2bOrder
           .where(seller_dealer_id: target_dealer.id, status: ready_statuses)
-          .where("delivered_at IS NOT NULL AND delivered_at <= ?", 48.hours.ago)
+          .where("delivered_at IS NOT NULL")
           .order(delivered_at: :desc)
           .limit(50)
 
@@ -116,10 +116,22 @@ module Api
           }
         end
 
+        pending_cod_payouts = target_dealer.dealer_payouts.where(status: %w[pending approved processing]).select { |p| service.payout_is_cod?(p) }.map do |p|
+          {
+            id: p.id,
+            request_number: p.request_number,
+            amount: p.amount.to_f,
+            status: p.status,
+            created_at: p.created_at&.iso8601,
+            selected_orders: (p.metadata || {})["selected_orders"] || []
+          }
+        end
+
         data = data.merge(
           eligible_orders: eligible,
           all_orders: orders_list,
           payout_history: payout_history,
+          pending_cod_payouts: pending_cod_payouts,
           dealer_name: target_dealer.full_name,
           dealer_code: target_dealer.dealer_code,
           dealer_email: target_dealer.email,
@@ -251,7 +263,8 @@ module Api
           payment_reference: params[:payment_reference].to_s,
           payment_mode: params[:payment_mode].to_s.presence || "neft",
           note: params[:admin_note],
-          penalty: params[:penalty]
+          penalty: params[:penalty],
+          adjusted_cod_payout_ids: params[:adjusted_cod_payout_ids]
         )
       when "failed"
         service.mark_failed!(payout: payout, admin: current_admin, note: params[:admin_note])
