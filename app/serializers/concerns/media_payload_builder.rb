@@ -23,16 +23,24 @@ module MediaPayloadBuilder
   end
 
   def blob_id_for(file)
-    file.respond_to?(:blob_id) ? file.blob_id : file.id
+    return file.blob_id if file.respond_to?(:blob_id)
+    return file.blob.id if file.respond_to?(:blob) && file.blob.present?
+    file.id
   end
 
   def file_payload(file)
+    return nil if file.blank?
+    blob = file.respond_to?(:blob) && file.blob.present? ? file.blob : file
+    return nil unless blob.respond_to?(:filename)
+
     host = options[:base_url] || Rails.application.config.active_storage.default_url_options&.dig(:host)
     {
-      id: file.id,
-      url: Rails.application.routes.url_helpers.rails_blob_url(file, host: host),
-      filename: file.filename.to_s,
-      content_type: file.content_type.to_s
+      id: blob.id,
+      url: Rails.application.routes.url_helpers.rails_blob_url(blob, host: host),
+      filename: blob.filename.to_s,
+      content_type: blob.content_type.to_s
     }
+  rescue => e
+    nil
   end
 end

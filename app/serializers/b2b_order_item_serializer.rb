@@ -4,15 +4,20 @@ class B2bOrderItemSerializer < ApplicationSerializer
              :media, :product_media, :variant_media, :color, :image_url
 
   def image_url
-    file = if object.wholesaler_post_id.present?
-             object.wholesaler_post&.media&.first
+    blob = if object.wholesaler_post_id.present?
+             object.wholesaler_post&.media&.first&.blob
            elsif object.dealer_product_id.present?
-             object.dealer_product&.display_media_attachments&.first
+             dp = object.dealer_product
+             dp&.media&.first&.blob || dp&.product_variant&.media&.first&.blob || dp&.product&.media&.first&.blob
            elsif object.product_variant_id.present?
-             object.product_variant&.media&.first || object.product_variant&.product&.media&.first
+             pv = object.product_variant
+             pv&.media&.first&.blob || pv&.product&.media&.first&.blob
            end
-    return nil unless file
-    file_payload(file)[:url]
+    return nil unless blob
+    payload = file_payload(blob)
+    payload ? payload[:url] : nil
+  rescue => e
+    nil
   end
 
   def pricing

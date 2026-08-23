@@ -5,9 +5,13 @@ class OrderItemSerializer < ApplicationSerializer
             :color, :image_url
 
   def image_url
-    file = object.product_variant&.media&.first || object.product_variant&.product&.media&.first
-    return nil unless file
-    file_payload(file)[:url]
+    pv = object.product_variant
+    blob = pv&.media&.first&.blob || pv&.product&.media&.first&.blob
+    return nil unless blob
+    payload = file_payload(blob)
+    payload ? payload[:url] : nil
+  rescue => e
+    nil
   end
 
   def pricing
