@@ -236,7 +236,8 @@ module Api
               product_name_with_variant: item.product_name_with_variant,
               quantity: item.quantity,
               unit_price: item.unit_price.to_f,
-              total_price: item.total_price.to_f
+              total_price: item.total_price.to_f,
+              image_url: order_item_image_url(item)
             }
           end,
           
@@ -313,7 +314,8 @@ module Api
               quantity: item.quantity,
               unit_price: item.unit_price.to_f,
               total_price: item.total_price.to_f,
-              status: item.status
+              status: item.status,
+              image_url: b2b_item_image_url(item)
             }
           end,
 
@@ -321,6 +323,32 @@ module Api
           delivery_confirmation: delivery_confirmation_payload(order.delivery_confirmation),
           replacement_delivery_confirmation: delivery_confirmation_payload(order.replacement_delivery_confirmation)
         }
+      end
+
+      def order_item_image_url(item)
+        pv = item.try(:product_variant)
+        dp = item.try(:dealer_product)
+        blob = pv&.media&.first&.blob || pv&.product&.media&.first&.blob || dp&.media&.first&.blob || dp&.product_variant&.media&.first&.blob || dp&.product&.media&.first&.blob
+        return nil unless blob
+        Rails.application.routes.url_helpers.rails_blob_url(blob, host: request.base_url)
+      rescue StandardError
+        nil
+      end
+
+      def b2b_item_image_url(item)
+        blob = if item.try(:wholesaler_post_id).present?
+                 item.wholesaler_post&.media&.first&.blob
+               elsif item.try(:dealer_product_id).present?
+                 dp = item.dealer_product
+                 dp&.media&.first&.blob || dp&.product_variant&.media&.first&.blob || dp&.product&.media&.first&.blob
+               elsif item.try(:product_variant_id).present?
+                 pv = item.product_variant
+                 pv&.media&.first&.blob || pv&.product&.media&.first&.blob
+               end
+        return nil unless blob
+        Rails.application.routes.url_helpers.rails_blob_url(blob, host: request.base_url)
+      rescue StandardError
+        nil
       end
 
       def delivery_confirmation_payload(dc)

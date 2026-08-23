@@ -14,6 +14,7 @@ class DealerPayoutService
   end
 
   def summary_balances
+    cleanup_duplicate_cod_deductions!
     process_cod_commission_deductions!
 
     online_net_earned = calculate_total_net_online_sales
@@ -491,6 +492,39 @@ class DealerPayoutService
 
   private
 
+  def cleanup_duplicate_cod_deductions!
+    entries = DealerLedgerEntry
+      .where(dealer_id: @dealer.id, entry_type: "cod_commission_deduction")
+      .order(:id)
+      .to_a
+
+    return if entries.empty?
+
+    grouped = entries.group_by do |entry|
+      meta = entry.metadata || {}
+      ref = entry.order&.order_number || meta["reference_number"] || meta[:reference_number]
+      oid = entry.order_id || meta["order_id"] || meta[:order_id]
+      req_type = meta["requestable_type"] || meta[:requestable_type] || (entry.order_id.present? ? "Order" : "B2bOrder")
+      "#{req_type}-#{oid}-#{ref}"
+    end
+
+    grouped.each do |_key, group_entries|
+      next if group_entries.length <= 1
+
+      duplicate_entries = group_entries[1..-1]
+
+      duplicate_entries.each do |dup|
+        amount_to_refund = dup.amount.to_d
+        Dealer.transaction do
+          locked_dealer = Dealer.lock.find(@dealer.id)
+          new_balance = (locked_dealer.settlement_balance.to_d + amount_to_refund).round(2)
+          locked_dealer.update!(settlement_balance: new_balance)
+          dup.destroy!
+        end
+      end
+    end
+  end
+
   def process_cod_commission_deductions!
     cod_orders = Order
       .where(seller_dealer_id: @dealer.id)
@@ -504,35 +538,47 @@ class DealerPayoutService
       .where(payment_method: "cod")
       .where("delivered_at IS NOT NULL")
 
-    (cod_orders.to_a + b2b_cod_orders.to_a).each do |order|
-      ref = request_reference(order)
-      already_deducted = DealerLedgerEntry.where(
-        dealer_id: @dealer.id,
-        entry_type: "cod_commission_deduction"
-      ).where("order_id = ? OR metadata ->> 'order_id' = ? OR metadata ->> 'reference_number' = ?", (order.is_a?(Order) ? order.id : nil), order.id.to_s, ref).exists?
+    all_orders = cod_orders.to_a + b2b_cod_orders.to_a
+    return if all_orders.empty?
 
-      next if already_deducted
+    Dealer.transaction do
+      locked_dealer = Dealer.lock.find(@dealer.id)
 
-      breakdown = calculate_order_financials(order)
-      deduction_total = breakdown[:commission_fee]
+      all_orders.each do |order|
+        ref = request_reference(order)
+        already_deducted = DealerLedgerEntry.where(
+          dealer_id: locked_dealer.id,
+          entry_type: "cod_commission_deduction"
+        ).where(
+          "order_id = ? OR metadata ->> 'order_id' = ? OR metadata ->> 'reference_number' = ?",
+          (order.is_a?(Order) ? order.id : nil),
+          order.id.to_s,
+          ref
+        ).exists?
 
-      next if deduction_total <= 0
+        next if already_deducted
 
-      DealerLedgerService.debit!(
-        dealer: @dealer,
-        amount: deduction_total,
-        entry_type: "cod_commission_deduction",
-        description: "COD Platform Commission deduction for order #{ref}",
-        order: order.is_a?(Order) ? order : nil,
-        metadata: {
-          order_id: order.id,
-          reference_number: ref,
-          requestable_type: order.class.name,
-          payment_method: "cod",
-          gross_amount: breakdown[:gross_amount].to_f,
-          commission_fee: breakdown[:commission_fee].to_f
-        }
-      )
+        breakdown = calculate_order_financials(order)
+        deduction_total = breakdown[:commission_fee]
+
+        next if deduction_total <= 0
+
+        DealerLedgerService.debit!(
+          dealer: locked_dealer,
+          amount: deduction_total,
+          entry_type: "cod_commission_deduction",
+          description: "COD Platform Commission deduction for order #{ref}",
+          order: order.is_a?(Order) ? order : nil,
+          metadata: {
+            order_id: order.id,
+            reference_number: ref,
+            requestable_type: order.class.name,
+            payment_method: "cod",
+            gross_amount: breakdown[:gross_amount].to_f,
+            commission_fee: breakdown[:commission_fee].to_f
+          }
+        )
+      end
     end
   end
 

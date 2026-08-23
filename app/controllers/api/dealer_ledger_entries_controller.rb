@@ -4,6 +4,8 @@ module Api
       dealer = resolve_dealer_scope
       return render json: { error: "Dealer not found" }, status: :not_found unless dealer
 
+      DealerPayoutService.new(dealer: dealer).summary_balances rescue nil
+
       scope = dealer.dealer_ledger_entries.includes(:order, :return_request)
       scope = apply_ledger_filters(scope)
       entries = scope.recent.page(params[:page]).per(params[:per_page] || 20)

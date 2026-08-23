@@ -123,7 +123,7 @@ class OrderSettlementService
     return unless order.delivered_at.present?
     return if order.settlement_due_at.present? && order.return_window_closes_at.present?
 
-    due_at = order.delivered_at + MarketplaceOrderFinancials.settlement_hold_days.days
+    due_at = order.delivered_at
     order.update!(
       settlement_due_at: due_at,
       return_window_closes_at: order.return_window_closes_at || (order.delivered_at + MarketplaceOrderFinancials.return_window_days.days),

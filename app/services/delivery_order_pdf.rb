@@ -21,7 +21,6 @@ class DeliveryOrderPdf
     add_seller_greeting(pdf)
     add_order_details_table(pdf)
     add_disbursement_breakup_table(pdf)
-    add_shipping_address_box(pdf)
     add_terms_and_conditions(pdf)
     add_footer(pdf)
 
@@ -205,25 +204,6 @@ class DeliveryOrderPdf
     pdf.move_down 12
   end
 
-  def add_shipping_address_box(pdf)
-    pdf.text "3. Customer Delivery Address", style: :bold, size: 9.5, color: "0047AB"
-    pdf.move_down 4
-
-    pdf.bounding_box([0, pdf.cursor], width: pdf.bounds.width) do
-      pdf.stroke_color "0047AB"
-      pdf.stroke_bounds
-      pdf.pad(8) do
-        pdf.indent(10) do
-          pdf.text "<b>Delivery Address:</b>", inline_format: true, size: 9, color: "0047AB"
-          pdf.move_down 4
-          pdf.text shipping_address_formatted, size: 8.5, leading: 3
-        end
-      end
-    end
-
-    pdf.move_down 12
-  end
-
   def add_terms_and_conditions(pdf)
     pdf.text "<b>Terms & Conditions & Instructions:</b>", inline_format: true, size: 9, color: "0047AB"
     pdf.move_down 4
@@ -373,26 +353,6 @@ class DeliveryOrderPdf
       1.50
     else
       2.50
-    end
-  end
-
-  def shipping_address_formatted
-    addr = order.shipping_address
-    return "N/A" if addr.blank?
-
-    case addr
-    when Hash, ActionController::Parameters
-      [
-        addr["address_line1"] || addr[:address_line1],
-        addr["address_line2"] || addr[:address_line2],
-        addr["city"] || addr[:city],
-        addr["state"] || addr[:state],
-        addr["postal_code"] || addr[:postal_code] || addr["pincode"] || addr[:pincode]
-      ].compact.reject(&:blank?).join("\n")
-    when String
-      addr
-    else
-      addr.try(:full_address).presence || "N/A"
     end
   end
 

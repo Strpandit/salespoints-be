@@ -6,7 +6,8 @@ class OrderItemSerializer < ApplicationSerializer
 
   def image_url
     pv = object.product_variant
-    blob = pv&.media&.first&.blob || pv&.product&.media&.first&.blob
+    dp = object.dealer_product
+    blob = pv&.media&.first&.blob || pv&.product&.media&.first&.blob || dp&.media&.first&.blob || dp&.product_variant&.media&.first&.blob || dp&.product&.media&.first&.blob
     return nil unless blob
     payload = file_payload(blob)
     payload ? payload[:url] : nil
