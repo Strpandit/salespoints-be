@@ -85,6 +85,18 @@ class B2bOrderMailer < ApplicationMailer
       rescue StandardError => e
         Rails.logger.error("[B2bOrderMailer] Failed to generate invoice attachment for B2B Order #{@order.id}: #{e.message}")
       end
+    elsif recipient_type.to_s == "seller"
+      begin
+        generator = DeliveryOrderPdf.new(@order)
+        pdf_content = generator.generate
+        ord_num = @order.reference_number.presence || "B2B-#{@order.id}"
+        attachments["Delivery_Order_#{ord_num}.pdf"] = {
+          mime_type: "application/pdf",
+          content: pdf_content
+        }
+      rescue StandardError => e
+        Rails.logger.error("[B2bOrderMailer] Failed to generate delivery order attachment for B2B Order #{@order.id}: #{e.message}")
+      end
     end
 
     case recipient_type.to_s

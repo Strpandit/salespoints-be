@@ -60,6 +60,18 @@ class RetailOrderMailer < ApplicationMailer
       rescue StandardError => e
         Rails.logger.error("[RetailOrderMailer] Failed to generate invoice attachment for Order #{@order.id}: #{e.message}")
       end
+    elsif recipient_type.to_s == "seller"
+      begin
+        generator = DeliveryOrderPdf.new(@order)
+        pdf_content = generator.generate
+        ord_num = @order.order_number.presence || "ORD-#{@order.id}"
+        attachments["Delivery_Order_#{ord_num}.pdf"] = {
+          mime_type: "application/pdf",
+          content: pdf_content
+        }
+      rescue StandardError => e
+        Rails.logger.error("[RetailOrderMailer] Failed to generate delivery order attachment for Order #{@order.id}: #{e.message}")
+      end
     end
 
     case recipient_type.to_s
