@@ -45,13 +45,13 @@ module Api
       elsif channel_filter == "b2b"
         b2c_orders = Order.none
         prev_b2c_orders = Order.none
-        b2b_orders = b2b_orders.where("wholesaler_post_id IS NULL AND (source_type IS NULL OR source_type != 'WholesalerPost')")
-        prev_b2b_orders = prev_b2b_orders.where("wholesaler_post_id IS NULL AND (source_type IS NULL OR source_type != 'WholesalerPost')")
+        b2b_orders = b2b_orders.where("source_type IS NULL OR source_type != 'WholesalerPost'")
+        prev_b2b_orders = prev_b2b_orders.where("source_type IS NULL OR source_type != 'WholesalerPost'")
       elsif channel_filter == "wholesale"
         b2c_orders = Order.none
         prev_b2c_orders = Order.none
-        b2b_orders = b2b_orders.where("wholesaler_post_id IS NOT NULL OR source_type = 'WholesalerPost'")
-        prev_b2b_orders = prev_b2b_orders.where("wholesaler_post_id IS NOT NULL OR source_type = 'WholesalerPost'")
+        b2b_orders = b2b_orders.where(source_type: "WholesalerPost")
+        prev_b2b_orders = prev_b2b_orders.where(source_type: "WholesalerPost")
       end
 
       b2c_revenue = b2c_orders.sum(:total_amount).to_f
@@ -91,9 +91,31 @@ module Api
       # Revenue trend (grouped by date)
       revenue_trend = build_revenue_trend(date_range, b2c_orders, b2b_orders)
 
-      # Orders by status (delivered vs replacement_delivered)
-      b2c_by_status = b2c_orders.group(:status).count
-      b2b_by_status = b2b_orders.group(:status).count
+      # All statuses B2C and B2B orders for Recent Orders & Status Breakdown (filtered by channel & payment mode)
+      all_status_b2c = Order.where(created_at: date_range)
+      all_status_b2b = B2bOrder.where(created_at: date_range)
+
+      if payment_filter == "prepaid"
+        all_status_b2c = all_status_b2c.where.not(payment_method: "cod")
+        all_status_b2b = all_status_b2b.where.not(payment_method: "cod")
+      elsif payment_filter == "postpaid"
+        all_status_b2c = all_status_b2c.where(payment_method: "cod")
+        all_status_b2b = all_status_b2b.where(payment_method: "cod")
+      end
+
+      if channel_filter == "b2c"
+        all_status_b2b = B2bOrder.none
+      elsif channel_filter == "b2b"
+        all_status_b2c = Order.none
+        all_status_b2b = all_status_b2b.where("source_type IS NULL OR source_type != 'WholesalerPost'")
+      elsif channel_filter == "wholesale"
+        all_status_b2c = Order.none
+        all_status_b2b = all_status_b2b.where(source_type: "WholesalerPost")
+      end
+
+      # Orders by status across all statuses
+      b2c_by_status = all_status_b2c.group(:status).count
+      b2b_by_status = all_status_b2b.group(:status).count
       orders_by_status = b2c_by_status.merge(b2b_by_status) { |_k, a, b| a + b }
 
       # Payment method breakdown
@@ -130,7 +152,7 @@ module Api
         paymentBreakdown:  payment_breakdown,
         topSellers:        top_sellers,
         topProducts:       top_products_combined(date_range),
-        recentOrders:      recent_orders_combined(b2c_orders, b2b_orders)
+        recentOrders:      recent_orders_combined(all_status_b2c, all_status_b2b)
       }
 
       render json: { success: true, data: data }
@@ -182,13 +204,13 @@ module Api
       elsif channel_filter == "b2b"
         b2c_orders = Order.none
         prev_b2c   = Order.none
-        b2b_orders = b2b_orders.where("wholesaler_post_id IS NULL AND (source_type IS NULL OR source_type != 'WholesalerPost')")
-        prev_b2b   = prev_b2b.where("wholesaler_post_id IS NULL AND (source_type IS NULL OR source_type != 'WholesalerPost')")
+        b2b_orders = b2b_orders.where("source_type IS NULL OR source_type != 'WholesalerPost'")
+        prev_b2b   = prev_b2b.where("source_type IS NULL OR source_type != 'WholesalerPost'")
       elsif channel_filter == "wholesale"
         b2c_orders = Order.none
         prev_b2c   = Order.none
-        b2b_orders = b2b_orders.where("wholesaler_post_id IS NOT NULL OR source_type = 'WholesalerPost'")
-        prev_b2b   = prev_b2b.where("wholesaler_post_id IS NOT NULL OR source_type = 'WholesalerPost'")
+        b2b_orders = b2b_orders.where(source_type: "WholesalerPost")
+        prev_b2b   = prev_b2b.where(source_type: "WholesalerPost")
       end
 
       b2c_revenue = b2c_orders.sum(:total_amount).to_f
@@ -218,9 +240,31 @@ module Api
       pending_payouts = DealerPayout.where(dealer_id: dealer.id, status: %w[pending approved processing]).sum(:amount).to_f rescue 0.0
       total_paid_out = DealerPayout.where(dealer_id: dealer.id, status: "paid").sum(:amount).to_f rescue 0.0
 
-      # Orders by status
-      b2c_by_status = b2c_orders.group(:status).count
-      b2b_by_status = b2b_orders.group(:status).count
+      # All statuses B2C and B2B orders for Recent Orders & Status Breakdown (filtered by channel & payment mode)
+      all_status_b2c = Order.where(seller_dealer_id: dealer.id, created_at: date_range)
+      all_status_b2b = B2bOrder.where(seller_dealer_id: dealer.id, created_at: date_range)
+
+      if payment_filter == "prepaid"
+        all_status_b2c = all_status_b2c.where.not(payment_method: "cod")
+        all_status_b2b = all_status_b2b.where.not(payment_method: "cod")
+      elsif payment_filter == "postpaid"
+        all_status_b2c = all_status_b2c.where(payment_method: "cod")
+        all_status_b2b = all_status_b2b.where(payment_method: "cod")
+      end
+
+      if channel_filter == "b2c"
+        all_status_b2b = B2bOrder.none
+      elsif channel_filter == "b2b"
+        all_status_b2c = Order.none
+        all_status_b2b = all_status_b2b.where("source_type IS NULL OR source_type != 'WholesalerPost'")
+      elsif channel_filter == "wholesale"
+        all_status_b2c = Order.none
+        all_status_b2b = all_status_b2b.where(source_type: "WholesalerPost")
+      end
+
+      # Orders by status across all statuses
+      b2c_by_status = all_status_b2c.group(:status).count
+      b2b_by_status = all_status_b2b.group(:status).count
       orders_by_status = b2c_by_status.merge(b2b_by_status) { |_k, a, b| a + b }
 
       # Revenue trend
@@ -229,8 +273,8 @@ module Api
       # Top products for this dealer
       top_prods = dealer_top_products(dealer.id, date_range)
 
-      # Recent orders
-      recent_b2c = b2c_orders.order(created_at: :desc).limit(5).map do |o|
+      # Recent orders across all statuses
+      recent_b2c = all_status_b2c.order(created_at: :desc).limit(10).map do |o|
         {
           id: o.order_number,
           order_number: o.order_number,
@@ -243,7 +287,7 @@ module Api
         }
       end
 
-      recent_b2b = b2b_orders.order(created_at: :desc).limit(5).map do |o|
+      recent_b2b = all_status_b2b.order(created_at: :desc).limit(10).map do |o|
         {
           id: o.reference_number,
           order_number: o.reference_number,
@@ -256,7 +300,7 @@ module Api
         }
       end
 
-      recent_orders = (recent_b2c + recent_b2b).sort_by { |o| o[:date] }.reverse.first(10)
+      recent_orders = (recent_b2c + recent_b2b).sort_by { |o| o[:date] }.reverse.first(15)
 
       data = {
         totalRevenue:   total_revenue,
@@ -600,10 +644,10 @@ module Api
 
     # ─── RECENT ORDERS (ADMIN) ─────────────────────────────────────────────────
     def recent_orders_combined(b2c_scope = nil, b2b_scope = nil)
-      b2c_query = b2c_scope || Order.where(status: %w[delivered replacement_delivered]).where("payment_status = 'paid' OR payment_method = 'cod'")
-      b2b_query = b2b_scope || B2bOrder.where(status: %w[delivered replacement_delivered]).where("payment_status = 'paid' OR payment_method = 'cod'")
+      b2c_query = b2c_scope || Order.all
+      b2b_query = b2b_scope || B2bOrder.all
 
-      b2c = b2c_query.order(created_at: :desc).limit(5).map do |o|
+      b2c = b2c_query.order(created_at: :desc).limit(15).map do |o|
         buyer_name = if o.buyer_type == "Dealer"
                        Dealer.find_by(id: o.buyer_id)&.full_name || Dealer.find_by(id: o.buyer_id)&.email
                      else
@@ -621,7 +665,7 @@ module Api
         }
       end
 
-      b2b = b2b_query.order(created_at: :desc).limit(5).map do |o|
+      b2b = b2b_query.order(created_at: :desc).limit(15).map do |o|
         buyer_name = o.buyer_dealer&.dealer_profile&.business_name || o.buyer_dealer&.full_name || "Dealer"
         {
           id:           o.reference_number,
@@ -635,7 +679,7 @@ module Api
         }
       end
 
-      (b2c + b2b).sort_by { |item| item[:date] }.reverse.first(10)
+      (b2c + b2b).sort_by { |item| item[:date] }.reverse.first(20)
     end
 
     # ─── DATE HELPERS ──────────────────────────────────────────────────────────

@@ -1,7 +1,19 @@
 class B2bOrderItemSerializer < ApplicationSerializer
   attributes :dealer_product_id, :product_variant_id, :quantity, :status, :responded_at,
              :unit_price, :taxable_amount, :gst_percentage, :gst_amount, :total_price, :product_name, :variant_sku, :assigned_dealer_name,
-             :media, :product_media, :variant_media, :color
+             :media, :product_media, :variant_media, :color, :image_url
+
+  def image_url
+    file = if object.wholesaler_post_id.present?
+             object.wholesaler_post&.media&.first
+           elsif object.dealer_product_id.present?
+             object.dealer_product&.display_media_attachments&.first
+           elsif object.product_variant_id.present?
+             object.product_variant&.media&.first || object.product_variant&.product&.media&.first
+           end
+    return nil unless file
+    file_payload(file)[:url]
+  end
 
   def pricing
     if object.product_variant.present?

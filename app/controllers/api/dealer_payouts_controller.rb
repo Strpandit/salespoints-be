@@ -86,10 +86,11 @@ module Api
 
         b2b_orders.each do |o|
           fin = service.calculate_order_financials(o) rescue { net_payout_amount: o.total_amount }
+          otype = o.source_type == "WholesalerPost" ? "wholesale" : "b2b"
           orders_list << {
             id: o.id,
             reference_number: o.reference_number.presence || "B2B-#{o.id}",
-            order_type: "b2b",
+            order_type: otype,
             payment_method: o.payment_method.presence || "online",
             payment_status: o.payment_status,
             status: o.status,

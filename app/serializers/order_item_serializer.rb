@@ -2,7 +2,13 @@ class OrderItemSerializer < ApplicationSerializer
   attributes :quantity, :unit_price, :taxable_amount, :gst_percentage, 
             :gst_amount, :total_price, :product_name, :product_name_with_variant,
             :variant_sku, :product_id, :variant_id, :product_media, :variant_media,
-            :color
+            :color, :image_url
+
+  def image_url
+    file = object.product_variant&.media&.first || object.product_variant&.product&.media&.first
+    return nil unless file
+    file_payload(file)[:url]
+  end
 
   def pricing
     @pricing ||= Pricing::PriceCalculator.new(
