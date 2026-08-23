@@ -357,8 +357,8 @@ class DealerPayoutService
           paid_at: Time.current,
           processing_at: cod_p.processing_at || Time.current,
           processed_by_admin: admin,
-          payment_reference: "ADJ-#{locked_payout.request_number}",
-          payment_mode: "adjustment",
+          payment_reference: payment_reference.presence || "ADJ-#{locked_payout.request_number}",
+          payment_mode: payment_mode.presence || "adjustment",
           admin_note: cod_p_note,
           metadata: (cod_p.metadata || {}).merge(
             "adjusted_against_payout_id" => locked_payout.id,
