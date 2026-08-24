@@ -1,6 +1,7 @@
 class DealerLedgerEntrySerializer < ApplicationSerializer
   attributes :entry_type, :direction, :amount, :balance_after, :reference_code, :description,
-             :metadata, :created_at, :order_number, :return_request_id
+             :metadata, :created_at, :order_number, :order_id, :return_request_id,
+             :payout_id, :payout_request_number, :dealer_payout
 
   def amount
     object.amount.to_f
@@ -8,6 +9,10 @@ class DealerLedgerEntrySerializer < ApplicationSerializer
 
   def balance_after
     object.balance_after.to_f
+  end
+
+  def order_id
+    object.order_id || (object.metadata.is_a?(Hash) ? object.metadata["order_id"] : nil)
   end
 
   def order_number
@@ -29,5 +34,27 @@ class DealerLedgerEntrySerializer < ApplicationSerializer
 
       nil
     end
+  end
+
+  def payout_id
+    if object.metadata.is_a?(Hash)
+      object.metadata["payout_id"] || object.metadata["dealer_payout_id"]
+    end
+  end
+
+  def payout_request_number
+    if object.metadata.is_a?(Hash)
+      object.metadata["payout_request_number"] || object.metadata["request_number"]
+    end
+  end
+
+  def dealer_payout
+    p_id = payout_id
+    return nil unless p_id.present?
+    payout = DealerPayout.find_by(id: p_id)
+    return nil unless payout.present?
+    DealerPayoutSerializer.render_one(payout)
+  rescue StandardError
+    nil
   end
 end

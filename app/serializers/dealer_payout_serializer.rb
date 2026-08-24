@@ -6,7 +6,7 @@ class DealerPayoutSerializer < ApplicationSerializer
              :request_flow, :invoice_number, :gst_invoice, :requestable_type, :requestable_id,
              :bank_verification_status, :bank_verified, :settlement_ready_for_processing,
              :selected_orders, :total_gross, :total_commission, :penalty, :net_payout,
-             :payout_mode, :is_cod
+             :payout_mode, :is_cod, :adjusted_cod_details
 
   def amount
     object.amount.to_f
@@ -132,5 +132,22 @@ class DealerPayoutSerializer < ApplicationSerializer
 
   def is_cod
     payout_mode == "postpaid"
+  end
+
+  def adjusted_cod_details
+    cod_ids = (object.metadata || {})["adjusted_cod_payout_ids"] || []
+    return [] if cod_ids.blank?
+    DealerPayout.where(id: cod_ids).map do |cp|
+      {
+        id: cp.id,
+        request_number: cp.request_number,
+        amount: cp.amount.to_f,
+        order_reference: cp.order_reference,
+        created_at: cp.created_at&.iso8601,
+        paid_at: cp.paid_at&.iso8601
+      }
+    end
+  rescue StandardError
+    []
   end
 end

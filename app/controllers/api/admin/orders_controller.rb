@@ -330,7 +330,9 @@ module Api
         dp = item.try(:dealer_product)
         blob = pv&.media&.first&.blob || pv&.product&.media&.first&.blob || dp&.media&.first&.blob || dp&.product_variant&.media&.first&.blob || dp&.product&.media&.first&.blob
         return nil unless blob
-        Rails.application.routes.url_helpers.rails_blob_url(blob, host: request.base_url)
+        host = request.base_url.to_s.sub(%r{\Ahttp://}, "https://")
+        url = Rails.application.routes.url_helpers.rails_blob_url(blob, host: host, protocol: "https")
+        url.to_s.sub(%r{\Ahttp://}, "https://")
       rescue StandardError
         nil
       end
@@ -346,7 +348,9 @@ module Api
                  pv&.media&.first&.blob || pv&.product&.media&.first&.blob
                end
         return nil unless blob
-        Rails.application.routes.url_helpers.rails_blob_url(blob, host: request.base_url)
+        host = request.base_url.to_s.sub(%r{\Ahttp://}, "https://")
+        url = Rails.application.routes.url_helpers.rails_blob_url(blob, host: host, protocol: "https")
+        url.to_s.sub(%r{\Ahttp://}, "https://")
       rescue StandardError
         nil
       end

@@ -38,7 +38,9 @@ class DealerPayoutService
     eligible_cod_rows = eligible_rows.select { |r| r[:payment_method].to_s.downcase == "cod" }
 
     eligible_online_net = eligible_online_rows.sum { |row| BigDecimal(row[:net_payout_amount].to_s) }
+    eligible_online_commission = eligible_online_rows.sum { |row| BigDecimal(row[:commission_fee].to_s) }
     eligible_cod_commission = eligible_cod_rows.sum { |row| BigDecimal(row[:commission_fee].to_s) }
+    eligible_cod_gross = eligible_cod_rows.sum { |row| BigDecimal(row[:gross_amount].to_s) }
 
     available_balance = [eligible_online_net, 0.to_d].max.round(2)
 
@@ -51,11 +53,15 @@ class DealerPayoutService
       prepaid_available_balance: eligible_online_net.to_f,
       prepaid_pending_payout: prepaid_pending.to_f,
       prepaid_paid_balance: prepaid_paid.to_f,
+      prepaid_platform_commission: eligible_online_commission.to_f,
       postpaid_total_earnings: cod_gross.to_f,
       postpaid_commission_owed: cod_deduction_total.to_f,
       postpaid_available_balance: eligible_cod_commission.to_f,
       postpaid_pending_payout: postpaid_pending.to_f,
       postpaid_paid_balance: postpaid_paid.to_f,
+      pending_invoices_cod_count: eligible_cod_rows.length,
+      pending_invoices_cod_amount: eligible_cod_commission.to_f,
+      pending_invoices_cod_gross: eligible_cod_gross.to_f,
       dealer_status: @dealer.status,
       bank_verified: @dealer.dealer_profile&.bank_verified? || false,
       eligible_orders_count: eligible_rows.length
