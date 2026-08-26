@@ -93,12 +93,13 @@ module Api
 
     # POST /api/reports/generate
     def generate
-      report_key = params[:report_key].presence || params[:report_type].presence || "sales_summary"
-      format     = (params[:format].presence || "xlsx").to_s.downcase
-      filters    = params[:filters] || params.slice(:period, :start_date, :end_date)
+      report_key  = params[:report_key].presence || params[:report_type].presence || "sales_summary"
+      format      = (params[:format].presence || "xlsx").to_s.downcase
+      raw_filters = params[:filters] || params.slice(:period, :start_date, :end_date)
+      filters     = raw_filters.respond_to?(:to_unsafe_h) ? raw_filters.to_unsafe_h : raw_filters
 
       scope = current_user_type == "AdminUser" ? :admin : :vendor
-      user  = scope == :admin ? current_admin_user : current_dealer
+      user  = scope == :admin ? current_admin : current_dealer
 
       exporter    = Reports::ExporterFactory.for(report_key, filters: filters, current_user: user, scope: scope)
       report_data = exporter.generate
@@ -115,7 +116,7 @@ module Api
         user: user,
         report_key: report_key,
         format: format,
-        applied_filters: filters.to_h,
+        applied_filters: filters.respond_to?(:to_h) ? filters.to_h : (filters || {}),
         row_count: (report_data[:rows] || []).size,
         ip_address: request.remote_ip,
         user_agent: request.user_agent,

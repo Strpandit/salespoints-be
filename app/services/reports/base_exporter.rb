@@ -3,7 +3,8 @@ module Reports
     attr_reader :filters, :current_user, :scope
 
     def initialize(filters: {}, current_user: nil, scope: :vendor)
-      @filters      = (filters || {}).with_indifferent_access
+      raw_filters   = filters.respond_to?(:to_unsafe_h) ? filters.to_unsafe_h : (filters || {})
+      @filters      = raw_filters.with_indifferent_access
       @current_user = current_user
       @scope        = scope
     end
