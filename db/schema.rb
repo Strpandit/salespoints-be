@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_08_18_084500) do
+ActiveRecord::Schema[8.0].define(version: 2026_08_27_000001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -860,6 +860,23 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_18_084500) do
     t.index ["token"], name: "index_push_subscriptions_on_token", unique: true
   end
 
+  create_table "report_audit_logs", force: :cascade do |t|
+    t.string "user_type", null: false
+    t.bigint "user_id", null: false
+    t.string "report_key", null: false
+    t.string "format", null: false
+    t.jsonb "applied_filters", default: {}, null: false
+    t.integer "row_count", default: 0
+    t.string "ip_address"
+    t.string "user_agent"
+    t.datetime "downloaded_at", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["created_at"], name: "index_report_audit_logs_on_created_at"
+    t.index ["report_key"], name: "index_report_audit_logs_on_report_key"
+    t.index ["user_type", "user_id"], name: "index_report_audit_logs_on_user_type_and_user_id"
+  end
+
   create_table "return_requests", force: :cascade do |t|
     t.string "requester_type", null: false
     t.bigint "requester_id", null: false
@@ -1021,6 +1038,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_18_084500) do
     t.string "hsn_code"
     t.string "ad_hoc_color"
     t.integer "stock_quantity", default: 0
+    t.string "mf_year"
     t.index ["approve_status"], name: "index_wholesaler_posts_on_approve_status"
     t.index ["dealer_id"], name: "index_wholesaler_posts_on_dealer_id"
     t.index ["dealer_product_id"], name: "index_wholesaler_posts_on_dealer_product_id"

@@ -13,6 +13,7 @@ class Dealer < ApplicationRecord
   has_many :notifications, as: :receiver, dependent: :destroy
   has_many :deletion_requests, as: :requestable, dependent: :destroy
   has_many :push_subscriptions, as: :subscriber, dependent: :destroy
+  has_many :report_audit_logs, as: :user, dependent: :destroy
   has_many :products, through: :dealer_products
   has_many :wholesaler_posts, dependent: :destroy
   has_many :wholesaler_post_ratings, dependent: :destroy

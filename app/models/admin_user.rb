@@ -11,6 +11,7 @@ class AdminUser < ApplicationRecord
   has_many :notifications, as: :receiver, dependent: :destroy
   has_many :deletion_requests, as: :requestable, dependent: :destroy
   has_many :push_subscriptions, as: :subscriber, dependent: :destroy
+  has_many :report_audit_logs, as: :user, dependent: :destroy
   has_many :support_tickets, foreign_key: 'admin_user_id', dependent: :destroy
   has_many :assigned_tickets, class_name: 'SupportTicket', foreign_key: 'assigned_to_id', dependent: :nullify
   has_many :ticket_messages, foreign_key: 'admin_user_id', dependent: :destroy
