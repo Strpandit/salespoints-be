@@ -18,7 +18,7 @@ gem "stimulus-rails"
 gem "jbuilder"
 
 # Use Active Model has_secure_password [https://guides.rubyonrails.org/active_model_basics.html#securepassword]
-gem "bcrypt", "~> 3.1.17"
+gem "bcrypt", "~> 3.1.22"
 
 # JSON Web Token support
 gem 'jwt', '~> 2.6'
